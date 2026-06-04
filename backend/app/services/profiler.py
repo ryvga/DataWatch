@@ -1,0 +1,234 @@
+"""
+ProfilerService: single-query table profiler.
+
+Design principle: ONE SQL aggregate query per table run.
+Never pulls rows to the application layer.
+"""
+import hashlib
+import logging
+import time
+from dataclasses import dataclass, field
+from typing import Any
+
+from app.connectors.base import BaseConnector
+
+logger = logging.getLogger(__name__)
+
+# Column type categories
+NUMERIC_TYPES = {
+    "integer", "bigint", "smallint", "numeric", "decimal", "real",
+    "double precision", "float", "float4", "float8", "int2", "int4", "int8",
+    "INT64", "FLOAT64", "NUMERIC", "BIGNUMERIC",  # BigQuery
+    "NUMBER", "FLOAT",  # Snowflake / DuckDB
+}
+TIMESTAMP_TYPES = {
+    "timestamp", "timestamp without time zone", "timestamp with time zone",
+    "timestamptz", "datetime", "TIMESTAMP", "DATETIME",
+}
+DATE_TYPES = {"date", "DATE"}
+TEXT_TYPES = {
+    "text", "varchar", "character varying", "char", "bpchar", "uuid",
+    "STRING", "VARCHAR", "BYTES",
+}
+
+
+@dataclass
+class ColumnInfo:
+    name: str
+    data_type: str
+    is_nullable: bool = True
+
+    @property
+    def category(self) -> str:
+        t = self.data_type.upper().split("(")[0].strip()
+        if any(nt.upper() == t for nt in NUMERIC_TYPES):
+            return "numeric"
+        if any(tt.upper() == t for tt in TIMESTAMP_TYPES):
+            return "timestamp"
+        if any(dt.upper() == t for dt in DATE_TYPES):
+            return "date"
+        return "text"
+
+
+@dataclass
+class ProfileResult:
+    row_count: int = 0
+    freshness_seconds: float | None = None
+    schema_fingerprint: str = ""
+    column_metrics: dict[str, Any] = field(default_factory=dict)
+    profiling_duration_ms: int = 0
+    error: str | None = None
+
+
+class ProfilerService:
+    """
+    Builds and executes a single aggregate SQL query per table.
+    Column introspection result is passed in (caller caches it).
+    """
+
+    async def get_columns(
+        self, connector: BaseConnector, schema: str, table: str
+    ) -> list[ColumnInfo]:
+        """Fetch column metadata from information_schema."""
+        query = f"""
+            SELECT column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = '{schema}' AND table_name = '{table}'
+            ORDER BY ordinal_position
+        """
+        try:
+            rows = await connector.execute_profile_query(query)
+            # execute_profile_query returns a single dict — we need multiple rows
+            # Use a different approach: wrap in a subquery that returns JSON
+            return await self._get_columns_raw(connector, schema, table)
+        except Exception:
+            return await self._get_columns_raw(connector, schema, table)
+
+    async def _get_columns_raw(
+        self, connector: BaseConnector, schema: str, table: str
+    ) -> list[ColumnInfo]:
+        """Get columns via DDL parsing fallback."""
+        ddl = await connector.get_table_ddl(schema, table)
+        columns = []
+        for line in ddl.split("\n"):
+            line = line.strip().rstrip(",")
+            if line.startswith("CREATE TABLE") or line in ("{", "}", ");", "("):
+                continue
+            parts = line.split()
+            if len(parts) >= 2:
+                col_name = parts[0]
+                data_type = parts[1]
+                nullable = "NOT NULL" not in line
+                columns.append(ColumnInfo(name=col_name, data_type=data_type, is_nullable=nullable))
+        return columns
+
+    def compute_schema_fingerprint(self, columns: list[ColumnInfo]) -> str:
+        """MD5 of sorted col_name:col_type pairs."""
+        pairs = sorted(f"{c.name}:{c.data_type}" for c in columns)
+        return hashlib.md5("|".join(pairs).encode()).hexdigest()
+
+    def build_profile_query(
+        self,
+        schema: str,
+        table: str,
+        columns: list[ColumnInfo],
+        freshness_column: str | None,
+    ) -> str:
+        """
+        Build a single SELECT with all aggregate metrics.
+        Returns (query_string, metric_keys_in_order).
+        """
+        parts = ["COUNT(*) AS _row_count"]
+
+        if freshness_column:
+            parts.append(
+                f"EXTRACT(EPOCH FROM NOW() - MAX({freshness_column})) AS _freshness_seconds"
+            )
+
+        for col in columns:
+            safe = col.name
+            cat = col.category
+
+            # Null rate — all types
+            parts.append(
+                f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END)::FLOAT "
+                f"/ NULLIF(COUNT(*), 0) AS null_rate_{safe}"
+            )
+            # Distinct count — all types
+            parts.append(f"COUNT(DISTINCT {safe}) AS distinct_count_{safe}")
+
+            if cat == "numeric":
+                parts += [
+                    f"MIN({safe}) AS min_{safe}",
+                    f"MAX({safe}) AS max_{safe}",
+                    f"AVG({safe}::FLOAT) AS mean_{safe}",
+                    f"STDDEV({safe}::FLOAT) AS stddev_{safe}",
+                    f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END)::FLOAT "
+                    f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) AS zero_rate_{safe}",
+                    f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END)::FLOAT "
+                    f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) AS negative_rate_{safe}",
+                ]
+            elif cat in ("timestamp", "date"):
+                parts += [
+                    f"MIN({safe}) AS min_{safe}",
+                    f"MAX({safe}) AS max_{safe}",
+                ]
+            else:  # text / other
+                parts += [
+                    f"MIN({safe}::TEXT) AS min_{safe}",
+                    f"MAX({safe}::TEXT) AS max_{safe}",
+                ]
+
+        select_clause = ",\n       ".join(parts)
+        return f"SELECT {select_clause}\nFROM {schema}.{table}"
+
+    def parse_results(
+        self,
+        raw: dict,
+        columns: list[ColumnInfo],
+        freshness_column: str | None,
+        schema_fingerprint: str,
+        duration_ms: int,
+    ) -> ProfileResult:
+        result = ProfileResult(
+            row_count=int(raw.get("_row_count", 0) or 0),
+            schema_fingerprint=schema_fingerprint,
+            profiling_duration_ms=duration_ms,
+        )
+
+        if freshness_column and "_freshness_seconds" in raw:
+            val = raw["_freshness_seconds"]
+            result.freshness_seconds = float(val) if val is not None else None
+
+        col_metrics: dict[str, dict] = {}
+        for col in columns:
+            metrics: dict[str, Any] = {}
+            for key, val in raw.items():
+                suffix = f"_{col.name}"
+                if key.endswith(suffix):
+                    metric_name = key[: -len(suffix)]
+                    metrics[metric_name] = float(val) if isinstance(val, (int, float)) else val
+            col_metrics[col.name] = metrics
+
+        result.column_metrics = col_metrics
+        return result
+
+    async def profile(
+        self,
+        connector: BaseConnector,
+        schema: str,
+        table: str,
+        freshness_column: str | None = None,
+    ) -> ProfileResult:
+        start = time.monotonic()
+        try:
+            columns = await self._get_columns_raw(connector, schema, table)
+            if not columns:
+                return ProfileResult(error="Could not introspect columns")
+
+            fingerprint = self.compute_schema_fingerprint(columns)
+            query = self.build_profile_query(schema, table, columns, freshness_column)
+
+            logger.info("Profiling %s.%s — query built, executing", schema, table)
+            raw = await connector.execute_profile_query(query)
+
+            duration_ms = int((time.monotonic() - start) * 1000)
+            result = self.parse_results(raw, columns, freshness_column, fingerprint, duration_ms)
+
+            logger.info(
+                "Profile complete",
+                extra={
+                    "schema": schema, "table": table,
+                    "row_count": result.row_count,
+                    "duration_ms": duration_ms,
+                },
+            )
+            return result
+
+        except Exception as e:
+            duration_ms = int((time.monotonic() - start) * 1000)
+            logger.error("Profiling failed for %s.%s: %s", schema, table, e)
+            return ProfileResult(
+                error=str(e),
+                profiling_duration_ms=duration_ms,
+            )

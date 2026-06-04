@@ -1,0 +1,36 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.database import Base
+
+
+class MonitoredTable(Base):
+    __tablename__ = "monitored_tables"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    schema_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    table_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    freshness_column: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    check_interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    sensitivity: Mapped[float] = mapped_column(Float, nullable=False, default=3.0)  # z-score threshold
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    dbt_model_yaml: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_profiled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    data_source: Mapped["DataSource"] = relationship("DataSource", back_populates="monitored_tables")
+    profiles: Mapped[list["TableProfile"]] = relationship("TableProfile", back_populates="table")
+    check_results: Mapped[list["CheckResult"]] = relationship("CheckResult", back_populates="table")
+    incidents: Mapped[list["Incident"]] = relationship("Incident", back_populates="table")
+    alert_configs: Mapped[list["AlertConfig"]] = relationship("AlertConfig", back_populates="table")
