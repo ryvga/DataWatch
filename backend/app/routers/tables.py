@@ -46,6 +46,7 @@ class ProfileSummary(BaseModel):
     schema_fingerprint: str | None
     profiling_duration_ms: int | None
     error: str | None
+    column_metrics: dict | None = None  # only populated on latest_profile, not in list
 
 
 class TableResponse(BaseModel):
@@ -121,6 +122,7 @@ async def _latest_profile(table_id, db: AsyncSession) -> ProfileSummary | None:
         schema_fingerprint=p.schema_fingerprint,
         profiling_duration_ms=p.profiling_duration_ms,
         error=p.error,
+        column_metrics=p.column_metrics,
     )
 
 
