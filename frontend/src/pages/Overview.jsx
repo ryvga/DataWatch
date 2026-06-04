@@ -30,8 +30,10 @@ export default function Overview() {
   const [incidents, setIncidents] = useState([])
   const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   const load = async () => {
+    setError('')
     try {
       const [s, t, i, h] = await Promise.all([
         getSources(), getTables(), getIncidents({ status: 'open', limit: 20 }), getHealth()
@@ -40,7 +42,9 @@ export default function Overview() {
       setTables(t.data)
       setIncidents(i.data)
       setHealth(h.data)
-    } catch (_) {}
+    } catch (err) {
+      setError(err.response?.data?.detail || err.message || 'Failed to load data')
+    }
     setLoading(false)
   }
 
@@ -65,6 +69,13 @@ export default function Overview() {
         </div>
         <button onClick={load} className="btn-secondary">Refresh</button>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="text-red-400/60 hover:text-red-400 ml-4">✕</button>
+        </div>
+      )}
 
       {/* Health cards */}
       {sources.length > 0 && (

@@ -8,6 +8,7 @@ import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import date, datetime
 from typing import Any
 
 from app.connectors.base import BaseConnector
@@ -187,7 +188,14 @@ class ProfilerService:
                 suffix = f"_{col.name}"
                 if key.endswith(suffix):
                     metric_name = key[: -len(suffix)]
-                    metrics[metric_name] = float(val) if isinstance(val, (int, float)) else val
+                    if isinstance(val, (int, float)):
+                        metrics[metric_name] = float(val)
+                    elif isinstance(val, datetime):
+                        metrics[metric_name] = val.isoformat()
+                    elif isinstance(val, date):
+                        metrics[metric_name] = val.isoformat()
+                    else:
+                        metrics[metric_name] = val
             col_metrics[col.name] = metrics
 
         result.column_metrics = col_metrics

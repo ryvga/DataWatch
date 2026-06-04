@@ -11,9 +11,20 @@ from app.worker import celery_app
 logger = logging.getLogger(__name__)
 
 
+async def _dispose_engine():
+    """Dispose SQLAlchemy asyncpg pool so it closes cleanly before the event loop exits."""
+    from app.database import engine
+    await engine.dispose()
+
+
 def _run(coro):
-    """Run a coroutine from a synchronous Celery task."""
-    return asyncio.run(coro)
+    """Run a coroutine from a synchronous Celery task, then dispose the DB engine."""
+    async def _wrapped():
+        try:
+            return await coro
+        finally:
+            await _dispose_engine()
+    return asyncio.run(_wrapped())
 
 
 @celery_app.task(
@@ -68,6 +79,7 @@ async def _profile_table_async(table_id: str) -> dict:
 
         # Rate limit check
         import redis as _redis_sync
+        from app.config import settings
         from app.services.plans import check_and_increment_rate
         r_sync = _redis_sync.from_url(settings.REDIS_URL)
         org = await db.get(__import__("app.models.organization", fromlist=["Organization"]).Organization, source.org_id)

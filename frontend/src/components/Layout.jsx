@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
 
 const links = [
@@ -9,6 +9,14 @@ const links = [
 ]
 
 export default function Layout() {
+  const nav = useNavigate()
+
+  const logout = () => {
+    localStorage.removeItem('dw_token')
+    localStorage.removeItem('dw_api_key')
+    nav('/login')
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
@@ -36,6 +44,14 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className="p-3 border-t border-gray-800">
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+          >
+            <span>🚪</span> Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* Main content */}
