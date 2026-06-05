@@ -1,11 +1,14 @@
 import logging
-from datetime import datetime
+import re
+from datetime import datetime, timezone
+from numbers import Number
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.connectors.factory import ConnectorFactory
 from app.database import get_db
 from app.models.check_result import CheckResult
 from app.models.data_source import DataSource
@@ -82,7 +85,93 @@ class CheckResultResponse(BaseModel):
     checked_at: datetime
 
 
+class CustomCheckRequest(BaseModel):
+    sql: str
+    name: str
+    severity: str = "P3"
+
+
+class CustomCheckResponse(BaseModel):
+    result: dict
+    violation_count: int
+    passed: bool
+    executed_at: datetime
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+_BLOCKED_SQL_KEYWORDS = (
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "DROP",
+    "CREATE",
+    "ALTER",
+    "GRANT",
+    "TRUNCATE",
+)
+_BLOCKED_SQL_RE = re.compile(
+    r"\b(" + "|".join(_BLOCKED_SQL_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _sql_without_quoted_content(sql: str) -> str:
+    chars: list[str] = []
+    quote: str | None = None
+    i = 0
+
+    while i < len(sql):
+        ch = sql[i]
+        if quote:
+            if ch == quote:
+                next_ch = sql[i + 1] if i + 1 < len(sql) else ""
+                if next_ch == quote:
+                    chars.extend("  ")
+                    i += 2
+                    continue
+                quote = None
+            chars.append(" ")
+            i += 1
+            continue
+
+        if ch in {"'", '"', "`"}:
+            quote = ch
+            chars.append(" ")
+        else:
+            chars.append(ch)
+        i += 1
+
+    return "".join(chars)
+
+
+def _validate_custom_check_sql(sql: str, severity: str) -> None:
+    stripped = sql.strip()
+    if not re.match(r"^SELECT\b", stripped, re.IGNORECASE):
+        raise HTTPException(status_code=422, detail="SQL must start with SELECT")
+
+    if severity not in {"P1", "P2", "P3"}:
+        raise HTTPException(status_code=422, detail="Severity must be one of P1, P2, or P3")
+
+    sql_for_checks = _sql_without_quoted_content(stripped)
+    if ";" in sql_for_checks:
+        raise HTTPException(status_code=422, detail="SQL must not contain semicolons")
+
+    blocked_match = _BLOCKED_SQL_RE.search(sql_for_checks)
+    if blocked_match:
+        keyword = blocked_match.group(1).upper()
+        raise HTTPException(status_code=422, detail=f"SQL contains prohibited keyword: {keyword}")
+
+
+def _violation_count_from_result(result: dict) -> int:
+    if not result:
+        return 0
+
+    first_value = next(iter(result.values()))
+    if isinstance(first_value, Number) and not isinstance(first_value, bool):
+        return int(first_value)
+    return 0
+
 
 async def _resolve_org_from_source(source_id: str, org: Organization, db: AsyncSession) -> DataSource:
     src = await db.scalar(
@@ -161,8 +250,6 @@ async def create_table(
     schema_snapshot = body.dbt_model_yaml
     if not schema_snapshot:
         try:
-            from app.connectors.factory import ConnectorFactory
-
             config = decrypt_config(source.connection_config["encrypted"], str(org.id))
             connector = ConnectorFactory.create(source.type, config)
             try:
@@ -275,8 +362,46 @@ async def trigger_run(
     table = await _get_table_or_404(table_id, org, db)
     from app.tasks import profile_table
     task = profile_table.delay(str(table.id))
-    from datetime import timezone
     return RunResponse(task_id=task.id, queued_at=datetime.now(timezone.utc))
+
+
+@router.post("/{table_id}/custom-check", response_model=CustomCheckResponse)
+async def run_custom_check(
+    table_id: str,
+    body: CustomCheckRequest,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        _validate_custom_check_sql(body.sql, body.severity)
+        table = await _get_table_or_404(table_id, org, db)
+        source = await db.scalar(
+            select(DataSource).where(DataSource.id == table.source_id, DataSource.org_id == org.id)
+        )
+        if not source:
+            raise HTTPException(status_code=422, detail="Table data source not found")
+
+        config = decrypt_config(source.connection_config["encrypted"], str(org.id))
+        connector = ConnectorFactory.create(source.type, config)
+        try:
+            result = await connector.execute_profile_query(body.sql.strip())
+        finally:
+            await connector.close()
+
+        violation_count = _violation_count_from_result(result)
+        return CustomCheckResponse(
+            result=result,
+            violation_count=violation_count,
+            passed=violation_count == 0,
+            executed_at=datetime.now(timezone.utc),
+        )
+    except HTTPException as e:
+        if e.status_code == 422:
+            raise
+        raise HTTPException(status_code=422, detail=str(e.detail)) from e
+    except Exception as e:
+        logger.warning("Custom check failed: %s", type(e).__name__)
+        raise HTTPException(status_code=422, detail=f"Custom check failed: {e}") from e
 
 
 @router.get("/{table_id}/profiles", response_model=list[ProfileSummary])
@@ -361,6 +486,38 @@ async def list_checks(
         q = q.where(CheckResult.checked_at < cursor)
 
     checks = (await db.scalars(q)).all()
+    return [
+        CheckResultResponse(
+            id=str(c.id),
+            profile_id=str(c.profile_id) if c.profile_id else None,
+            check_type=c.check_type,
+            check_name=c.check_name,
+            column_name=c.column_name,
+            status=c.status,
+            observed_value=c.observed_value,
+            expected_range=c.expected_range,
+            deviation_score=c.deviation_score,
+            checked_at=c.checked_at,
+        )
+        for c in checks
+    ]
+
+
+@router.get("/{table_id}/check-history", response_model=list[CheckResultResponse])
+async def get_check_history(
+    table_id: str,
+    limit: int = 50,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    table = await _get_table_or_404(table_id, org, db)
+    checks = (await db.scalars(
+        select(CheckResult)
+        .where(CheckResult.table_id == table.id)
+        .order_by(desc(CheckResult.checked_at))
+        .limit(min(limit, 500))
+    )).all()
+
     return [
         CheckResultResponse(
             id=str(c.id),

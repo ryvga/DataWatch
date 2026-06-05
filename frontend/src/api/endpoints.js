@@ -28,6 +28,8 @@ export const getTableProfiles = getProfiles
 export const getProfile = (tableId, profileId) => api.get(`/api/v1/tables/${tableId}/profiles/${profileId}`)
 export const getChecks = (id, params) => api.get(`/api/v1/tables/${id}/checks`, { params })
 export const getTableCheckResults = getChecks
+export const getCheckHistory = (id, limit = 50) => api.get(`/api/v1/tables/${id}/check-history?limit=${limit}`)
+export const runCustomCheck = (id, data) => api.post(`/api/v1/tables/${id}/custom-check`, data)
 
 // Incidents
 export const getIncidents = (params) => api.get('/api/v1/incidents', { params })
