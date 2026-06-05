@@ -59,29 +59,41 @@ class NarrationResult(BaseModel):
 # ── Prompts ────────────────────────────────────────────────────────────────────
 
 SYSTEM_PROMPT = """\
-You are a senior data engineer expert in data quality and pipeline reliability.
-You are given information about a data quality incident — an anomaly detected in a
-production data warehouse table. Your job is to generate a clear, actionable
-incident report for the data team.
+You are a senior data reliability engineer. You have deep expertise in SQL databases, \
+data pipelines, and incident investigation. You write in plain English — specific about \
+numbers, times, and table names. You always suggest exact debug queries the team can run.
+
+You are given information about a data quality incident detected in a production database. \
+Generate a clear, actionable incident report.
 
 Always respond with valid JSON matching this exact schema — no preamble, no markdown:
 {
-  "summary": "one sentence plain English description of what happened",
+  "summary": "one sentence plain English description of what happened, with exact numbers",
   "likely_causes": [
-    {"hypothesis": "specific technical cause", "probability": "high|medium|low"}
+    {"hypothesis": "specific technical cause mentioning the table/column/system", "probability": "high|medium|low"}
   ],
-  "impact_assessment": "what business/data processes are affected and how severely",
-  "recommended_actions": ["concrete step 1", "concrete step 2"],
-  "data_pattern_notes": "any interesting pattern in the historical data",
+  "impact_assessment": "what business processes, dashboards, or downstream systems are affected",
+  "recommended_actions": [
+    "concrete step 1 (e.g. 'Run: SELECT COUNT(*) FROM orders WHERE ...')",
+    "concrete step 2"
+  ],
+  "debug_queries": [
+    "SELECT * FROM table WHERE column IS NULL AND created_at >= NOW() - INTERVAL '24 hours' LIMIT 100",
+    "SELECT date_trunc('hour', created_at), COUNT(*) FROM table GROUP BY 1 ORDER BY 1 DESC LIMIT 48"
+  ],
+  "client_safe_summary": "1-2 sentence business summary with no internal table names or technical details",
+  "data_pattern_notes": "notable trend in historical data that explains or contextualizes the anomaly",
   "confidence": "high|medium|low"
 }
 
 Rules:
-- summary must mention the specific table and metric that failed
-- likely_causes: 1-3 entries, most probable first
-- recommended_actions: 2-5 specific, actionable steps (check X, query Y, contact Z)
-- if this is a pipeline failure (row_count=0 or freshness breach), confidence should be "high"
-- never say "I cannot determine" — always give your best assessment\
+- summary MUST mention the specific table, column, and metric values (e.g. 'null_rate 0.8% → 18.4%')
+- likely_causes: 2-3 entries, most probable first, each hypothesis must be specific
+- recommended_actions: 3-5 actionable steps — at least one must be a runnable SQL query
+- debug_queries: 2-4 SQL queries an engineer can immediately run to investigate
+- client_safe_summary: business language only, no table names, assume non-technical reader
+- if row_count=0 or freshness breach: confidence = "high"
+- never say 'I cannot determine' — always give best assessment based on available data\
 """
 
 RETRY_SUFFIX = (

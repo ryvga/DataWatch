@@ -131,4 +131,44 @@ async def build_context(incident_id: str) -> str:
     if table.dbt_model_yaml:
         lines += ["", "=== DBT MODEL ===", table.dbt_model_yaml[:1000]]
 
+    # ── Column trend for fired columns ────────────────────────────────────────
+    trend_cols = {c.get("column_name") for c in (incident.fired_checks or []) if c.get("column_name")}
+    if trend_cols and len(history) >= 3:
+        trend_lines = ["=== COLUMN TRENDS (last 5 profiles for impacted columns) ==="]
+        for col in list(trend_cols)[:4]:  # cap at 4 columns
+            vals = []
+            for p in history[-5:]:
+                m = (p.column_metrics or {}).get(col, {})
+                if isinstance(m, dict):
+                    nr = m.get("null_rate")
+                    mn = m.get("mean")
+                    ur = m.get("uniqueness_ratio")
+                    bits = []
+                    if nr is not None: bits.append(f"null={nr:.3f}")
+                    if mn is not None: bits.append(f"mean={mn:.2f}")
+                    if ur is not None: bits.append(f"uniq={ur:.3f}")
+                    vals.append(f"[{p.collected_at.strftime('%m/%d')} {','.join(bits)}]")
+            if vals:
+                trend_lines.append(f"  {col}: {' → '.join(vals)}")
+        lines += [""] + trend_lines
+
+    # ── Incident frequency ────────────────────────────────────────────────────
+    async with AsyncSessionLocal() as db2:
+        from app.models.incident import Incident as Inc
+        cutoff_30d = datetime.now(UTC) - timedelta(days=30)
+        recent_count = await db2.scalar(
+            select(__import__("sqlalchemy").func.count())
+            .where(Inc.table_id == table.id, Inc.created_at >= cutoff_30d)
+        ) or 0
+    if recent_count > 1:
+        lines += ["", f"=== INCIDENT FREQUENCY ===",
+                  f"This table has had {recent_count} incidents in the past 30 days."]
+
+    # ── Schema change note ────────────────────────────────────────────────────
+    if len(history) >= 2:
+        fingerprints = [p.schema_fingerprint for p in history if p.schema_fingerprint]
+        if fingerprints and len(set(fingerprints[-5:])) > 1:
+            lines += ["", "=== SCHEMA CHANGES ===",
+                      "Schema fingerprint changed in the last 5 profiles — recent deployment likely."]
+
     return "\n".join(lines)
