@@ -33,6 +33,7 @@ export const getTableCheckResults = getChecks
 export const getIncidents = (params) => api.get('/api/v1/incidents', { params })
 export const getIncident = (id) => api.get(`/api/v1/incidents/${id}`)
 export const acknowledgeIncident = (id) => api.patch(`/api/v1/incidents/${id}/acknowledge`)
+export const investigateIncident = (id) => api.patch(`/api/v1/incidents/${id}/investigate`)
 export const resolveIncident = (id) => api.patch(`/api/v1/incidents/${id}/resolve`)
 export const retryNarration = (id) => api.post(`/api/v1/incidents/${id}/narration/retry`)
 

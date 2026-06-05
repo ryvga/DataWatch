@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
-import { acknowledgeIncident, getIncident, getTable, resolveIncident } from '../api/endpoints'
+import { acknowledgeIncident, investigateIncident, getIncident, getTable, resolveIncident } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import SeverityBadge from '../components/SeverityBadge'
 import { LoadingState, formatDateTime, formatNumber } from '../components/app-ui'
@@ -566,6 +566,16 @@ export default function IncidentDetail() {
     }
   }
 
+  const doInvestigate = async () => {
+    setUpdating(true)
+    try {
+      const response = await investigateIncident(id)
+      setIncident(response.data)
+    } finally {
+      setUpdating(false)
+    }
+  }
+
   const doResolve = async () => {
     setUpdating(true)
     try {
@@ -608,9 +618,9 @@ export default function IncidentDetail() {
             <SeverityBadge severity={incident.severity} />
             <HealthBadge status={incident.status} />
             {incident.status === 'acknowledged' && (
-              <Button type="button" variant="secondary" disabled>
+              <Button type="button" variant="secondary" onClick={doInvestigate} disabled={updating}>
                 <Search data-icon="inline-start" />
-                Investigating
+                Mark Investigating
               </Button>
             )}
             {canAcknowledge && (

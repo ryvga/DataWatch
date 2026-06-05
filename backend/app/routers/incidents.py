@@ -103,10 +103,29 @@ async def acknowledge_incident(
 ):
     from datetime import timezone
     incident = await _get_incident_or_404(incident_id, org, db)
-    if incident.status != "open":
+    if incident.status in ("resolved", "acknowledged", "investigating"):
         raise HTTPException(status_code=409, detail=f"Incident is already {incident.status}")
     incident.status = "acknowledged"
     incident.acknowledged_at = datetime.now(timezone.utc)
+    await db.commit()
+    return _incident_response(incident)
+
+
+@router.patch("/{incident_id}/investigate", response_model=IncidentResponse)
+async def investigate_incident(
+    incident_id: str,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark incident as actively being investigated (ack → investigating)."""
+    from datetime import timezone
+    incident = await _get_incident_or_404(incident_id, org, db)
+    if incident.status == "resolved":
+        raise HTTPException(status_code=409, detail="Incident already resolved")
+    incident.status = "investigating"
+    if not incident.acknowledged_at:
+        incident.acknowledged_at = datetime.now(timezone.utc)
+    await db.commit()
     return _incident_response(incident)
 
 
@@ -122,6 +141,7 @@ async def resolve_incident(
         raise HTTPException(status_code=409, detail="Incident already resolved")
     incident.status = "resolved"
     incident.resolved_at = datetime.now(timezone.utc)
+    await db.commit()
     return _incident_response(incident)
 
 
