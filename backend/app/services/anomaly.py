@@ -453,3 +453,255 @@ def run_enum_drift_check(
                 ))
 
     return results
+
+
+# ── 8. Distribution Drift Mean ────────────────────────────────────────────────
+
+def _safe_float(value) -> float | None:
+    try:
+        if value is None:
+            return None
+        val = float(value)
+        if not np.isfinite(val):
+            return None
+        return val
+    except (TypeError, ValueError):
+        return None
+
+
+def run_distribution_drift_check(current_profile, history) -> list[AnomalyResult]:
+    """Detect numeric column mean drift against the historical rolling average."""
+    results: list[AnomalyResult] = []
+    curr_metrics = getattr(current_profile, "column_metrics", None) or {}
+    if not isinstance(curr_metrics, dict):
+        return results
+
+    history = history or []
+    for col_name, col_data in curr_metrics.items():
+        if not isinstance(col_data, dict):
+            continue
+        current_mean = _safe_float(col_data.get("mean"))
+        current_stddev = _safe_float(col_data.get("stddev"))
+        if current_mean is None or current_stddev is None:
+            continue
+
+        hist_means: list[float] = []
+        for profile in history[-Z_SCORE_WINDOW:]:
+            profile_metrics = getattr(profile, "column_metrics", None) or {}
+            if not isinstance(profile_metrics, dict):
+                continue
+            hist_col = profile_metrics.get(col_name, {})
+            if not isinstance(hist_col, dict):
+                continue
+            hist_mean = _safe_float(hist_col.get("mean"))
+            hist_stddev = _safe_float(hist_col.get("stddev"))
+            if hist_mean is not None and hist_stddev is not None:
+                hist_means.append(hist_mean)
+
+        if len(hist_means) < Z_SCORE_MIN_POINTS:
+            continue
+
+        arr = np.array(hist_means, dtype=float)
+        mean = float(np.mean(arr))
+        std = float(np.std(arr))
+        if std == 0:
+            continue
+
+        z = (current_mean - mean) / std
+        results.append(AnomalyResult(
+            check_type="z_score",
+            check_name="distribution_drift_mean",
+            column_name=col_name,
+            status="failed" if abs(z) > 3.0 else "passed",
+            observed_value=round(current_mean, 4),
+            expected_range={"low": round(mean - 3.0 * std, 4), "high": round(mean + 3.0 * std, 4)},
+            deviation_score=round(z, 4),
+        ))
+
+    return results
+
+
+# ── 9. Null Rate Trend ────────────────────────────────────────────────────────
+
+def run_null_rate_trend_check(current_profile, history) -> list[AnomalyResult]:
+    """Detect columns whose null_rate is monotonically increasing."""
+    results: list[AnomalyResult] = []
+    history = history or []
+    if len(history) < 5:
+        return results
+
+    curr_metrics = getattr(current_profile, "column_metrics", None) or {}
+    if not isinstance(curr_metrics, dict):
+        return results
+
+    for col_name, col_data in curr_metrics.items():
+        if not isinstance(col_data, dict):
+            continue
+
+        rates: list[float] = []
+        for profile in history[-5:]:
+            profile_metrics = getattr(profile, "column_metrics", None) or {}
+            if not isinstance(profile_metrics, dict):
+                continue
+            hist_col = profile_metrics.get(col_name, {})
+            if not isinstance(hist_col, dict):
+                continue
+            null_rate = _safe_float(hist_col.get("null_rate"))
+            if null_rate is not None:
+                rates.append(null_rate)
+
+        current_null_rate = _safe_float(col_data.get("null_rate"))
+        if current_null_rate is None or len(rates) < 5:
+            continue
+
+        rates.append(current_null_rate)
+        trending = all(rates[i] > rates[i - 1] for i in range(1, len(rates)))
+        slope = float(np.polyfit(np.arange(len(rates), dtype=float), np.array(rates, dtype=float), 1)[0])
+
+        results.append(AnomalyResult(
+            check_type="rule",
+            check_name="null_rate_trending",
+            column_name=col_name,
+            status="failed" if trending else "passed",
+            observed_value=round(current_null_rate, 4),
+            expected_range={"low": 0.0, "high": round(rates[0], 4)},
+            deviation_score=round(slope, 4),
+        ))
+
+    return results
+
+
+# ── 10. Freshness ─────────────────────────────────────────────────────────────
+
+def run_freshness_check(current_profile, monitored_table) -> list[AnomalyResult]:
+    """Check freshness staleness and SLA breach for tables with a freshness column."""
+    results: list[AnomalyResult] = []
+    freshness_column = getattr(monitored_table, "freshness_column", None)
+    freshness_seconds = _safe_float(getattr(current_profile, "freshness_seconds", None))
+    if not freshness_column or freshness_seconds is None:
+        return results
+
+    interval_minutes = _safe_float(getattr(monitored_table, "check_interval_minutes", None))
+    if interval_minutes is None:
+        return results
+
+    stale_seconds = interval_minutes * 60
+    sla_seconds = stale_seconds * 2
+
+    if freshness_seconds > sla_seconds:
+        results.append(AnomalyResult(
+            check_type="rule",
+            check_name="freshness_sla_breach",
+            column_name=freshness_column,
+            status="failed",
+            observed_value=round(freshness_seconds, 1),
+            expected_range={"low": 0, "high": round(sla_seconds, 1)},
+            deviation_score=None,
+        ))
+
+    results.append(AnomalyResult(
+        check_type="rule",
+        check_name="freshness_stale",
+        column_name=freshness_column,
+        status="failed" if freshness_seconds > stale_seconds else "passed",
+        observed_value=round(freshness_seconds, 1),
+        expected_range={"low": 0, "high": round(stale_seconds, 1)},
+        deviation_score=None,
+    ))
+
+    return results
+
+
+# ── 11. Schema Change ─────────────────────────────────────────────────────────
+
+def run_schema_change_check(current_profile, history) -> list[AnomalyResult]:
+    """Detect schema fingerprint drift and column count changes."""
+    results: list[AnomalyResult] = []
+    history = history or []
+    if len(history) < 1:
+        return results
+
+    prev_profile = history[-1]
+    curr_fp = getattr(current_profile, "schema_fingerprint", None)
+    prev_fp = getattr(prev_profile, "schema_fingerprint", None)
+    if curr_fp is not None and prev_fp is not None:
+        changed = curr_fp != prev_fp
+        results.append(AnomalyResult(
+            check_type="rule",
+            check_name="schema_drift",
+            column_name=None,
+            status="failed" if changed else "passed",
+            observed_value=None,
+            expected_range={"previous": prev_fp, "current": curr_fp} if changed else None,
+            deviation_score=None,
+        ))
+
+    curr_metrics = getattr(current_profile, "column_metrics", None) or {}
+    prev_metrics = getattr(prev_profile, "column_metrics", None) or {}
+    if isinstance(curr_metrics, dict) and isinstance(prev_metrics, dict):
+        curr_count = len(curr_metrics)
+        prev_count = len(prev_metrics)
+        if curr_count != prev_count:
+            results.append(AnomalyResult(
+                check_type="rule",
+                check_name="schema_column_count_change",
+                column_name=None,
+                status="failed",
+                observed_value=float(curr_count),
+                expected_range={"previous": prev_count, "current": curr_count},
+                deviation_score=float(curr_count - prev_count),
+            ))
+
+    return results
+
+
+# ── 8. Uniqueness / Duplicate Rate Check ──────────────────────────────────────
+
+UNIQUENESS_DROP_THRESHOLD = 0.05  # flag if uniqueness drops >5% relative
+
+def run_uniqueness_check(
+    current_profile,
+    history: list,
+) -> list[AnomalyResult]:
+    """
+    Detect columns where uniqueness_ratio dropped significantly (duplicate surge).
+    Uses uniqueness_ratio from column_metrics (= distinct_count / row_count).
+    """
+    results: list[AnomalyResult] = []
+    if len(history) < 3:
+        return results
+
+    curr_metrics = current_profile.column_metrics or {}
+    for col_name, col_data in curr_metrics.items():
+        if not isinstance(col_data, dict):
+            continue
+        curr_uniq = col_data.get("uniqueness_ratio")
+        if curr_uniq is None:
+            continue
+
+        hist_uniqs = []
+        for p in history[-7:]:
+            if p.column_metrics and col_name in p.column_metrics:
+                v = p.column_metrics[col_name]
+                if isinstance(v, dict) and v.get("uniqueness_ratio") is not None:
+                    hist_uniqs.append(float(v["uniqueness_ratio"]))
+
+        if len(hist_uniqs) < 2:
+            continue
+
+        avg_hist = float(np.mean(hist_uniqs))
+        if avg_hist < 0.01:
+            continue  # was never unique, skip
+
+        relative_drop = (avg_hist - float(curr_uniq)) / avg_hist
+        results.append(AnomalyResult(
+            check_type="rule",
+            check_name="uniqueness_drop",
+            column_name=col_name,
+            status="failed" if relative_drop > UNIQUENESS_DROP_THRESHOLD else "passed",
+            observed_value=round(float(curr_uniq), 4),
+            expected_range={"low": round(avg_hist * (1 - UNIQUENESS_DROP_THRESHOLD), 4), "high": 1.0},
+            deviation_score=round(relative_drop, 4),
+        ))
+
+    return results

@@ -119,7 +119,12 @@ class ProfilerService:
         Build a single SELECT with all aggregate metrics.
         Returns (query_string, metric_keys_in_order).
         """
-        parts = ["COUNT(*) AS _row_count"]
+        parts = [
+            "COUNT(*) AS _row_count",
+            # Duplicate rate: what fraction of rows are duplicates of at least one other row
+            # Approximated via: 1 - (COUNT(DISTINCT all_cols) / COUNT(*))
+            # We approximate per-column uniqueness instead (cheaper)
+        ]
 
         if freshness_column:
             parts.append(
@@ -137,6 +142,10 @@ class ProfilerService:
             )
             # Distinct count — all types
             parts.append(f"COUNT(DISTINCT {safe}) AS distinct_count_{safe}")
+            # Uniqueness ratio — 1.0 means all values unique, lower = many duplicates
+            parts.append(
+                f"COUNT(DISTINCT {safe})::FLOAT / NULLIF(COUNT(*), 0) AS uniqueness_ratio_{safe}"
+            )
 
             if cat == "numeric":
                 parts += [

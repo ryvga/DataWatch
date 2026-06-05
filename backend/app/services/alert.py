@@ -228,6 +228,76 @@ def send_teams_alert(webhook_url: str, incident, narration: dict | None) -> bool
         return False
 
 
+# ── Discord ───────────────────────────────────────────────────────────────────
+
+DISCORD_COLORS = {"P1": 15548997, "P2": 15105570, "P3": 16776960}
+
+def send_discord_alert(webhook_url: str, incident, narration: dict | None) -> bool:
+    """Discord webhook alert with an embed payload."""
+    severity = incident.severity.upper()
+    summary = narration.get("summary", "Narration pending.") if narration and "error" not in narration else "Narration pending."
+    color = DISCORD_COLORS.get(severity, 8421504)
+    payload = {
+        "embeds": [
+            {
+                "color": color,
+                "title": incident.title,
+                "description": summary,
+                "fields": [
+                    {"name": "Severity", "value": severity, "inline": True},
+                    {"name": "Status", "value": str(incident.status), "inline": True},
+                    {
+                        "name": "Detected",
+                        "value": incident.created_at.strftime("%Y-%m-%d %H:%M UTC"),
+                        "inline": True,
+                    },
+                ],
+            }
+        ]
+    }
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.post(webhook_url, json=payload)
+            r.raise_for_status()
+            return True
+    except Exception as e:
+        logger.error("Discord alert failed for incident %s: %s", incident.id, e)
+        return False
+
+
+# ── OpsGenie ──────────────────────────────────────────────────────────────────
+
+OPSGENIE_PRIORITIES = {"P1": "P1", "P2": "P2", "P3": "P3"}
+
+def send_opsgenie_alert(
+    api_key: str,
+    incident,
+    narration: dict | None,
+    base_url: str = "https://api.opsgenie.com/v2/alerts",
+) -> bool:
+    """OpsGenie create alert API."""
+    severity = incident.severity.upper()
+    summary = narration.get("summary", "Narration pending.") if narration and "error" not in narration else "Narration pending."
+    payload = {
+        "message": incident.title,
+        "description": summary,
+        "priority": OPSGENIE_PRIORITIES.get(severity, "P3"),
+        "tags": ["datawatch"],
+        "source": "DataWatch",
+    }
+    headers = {"Authorization": f"GenieKey {api_key}"}
+
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.post(base_url, json=payload, headers=headers)
+            r.raise_for_status()
+            return True
+    except Exception as e:
+        logger.error("OpsGenie alert failed for incident %s: %s", incident.id, e)
+        return False
+
+
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 def dispatch_alert(alert_config, incident, narration: dict | None) -> bool:
@@ -252,6 +322,10 @@ def dispatch_alert(alert_config, incident, narration: dict | None) -> bool:
         return send_webhook_alert(cfg["url"], incident, narration, cfg.get("secret"))
     elif channel == "teams":
         return send_teams_alert(cfg["webhook_url"], incident, narration)
+    elif channel == "discord":
+        return send_discord_alert(cfg["webhook_url"], incident, narration)
+    elif channel == "opsgenie":
+        return send_opsgenie_alert(cfg["api_key"], incident, narration)
     else:
         logger.warning("Unknown alert channel: %s", channel)
         return False

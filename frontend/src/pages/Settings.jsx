@@ -107,6 +107,8 @@ const ALERT_EXAMPLES = {
   pagerduty: '{\n  "routing_key": "YOUR_KEY",\n  "min_severity": "P1"\n}',
   webhook: '{\n  "url": "https://example.com/webhook",\n  "secret": ""\n}',
   teams: '{\n  "webhook_url": "https://outlook.office.com/webhook/..."\n}',
+  discord: '{\n  "webhook_url": "https://discord.com/api/webhooks/...",\n  "min_severity": "P2"\n}',
+  opsgenie: '{\n  "api_key": "YOUR_OPSGENIE_KEY",\n  "min_severity": "P1"\n}',
 }
 
 const ALERT_FIELD_DEFAULTS = {
@@ -430,7 +432,9 @@ function AlertForm({ open, onOpenChange, onCreated }) {
                 <SelectGroup>
                   <SelectItem value="slack">Slack</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="discord">Discord</SelectItem>
                   <SelectItem value="pagerduty">PagerDuty</SelectItem>
+                  <SelectItem value="opsgenie">OpsGenie</SelectItem>
                   <SelectItem value="webhook">Webhook (Generic)</SelectItem>
                   <SelectItem value="teams">Microsoft Teams</SelectItem>
                 </SelectGroup>

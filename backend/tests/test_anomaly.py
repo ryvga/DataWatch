@@ -117,6 +117,97 @@ def test_rule_null_rate_spike():
     assert check.deviation_score > 0.20
 
 
+# ── Additional anomaly checks ──────────────────────────────────────────────────
+
+def test_distribution_drift_flags_current_mean_outlier():
+    from app.services.anomaly import run_distribution_drift_check
+
+    history = [
+        make_profile(column_metrics={"amount": {"mean": 100 + i, "stddev": 10}})
+        for i in range(10)
+    ]
+    current = make_profile(column_metrics={"amount": {"mean": 150, "stddev": 10}})
+
+    results = run_distribution_drift_check(current, history)
+    check = next((r for r in results if r.check_name == "distribution_drift_mean"), None)
+
+    assert check is not None
+    assert check.column_name == "amount"
+    assert check.check_type == "z_score"
+    assert check.status == "failed"
+    assert check.deviation_score is not None
+    assert abs(check.deviation_score) > 3.0
+
+
+def test_null_rate_trend_flags_monotonic_increase():
+    from app.services.anomaly import run_null_rate_trend_check
+
+    history = [
+        make_profile(column_metrics={"email": {"null_rate": rate}})
+        for rate in [0.01, 0.02, 0.03, 0.04, 0.05]
+    ]
+    current = make_profile(column_metrics={"email": {"null_rate": 0.06}})
+
+    results = run_null_rate_trend_check(current, history)
+    check = next((r for r in results if r.check_name == "null_rate_trending"), None)
+
+    assert check is not None
+    assert check.column_name == "email"
+    assert check.check_type == "rule"
+    assert check.status == "failed"
+    assert check.deviation_score is not None
+    assert check.deviation_score > 0
+
+
+def test_freshness_check_reports_stale_and_sla_breach():
+    from app.services.anomaly import run_freshness_check
+
+    current = make_profile(freshness_seconds=7500.0)
+    table = make_table(freshness_column="updated_at", interval=60)
+
+    results = run_freshness_check(current, table)
+    stale = next((r for r in results if r.check_name == "freshness_stale"), None)
+    sla = next((r for r in results if r.check_name == "freshness_sla_breach"), None)
+
+    assert stale is not None
+    assert stale.status == "failed"
+    assert stale.observed_value == 7500.0
+    assert stale.expected_range == {"low": 0, "high": 3600}
+    assert sla is not None
+    assert sla.status == "failed"
+    assert sla.expected_range == {"low": 0, "high": 7200}
+
+
+def test_schema_change_check_reports_fingerprint_and_column_count_changes():
+    from app.services.anomaly import run_schema_change_check
+
+    prev = make_profile(
+        fingerprint="fp_old",
+        column_metrics={"id": {"null_rate": 0}, "amount": {"mean": 10, "stddev": 1}},
+    )
+    current = make_profile(
+        fingerprint="fp_new",
+        column_metrics={
+            "id": {"null_rate": 0},
+            "amount": {"mean": 10, "stddev": 1},
+            "status": {"null_rate": 0},
+        },
+    )
+
+    results = run_schema_change_check(current, [prev])
+    drift = next((r for r in results if r.check_name == "schema_drift"), None)
+    count = next((r for r in results if r.check_name == "schema_column_count_change"), None)
+
+    assert drift is not None
+    assert drift.status == "failed"
+    assert drift.observed_value is None
+    assert drift.expected_range == {"previous": "fp_old", "current": "fp_new"}
+    assert count is not None
+    assert count.status == "failed"
+    assert count.observed_value == 3.0
+    assert count.expected_range == {"previous": 2, "current": 3}
+
+
 # ── IncidentService tests ──────────────────────────────────────────────────────
 
 def test_severity_p1_row_count_zero():
