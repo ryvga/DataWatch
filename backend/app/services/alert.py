@@ -160,6 +160,74 @@ def send_pagerduty_alert(routing_key: str, incident, event_action: str = "trigge
         return False
 
 
+# ── Webhook ───────────────────────────────────────────────────────────────────
+
+def send_webhook_alert(url: str, incident, narration: dict | None, secret: str | None = None) -> bool:
+    """Generic JSON webhook — sends full incident payload with optional HMAC signature."""
+    import hashlib, hmac, time
+    payload = {
+        "event": "incident.created",
+        "timestamp": int(time.time()),
+        "incident": {
+            "id": str(incident.id),
+            "title": incident.title,
+            "severity": incident.severity,
+            "status": incident.status,
+            "detected_at": incident.created_at.isoformat(),
+            "table_id": str(incident.table_id),
+        },
+        "ai_summary": narration.get("summary") if narration else None,
+    }
+    headers = {"Content-Type": "application/json"}
+    if secret:
+        body = __import__("json").dumps(payload).encode()
+        sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        headers["X-DataWatch-Signature"] = f"sha256={sig}"
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.post(url, json=payload, headers=headers)
+            r.raise_for_status()
+            return True
+    except Exception as e:
+        logger.error("Webhook alert failed: %s", e)
+        return False
+
+
+# ── Microsoft Teams ───────────────────────────────────────────────────────────
+
+TEAMS_COLORS = {"P1": "FF0000", "P2": "FFA500", "P3": "FFFF00"}
+
+def send_teams_alert(webhook_url: str, incident, narration: dict | None) -> bool:
+    """Microsoft Teams Incoming Webhook (Adaptive Card format)."""
+    severity = incident.severity.upper()
+    summary = narration.get("summary", "See incident for details.") if narration else "See incident for details."
+    color = TEAMS_COLORS.get(severity, "6b7280")
+    payload = {
+        "@type": "MessageCard",
+        "@context": "http://schema.org/extensions",
+        "themeColor": color,
+        "summary": f"[{severity}] {incident.title}",
+        "sections": [{
+            "activityTitle": f"🚨 [{severity}] DataWatch Incident",
+            "activitySubtitle": incident.title,
+            "facts": [
+                {"name": "Severity", "value": severity},
+                {"name": "Status", "value": incident.status.title()},
+                {"name": "Detected", "value": incident.created_at.strftime("%Y-%m-%d %H:%M UTC")},
+            ],
+            "text": summary,
+        }],
+    }
+    try:
+        with httpx.Client(timeout=10) as client:
+            r = client.post(webhook_url, json=payload)
+            r.raise_for_status()
+            return True
+    except Exception as e:
+        logger.error("Teams alert failed: %s", e)
+        return False
+
+
 # ── Dispatcher ────────────────────────────────────────────────────────────────
 
 def dispatch_alert(alert_config, incident, narration: dict | None) -> bool:
@@ -180,6 +248,10 @@ def dispatch_alert(alert_config, incident, narration: dict | None) -> bool:
         return send_email_alert(cfg.get("to", []), incident, narration)
     elif channel == "pagerduty":
         return send_pagerduty_alert(cfg["routing_key"], incident)
+    elif channel == "webhook":
+        return send_webhook_alert(cfg["url"], incident, narration, cfg.get("secret"))
+    elif channel == "teams":
+        return send_teams_alert(cfg["webhook_url"], incident, narration)
     else:
         logger.warning("Unknown alert channel: %s", channel)
         return False

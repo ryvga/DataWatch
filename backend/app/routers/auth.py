@@ -1,6 +1,9 @@
 from datetime import UTC, datetime
+from collections import defaultdict
+import time
+import threading
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from jose import JWTError
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update
@@ -18,6 +21,28 @@ from app.models.organization import Organization
 from app.models.user import ApiKey, StaffUser, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# ── Simple in-process rate limiter for login endpoints ────────────────────────
+# Uses sliding window: max 10 attempts per IP per 60 seconds.
+# Production should use Redis-backed rate limiting.
+_RATE_LIMIT_WINDOW = 60   # seconds
+_RATE_LIMIT_MAX = 10      # attempts per window
+_rate_store: dict[str, list[float]] = defaultdict(list)
+_rate_lock = threading.Lock()
+
+def _check_rate_limit(ip: str) -> None:
+    now = time.time()
+    with _rate_lock:
+        timestamps = _rate_store[ip]
+        # Purge old
+        _rate_store[ip] = [t for t in timestamps if now - t < _RATE_LIMIT_WINDOW]
+        if len(_rate_store[ip]) >= _RATE_LIMIT_MAX:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many login attempts. Please wait before trying again.",
+                headers={"Retry-After": str(_RATE_LIMIT_WINDOW)},
+            )
+        _rate_store[ip].append(now)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -96,7 +121,8 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 _INVALID = HTTPException(status_code=401, detail="Invalid email or password")
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    _check_rate_limit(request.client.host if request.client else "unknown")
     # Never reveal whether workspace or user exists — always same error
     org = await db.scalar(select(Organization).where(Organization.slug == body.org_slug))
     if not org:
@@ -128,7 +154,9 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 # ── Staff Login ───────────────────────────────────────────────────────────────
 
 @router.post("/staff/login", response_model=StaffTokenResponse)
-async def staff_login(body: StaffLoginRequest, db: AsyncSession = Depends(get_db)):
+async def staff_login(body: StaffLoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    # Strict rate limit for staff login — more sensitive target
+    _check_rate_limit(f"staff:{request.client.host if request.client else 'unknown'}")
     staff = await db.scalar(
         select(StaffUser).where(StaffUser.email == body.email, StaffUser.is_active == True)
     )
