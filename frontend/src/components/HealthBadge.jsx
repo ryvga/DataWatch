@@ -12,6 +12,7 @@ const STATUS_STYLES = {
   error: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
   failed: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
   open: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
+  incident: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
 }
 
 export default function HealthBadge({ status, size = 'sm', className }) {

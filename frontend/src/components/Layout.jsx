@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   Database,
@@ -34,6 +35,7 @@ import { clearSession } from '@/lib/storage'
 const links = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/tables', label: 'Tables', icon: Table2 },
+  { to: '/monitors', label: 'Monitors', icon: Activity },
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },

@@ -23,8 +23,9 @@ export default defineConfig({
     },
   },
   server: {
+    // '0.0.0.0' lets *.localhost subdomains resolve to this dev server
+    host: '0.0.0.0',
     port: 5173,
-    host: '127.0.0.1',
     strictPort: true,
     proxy: {
       '/api': { target: 'http://localhost:8000', changeOrigin: true },
@@ -32,7 +33,5 @@ export default defineConfig({
       '/orgs': { target: 'http://localhost:8000', changeOrigin: true },
       '/health': { target: 'http://localhost:8000', changeOrigin: true },
     },
-    // Allow *.localhost subdomains for dev subdomain routing
-    host: '0.0.0.0',
   },
 })

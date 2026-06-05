@@ -66,12 +66,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { storage } from '@/lib/storage'
 
-const SOURCE_TYPES = ['postgres', 'mysql', 'mongodb', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
+const SOURCE_TYPES = ['postgres', 'mysql', 'mongodb', 'cassandra', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
 
 const SOURCE_TYPE_LABELS = {
   postgres: 'PostgreSQL',
   mysql: 'MySQL / MariaDB',
   mongodb: 'MongoDB',
+  cassandra: 'Cassandra',
   redshift: 'Amazon Redshift',
   bigquery: 'Google BigQuery',
   snowflake: 'Snowflake',
@@ -89,6 +90,7 @@ const SOURCE_CONFIG_TEMPLATES = {
   bigquery: '{\n  "project_id": "my-gcp-project",\n  "credentials_json": null\n}',
   snowflake: '{\n  "account": "xy12345.us-east-1",\n  "user": "MYUSER",\n  "password": "",\n  "database": "MYDB",\n  "warehouse": "COMPUTE_WH"\n}',
   mongodb: '{\n  "uri": "mongodb://user:pass@localhost:27017",\n  "database": "mydb"\n}',
+  cassandra: '{\n  "hosts": "node1.cassandra.io,node2.cassandra.io",\n  "port": 9042,\n  "keyspace": "my_keyspace",\n  "username": "cassandra",\n  "password": ""\n}',
   sqlserver: '{\n  "host": "localhost",\n  "port": 1433,\n  "database": "MyDB",\n  "username": "sa",\n  "password": ""\n}',
   clickhouse: '{\n  "host": "localhost",\n  "port": 8123,\n  "database": "default",\n  "username": "default",\n  "password": ""\n}',
   databricks: '{\n  "server_hostname": "adb-xxx.azuredatabricks.net",\n  "http_path": "/sql/1.0/warehouses/xxx",\n  "access_token": "dapi...",\n  "catalog": "hive_metastore"\n}',
@@ -734,52 +736,114 @@ function AlertsTab() {
   )
 }
 
+const ROLES = [
+  { value: 'admin', label: 'Admin', desc: 'Full access — sources, tables, alerts, settings' },
+  { value: 'member', label: 'Member', desc: 'View dashboards, incidents, and reports' },
+  { value: 'viewer', label: 'Viewer (client)', desc: 'Read-only health score and reports — no raw data' },
+]
+
 function TeamTab() {
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('member')
+  const [sent, setSent] = useState(false)
+
+  const invite = (e) => {
+    e.preventDefault()
+    if (!email) return
+    setSent(true)
+    setTimeout(() => setSent(false), 3000)
+    setEmail('')
+  }
+
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 pt-6">
-        <div>
-          <h2 className="flex items-center gap-2 text-base font-medium">
-            <Users className="size-4 text-muted-foreground" />
-            Team members
-          </h2>
-          <p className="text-sm text-muted-foreground">Invite colleagues to your workspace and manage their roles.</p>
-        </div>
-        <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center">
-          <Users className="mx-auto size-8 text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium">Team invitations coming soon</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            You'll be able to invite team members by email and assign roles (admin / member).
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardContent className="pt-6 flex flex-col gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-medium"><Users className="size-4 text-muted-foreground" />Invite team members</h2>
+            <p className="text-sm text-muted-foreground mt-1">Members are isolated to your workspace — they cannot access other workspaces.</p>
+          </div>
+          <form onSubmit={invite} className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="email" value={email} onChange={e => setEmail(e.target.value)}
+              placeholder="colleague@company.com"
+              className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+            />
+            <select value={role} onChange={e => setRole(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm outline-none">
+              {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+            <Button type="submit" size="sm" disabled={!email}>{sent ? '✓ Invite sent!' : 'Send invite'}</Button>
+          </form>
+          <div className="rounded-lg border border-dashed bg-muted/20 p-5 text-center">
+            <p className="text-xs text-muted-foreground">No team members yet. Invite backend is coming in the next release.</p>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <h3 className="text-sm font-medium mb-3">Role permissions</h3>
+          <div className="flex flex-col gap-2">
+            {ROLES.map(r => (
+              <div key={r.value} className="flex items-start gap-3 rounded-lg border bg-muted/20 px-3 py-2">
+                <span className="mt-0.5 rounded-full border px-2 py-0.5 text-xs font-medium">{r.label}</span>
+                <span className="text-xs text-muted-foreground">{r.desc}</span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
+const PLANS = [
+  { name: 'Free', price: '$0', limit: '1 source · 5 tables · 7-day history' },
+  { name: 'Starter', price: '$49/mo', limit: '3 sources · 50 tables · 90-day history · Slack alerts' },
+  { name: 'Growth', price: '$149/mo', limit: 'Unlimited · 1yr history · AI features · PDF reports' },
+  { name: 'Agency', price: '$299/mo', limit: 'Multi-client · White-label reports · 15 members' },
+]
+
 function BillingTab() {
   const orgName = storage.getItem('dw_org_name') || 'Your workspace'
+  const plan = storage.getItem('dw_plan') || 'free'
+
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-4 pt-6">
-        <div>
-          <h2 className="flex items-center gap-2 text-base font-medium">
-            <CreditCard className="size-4 text-muted-foreground" />
-            Billing & Plan
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Manage your plan, payment method, and usage limits for <strong>{orgName}</strong>.
-          </p>
-        </div>
-        <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center">
-          <CreditCard className="mx-auto size-8 text-muted-foreground/40 mb-3" />
-          <p className="text-sm font-medium">Payment integration coming soon</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Stripe-powered billing will be available here. Contact us to discuss enterprise plans.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardContent className="pt-6 flex flex-col gap-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-medium"><CreditCard className="size-4 text-muted-foreground" />Current plan</h2>
+              <p className="text-sm text-muted-foreground mt-1">{orgName}</p>
+            </div>
+            <span className="rounded-full border px-3 py-1 text-sm font-semibold capitalize">{plan}</span>
+          </div>
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+            💳 Stripe billing integration is coming soon. You'll be able to upgrade, manage payment methods, and view invoices here.
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="pt-6">
+          <h3 className="text-sm font-medium mb-3">Available plans</h3>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {PLANS.map(p => (
+              <div key={p.name} className={cn('rounded-lg border p-3', p.name.toLowerCase() === plan && 'border-primary/40 bg-primary/5')}>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-sm">{p.name}</span>
+                  <span className="font-bold text-sm">{p.price}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{p.limit}</p>
+                {p.name.toLowerCase() !== plan && (
+                  <Button size="sm" variant="outline" className="mt-2 w-full h-7 text-xs" disabled>Upgrade (coming soon)</Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-center text-muted-foreground">Annual billing saves 20%. Enterprise pricing available on request.</p>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

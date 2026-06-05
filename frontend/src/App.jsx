@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Landing from './pages/Landing'
 import Overview from './pages/Overview'
 import Tables from './pages/Tables'
+import Monitors from './pages/Monitors'
 import Incidents from './pages/Incidents'
 import IncidentDetail from './pages/IncidentDetail'
 import TableDetail from './pages/TableDetail'
@@ -78,6 +79,7 @@ export default function App() {
               <Route index element={<Overview />} />
               <Route path="tables" element={<Tables />} />
               <Route path="tables/:id" element={<TableDetail />} />
+              <Route path="monitors" element={<Monitors />} />
               <Route path="incidents" element={<Incidents />} />
               <Route path="incidents/:id" element={<IncidentDetail />} />
               <Route path="reports" element={<Reports />} />

@@ -23,8 +23,7 @@ function SourceHealthRow({ source, tables }) {
       <TableCell>
         <HealthBadge status={status} />
       </TableCell>
-      <TableCell className="text-muted-foreground">{healthy}/{total}</TableCell>
-      <TableCell className="font-medium tabular-nums">{pct}%</TableCell>
+      <TableCell className="text-right text-sm text-muted-foreground">{healthy}/{total}</TableCell>
     </TableRow>
   )
 }
@@ -103,8 +102,7 @@ export default function Overview() {
                     <TableRow>
                       <TableHead>Source</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Healthy tables</TableHead>
-                      <TableHead>Score</TableHead>
+                      <TableHead className="text-right">Tables</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -153,21 +151,23 @@ export default function Overview() {
                   <TableRow>
                     <TableHead>Table</TableHead>
                     <TableHead>Rows</TableHead>
-                    <TableHead>Last profile</TableHead>
+                    <TableHead className="hidden sm:table-cell">Last profile</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {tables.slice(0, 12).map((table) => (
-                    <TableRow key={table.id}>
-                      <TableCell className="font-mono text-xs">{table.schema_name}.{table.table_name}</TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">{formatNumber(table.latest_profile?.row_count)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatDateTime(table.last_profiled_at)}</TableCell>
-                      <TableCell>
-                        <HealthBadge status={table.latest_profile?.error ? 'error' : table.is_active ? 'healthy' : 'paused'} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {tables.slice(0, 12).map((table) => {
+                    const hasIncident = incidents.some(i => i.table_id === table.id)
+                    const status = !table.is_active ? 'paused' : table.latest_profile?.error ? 'error' : hasIncident ? 'incident' : 'healthy'
+                    return (
+                      <TableRow key={table.id} className="cursor-pointer hover:bg-muted/30" onClick={() => window.location.href = `/tables/${table.id}`}>
+                        <TableCell className="font-mono text-xs">{table.schema_name}.{table.table_name}</TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">{formatNumber(table.latest_profile?.row_count)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">{formatDateTime(table.last_profiled_at)}</TableCell>
+                        <TableCell><HealthBadge status={status} /></TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

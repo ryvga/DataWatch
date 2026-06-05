@@ -82,6 +82,15 @@ CONNECTOR_REGISTRY = {
         "label": "SQLite",
         "description": "SQLite file database",
     },
+    "cassandra": {
+        "module": "app.connectors.cassandra",
+        "class": "CassandraConnector",
+        "required": ["hosts"],
+        "optional": {"port": 9042, "keyspace": None, "username": None, "password": None},
+        "label": "Cassandra",
+        "description": "Apache Cassandra (safe monitors — no full-table scans)",
+        "tier": 2,
+    },
     "mongodb": {
         "module": "app.connectors.mongodb",
         "class": "MongoDBConnector",
