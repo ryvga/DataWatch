@@ -1,12 +1,40 @@
 import { useEffect, useState } from 'react'
-import { RefreshCw, Server, Table2 } from 'lucide-react'
-import { getIncidents, getSources, getTables } from '../api/endpoints'
+import { Activity, AlertTriangle, CheckCircle2, RefreshCw, Server, Table2 } from 'lucide-react'
+import { getIncidents, getOrgHealth, getSources, getTables } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import IncidentCard from '../components/IncidentCard'
 import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatDateTime, formatNumber } from '../components/app-ui'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+const HEALTH_RING_COLOR = { green: '#10b981', yellow: '#f59e0b', red: '#ef4444' }
+
+function HealthRing({ score = 0, color = 'red', grade = '?' }) {
+  const r = 38, c = 2 * Math.PI * r
+  const offset = c - (Math.min(100, Math.max(0, score)) / 100) * c
+  const stroke = HEALTH_RING_COLOR[color] || HEALTH_RING_COLOR.red
+  return (
+    <div className="flex items-center gap-4">
+      <div className="relative size-24 shrink-0">
+        <svg viewBox="0 0 88 88" className="size-24 -rotate-90">
+          <circle cx="44" cy="44" r={r} fill="none" stroke="currentColor" strokeWidth="8" className="text-muted/30" />
+          <circle cx="44" cy="44" r={r} fill="none" stroke={stroke} strokeWidth="8"
+            strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xl font-black tabular-nums" style={{ color: stroke }}>{Math.round(score)}</span>
+          <span className="text-xs font-bold" style={{ color: stroke }}>{grade}</span>
+        </div>
+      </div>
+      <div>
+        <p className="text-sm font-semibold">Health Score</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Last 24h, weighted by severity</p>
+      </div>
+    </div>
+  )
+}
 
 function SourceHealthRow({ source, tables }) {
   const healthy = tables.filter((table) => !table.latest_profile?.error).length
@@ -32,6 +60,7 @@ export default function Overview() {
   const [sources, setSources] = useState([])
   const [tables, setTables] = useState([])
   const [incidents, setIncidents] = useState([])
+  const [orgHealth, setOrgHealth] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -40,14 +69,16 @@ export default function Overview() {
     setError('')
     if (isRefresh) setRefreshing(true)
     try {
-      const [s, t, i] = await Promise.all([
+      const [s, t, i, h] = await Promise.all([
         getSources(),
         getTables(),
         getIncidents({ status: 'open', limit: 20 }),
+        getOrgHealth().catch(() => null),
       ])
       setSources(s.data)
       setTables(t.data)
       setIncidents(i.data)
+      if (h) setOrgHealth(h.data)
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Failed to load overview data')
     } finally {
@@ -83,6 +114,43 @@ export default function Overview() {
       />
 
       <ErrorNotice message={error} onDismiss={() => setError('')} />
+
+      {/* ── Health + Stats row ─── */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {orgHealth ? (
+          <Card className="sm:col-span-2 lg:col-span-1">
+            <CardContent className="pt-5">
+              <HealthRing score={orgHealth.score} color={orgHealth.color} grade={orgHealth.grade} />
+            </CardContent>
+          </Card>
+        ) : null}
+        {[
+          { label: 'Open incidents', value: incidents.filter(i => i.status === 'open').length, icon: AlertTriangle, color: incidents.some(i => i.severity === 'P1') ? 'text-red-500' : 'text-orange-500' },
+          { label: 'Monitored tables', value: tables.length, icon: Table2, color: 'text-primary' },
+          { label: 'Sources connected', value: sources.filter(s => s.status === 'connected').length, icon: Server, color: 'text-emerald-500' },
+        ].map(stat => (
+          <Card key={stat.label}>
+            <CardContent className="pt-5 flex items-start justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+                <p className="mt-1 text-3xl font-black tabular-nums">{stat.value}</p>
+              </div>
+              <stat.icon className={`size-5 mt-1 ${stat.color}`} />
+            </CardContent>
+          </Card>
+        ))}
+        {!orgHealth && (
+          <Card>
+            <CardContent className="pt-5 flex items-start justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Checks passed (24h)</p>
+                <p className="mt-1 text-3xl font-black tabular-nums">{orgHealth?.passed_checks ?? '—'}</p>
+              </div>
+              <CheckCircle2 className="size-5 mt-1 text-emerald-500" />
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.55fr)]">
         <Card>

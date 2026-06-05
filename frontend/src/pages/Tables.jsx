@@ -22,7 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-const ACTIVE_INCIDENT_STATUSES = new Set(['open', 'acknowledged'])
+const ACTIVE_INCIDENT_STATUSES = new Set(['open', 'acknowledged', 'investigating'])
 const STATUS_RANK = {
   incident: 0,
   error: 1,
@@ -256,7 +256,7 @@ export default function Tables() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryItem icon={Database} label="Total tables" value={formatCompactNumber(summary.total)} detail="Monitored objects" />
         <SummaryItem icon={CheckCircle2} label="Healthy" value={formatCompactNumber(summary.healthy)} detail="No active signal" />
-        <SummaryItem icon={AlertTriangle} label="Incidents" value={formatCompactNumber(summary.incidents)} detail="Open or acknowledged" />
+        <SummaryItem icon={AlertTriangle} label="Incidents" value={formatCompactNumber(summary.incidents)} detail="Unresolved incidents" />
         <SummaryItem
           icon={Clock}
           label="Last profiled"

@@ -37,6 +37,8 @@ export const getIncident = (id) => api.get(`/api/v1/incidents/${id}`)
 export const acknowledgeIncident = (id) => api.patch(`/api/v1/incidents/${id}/acknowledge`)
 export const investigateIncident = (id) => api.patch(`/api/v1/incidents/${id}/investigate`)
 export const resolveIncident = (id) => api.patch(`/api/v1/incidents/${id}/resolve`)
+export const muteIncident = (id, data) => api.patch(`/api/v1/incidents/${id}/mute`, data)
+export const markFalsePositive = (id) => api.patch(`/api/v1/incidents/${id}/false-positive`)
 export const retryNarration = (id) => api.post(`/api/v1/incidents/${id}/narration/retry`)
 
 // Alerts

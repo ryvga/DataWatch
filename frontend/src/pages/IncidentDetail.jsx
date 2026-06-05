@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
-import { acknowledgeIncident, investigateIncident, getIncident, getTable, resolveIncident } from '../api/endpoints'
+import { acknowledgeIncident, investigateIncident, getIncident, getTable, resolveIncident, muteIncident, markFalsePositive } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import SeverityBadge from '../components/SeverityBadge'
 import { LoadingState, formatDateTime, formatNumber } from '../components/app-ui'
@@ -587,6 +587,25 @@ export default function IncidentDetail() {
     }
   }
 
+  const doMute = async () => {
+    setUpdating(true)
+    try {
+      const response = await muteIncident(id, { hours: 24 })
+      setIncident(response.data)
+    } catch { /* endpoint may not be deployed yet */ }
+    finally { setUpdating(false) }
+  }
+
+  const doFalsePositive = async () => {
+    if (!confirm('Mark as false positive? This will close the incident and prevent future re-creation.')) return
+    setUpdating(true)
+    try {
+      const response = await markFalsePositive(id)
+      setIncident(response.data)
+    } catch { /* endpoint may not be deployed yet */ }
+    finally { setUpdating(false) }
+  }
+
   if (loading) return <LoadingState label="Loading incident" />
   if (!incident) return <div className="dw-page text-destructive">Incident not found</div>
 
@@ -634,6 +653,16 @@ export default function IncidentDetail() {
                 <Check data-icon="inline-start" />
                 Resolve
               </Button>
+            )}
+            {incident.status !== 'resolved' && incident.status !== 'muted' && incident.status !== 'ignored' && (
+              <>
+                <Button type="button" variant="ghost" size="sm" onClick={doMute} disabled={updating} className="text-muted-foreground hover:text-foreground text-xs">
+                  Mute 24h
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={doFalsePositive} disabled={updating} className="text-muted-foreground hover:text-foreground text-xs">
+                  False positive
+                </Button>
+              </>
             )}
           </div>
         </div>
