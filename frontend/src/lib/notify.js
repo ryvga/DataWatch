@@ -51,7 +51,7 @@ export const notify = {
       }),
 
     deleted: (name) =>
-      toast.success(`${name} removed`, {
+      toast.success(`${name} archived`, {
         description: 'All monitored tables from this source are paused.',
         duration: STD,
       }),

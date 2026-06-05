@@ -13,6 +13,7 @@ from app.config import settings
 from app.connectors.factory import ConnectorFactory
 from app.database import get_db
 from app.models.data_source import DataSource
+from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
 from app.routers.auth import get_current_org_from_api_key, get_current_org_from_jwt
 from app.services.crypto import decrypt_config, encrypt_config
@@ -188,7 +189,7 @@ async def list_sources(
     db: AsyncSession = Depends(get_db),
 ):
     sources = (await db.scalars(
-        select(DataSource).where(DataSource.org_id == org.id)
+        select(DataSource).where(DataSource.org_id == org.id, DataSource.status != "paused")
     )).all()
     return [DataSourceResponse(
         id=str(s.id), name=s.name, type=s.type,
@@ -217,6 +218,14 @@ async def pause_source(
 ):
     src = await _get_source_or_404(source_id, org, db)
     src.status = "paused"  # soft delete — preserves profile history
+    tables = (await db.scalars(
+        select(MonitoredTable).where(MonitoredTable.source_id == src.id, MonitoredTable.is_active == True)
+    )).all()
+
+    from app.scheduler import remove_table_job
+    for table in tables:
+        table.is_active = False
+        remove_table_job(str(table.id))
 
 
 @router.post("/{source_id}/test", response_model=TestResult)

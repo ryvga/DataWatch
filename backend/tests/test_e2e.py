@@ -57,6 +57,27 @@ async def register_table(client, auth_headers, source_id: str, **kwargs):
     return resp.json()
 
 
+@pytest.mark.asyncio
+async def test_delete_source_archives_source_and_deactivates_tables(client, auth_headers, db_session, test_org):
+    from app.models.data_source import DataSource
+    from app.models.monitored_table import MonitoredTable
+
+    source = await register_source(client, auth_headers)
+    table = await register_table(client, auth_headers, source["id"])
+
+    resp = await client.delete(f"/api/v1/sources/{source['id']}", headers=auth_headers)
+    assert resp.status_code == 204
+
+    resp = await client.get("/api/v1/sources", headers=auth_headers)
+    assert resp.status_code == 200
+    assert all(item["id"] != source["id"] for item in resp.json())
+
+    archived_source = await db_session.get(DataSource, uuid.UUID(source["id"]))
+    archived_table = await db_session.get(MonitoredTable, uuid.UUID(table["id"]))
+    assert archived_source.status == "paused"
+    assert archived_table.is_active is False
+
+
 async def run_anomaly_checks_directly(db_session, table_id: str, profile_id: str):
     """Call the async anomaly function directly (bypassing Celery)."""
     from app.tasks import _run_anomaly_checks_async
