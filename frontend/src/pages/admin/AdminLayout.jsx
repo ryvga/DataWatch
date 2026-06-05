@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Building2, LogOut, ShieldCheck, Users, UserCog } from 'lucide-react'
+import { BarChart3, Building2, LogOut, Users, UserCog } from 'lucide-react'
 import { BrandMark, ThemeToggle } from '../../components/app-ui'
 import { Button } from '@/components/ui/button'
 import { storage } from '@/lib/storage'
@@ -10,6 +10,7 @@ function isStaffValid() {
 }
 
 const NAV = [
+  { to: '/', icon: BarChart3, label: 'Dashboard', end: true },
   { to: '/orgs', icon: Building2, label: 'Organisations' },
   { to: '/users', icon: Users, label: 'All Users' },
   { to: '/staff', icon: UserCog, label: 'Staff' },
@@ -53,6 +54,7 @@ export default function AdminLayout() {
             <NavLink
               key={item.to}
               to={item.to}
+              end={item.end}
               className={({ isActive }) =>
                 `flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
                   isActive

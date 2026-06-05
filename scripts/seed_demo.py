@@ -320,10 +320,19 @@ INVENTORY_COLS = [
 # ── Seed a workspace ───────────────────────────────────────────────────────────
 
 def seed_acme(conn, org_id):
-    """Agency workspace: active P1 incident on payment_status."""
-    print("  → Seeding acme-corp data...")
-    sid = seed_source(conn, org_id, "Acme Production DB", "postgres", {
-        "host": "db.acme.io", "port": 5432, "database": "acme_prod",
+    """Agency workspace: connects to the real demo-db docker container with active P1 incident."""
+    print("  → Seeding acme-corp data (connected to demo-db)...")
+    # This points to the real demo-db Docker container seeded by demo_db_init.sql
+    sid = seed_source(conn, org_id, "Shop Demo DB (live)", "postgres", {
+        "host": "demo-db",  # Docker service name; use "localhost" port 5434 for local dev
+        "port": 5432,
+        "database": "shopDemo",
+        "username": "readonly_user",
+        "password": "readonly_pass",
+    })
+    # Also add a second fake source for UI variety
+    sid2 = seed_source(conn, org_id, "Analytics Warehouse", "postgres", {
+        "host": "analytics.acme.io", "port": 5432, "database": "analytics",
         "username": "readonly", "password": "readonly",
     })
 
@@ -381,18 +390,75 @@ def seed_acme(conn, org_id):
         offset_hours=4,
     )
 
-    # Users — 60 days history, healthy
+    # Users — 60 days history + P2 duplicate incident
     for h in range(60 * 24, 0, -12):
         rows = 12000 + h * 2 + random.randint(-50, 50)
         seed_profile(conn, users_tid, rows, random.randint(5, 25) * 60, USERS_COLS, offset_hours=h)
-    seed_profile(conn, users_tid, 12450, 2 * 60, USERS_COLS)
+    # Latest users profile — low uniqueness on email (duplicate emails detected)
+    dup_cols = [c.copy() for c in USERS_COLS]
+    for c in dup_cols:
+        if c["name"] == "email":
+            c["distinct_count"] = 11800  # was 11950, dropped → duplicates
+    users_pid = seed_profile(conn, users_tid, 12450, 2 * 60, dup_cols)
+    seed_incident(conn, org_id, users_tid, users_pid, "P2",
+        "users.email — uniqueness drop detected (duplicate emails)",
+        "uniqueness_drop", "rule", 0.9517, 0.99,
+        {
+            "summary": "The users table email column uniqueness ratio dropped from 99.5% to 95.2%, indicating approximately 350 duplicate email addresses were inserted.",
+            "likely_causes": [
+                {"hypothesis": "A data migration or batch import ran without uniqueness validation", "probability": "high"},
+                {"hypothesis": "The UNIQUE constraint on users.email was temporarily dropped during a migration", "probability": "medium"},
+            ],
+            "impact_assessment": "User authentication and communications may be affected. Duplicate emails can cause login issues, double notifications, and inaccurate user counts in reports.",
+            "recommended_actions": [
+                "Run: SELECT email, COUNT(*) FROM users GROUP BY email HAVING COUNT(*) > 1 ORDER BY 2 DESC LIMIT 50",
+                "Identify when duplicates were inserted: SELECT email, MIN(created_at), MAX(created_at) FROM users GROUP BY email HAVING COUNT(*) > 1",
+                "Review recent batch imports and migrations",
+                "Re-add UNIQUE constraint after deduplication",
+            ],
+            "debug_queries": [
+                "SELECT email, COUNT(*) as count FROM users GROUP BY email HAVING COUNT(*) > 1 ORDER BY 2 DESC LIMIT 50",
+                "SELECT COUNT(*) as total_users, COUNT(DISTINCT email) as unique_emails, COUNT(*) - COUNT(DISTINCT email) as duplicates FROM users",
+            ],
+            "client_safe_summary": "A data quality issue was detected in user account records. The engineering team is investigating and will resolve the issue.",
+            "confidence": "high",
+        },
+        offset_hours=2,
+    )
 
     # Products — 30 days, healthy
     for h in range(30 * 24, 0, -24):
         seed_profile(conn, products_tid, 3400 + random.randint(-20, 30), 0, PRODUCTS_COLS, offset_hours=h)
     seed_profile(conn, products_tid, 3520, 0, PRODUCTS_COLS)
 
-    print(f"  ✓ acme-corp: 3 tables, 1 active P1 incident")
+    # P3 incident — orders freshness (data not updated for 3 hours)
+    seed_incident(conn, org_id, orders_tid, current_pid, "P3",
+        "orders — freshness warning (3.2h since last update, expected <1h)",
+        "freshness_sla_breach", "rule", 11520, 3600,
+        {
+            "summary": "The orders table has not received new data for 3.2 hours. The expected update interval is 1 hour.",
+            "likely_causes": [
+                {"hypothesis": "ETL job or data pipeline failed silently", "probability": "high"},
+                {"hypothesis": "Database connection pool exhausted on the source system", "probability": "medium"},
+            ],
+            "impact_assessment": "Real-time order tracking and inventory dashboards may show stale data. SLA breach if data is not updated within 30 minutes.",
+            "recommended_actions": [
+                "Check ETL job logs for errors",
+                "Run: SELECT MAX(created_at), NOW() - MAX(created_at) AS lag FROM orders",
+                "Verify source system connectivity",
+            ],
+            "debug_queries": [
+                "SELECT MAX(created_at) as last_order, NOW() - MAX(created_at) as lag FROM orders",
+                "SELECT date_trunc('hour', created_at) as hour, COUNT(*) FROM orders WHERE created_at > NOW() - INTERVAL '24h' GROUP BY 1 ORDER BY 1 DESC",
+            ],
+            "client_safe_summary": "Order data is experiencing a brief delay. Our team is monitoring the situation.",
+            "data_pattern_notes": "Orders table normally updates every 15-30 minutes. The gap started 3.2 hours ago.",
+            "confidence": "high",
+        },
+        offset_hours=3,
+    )
+
+    print(f"  ✓ acme-corp: 3 tables, 3 incidents (1×P1, 1×P2, 1×P3 freshness)")
 
 
 def seed_startup(conn, org_id):

@@ -22,6 +22,8 @@ class Organization(Base):
 
     # Billing placeholders (Stripe wired later)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    paypal_subscription_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    billing_period: Mapped[str | None] = mapped_column(String(20), nullable=True)
     subscription_status: Mapped[str] = mapped_column(String(50), nullable=False, default="trialing")
     trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { setWorkspaceSession, isSessionValid } from '@/lib/storage'
+import { setWorkspaceSession, isSessionValid, storage } from '@/lib/storage'
 import { getWorkspaceFromHost } from '@/lib/subdomain'
 
 export default function Login() {
@@ -65,6 +65,8 @@ export default function Login() {
           remember,
         })
       }
+      storage.setItem('dw_user_email', form.email)
+      if (form.full_name) storage.setItem('dw_user_name', form.full_name)
       nav('/')
     } catch (err) {
       setError(err.response?.data?.detail || 'Authentication failed')

@@ -1,7 +1,10 @@
-from datetime import UTC, datetime
+import asyncio
+import uuid
+from datetime import UTC, datetime, timedelta
 from collections import defaultdict
 import time
 import threading
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from jose import JWTError
@@ -17,8 +20,11 @@ from app.auth import (
     verify_password,
 )
 from app.database import get_db
+from app.models.invite import Invite
 from app.models.organization import Organization
 from app.models.user import ApiKey, StaffUser, User
+from app.services import email as email_service
+from app.services.plans import enforce_member_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -29,6 +35,8 @@ _RATE_LIMIT_WINDOW = 60   # seconds
 _RATE_LIMIT_MAX = 10      # attempts per window
 _rate_store: dict[str, list[float]] = defaultdict(list)
 _rate_lock = threading.Lock()
+_password_reset_tokens: dict[str, dict] = {}
+_password_reset_lock = asyncio.Lock()
 
 def _check_rate_limit(ip: str) -> None:
     now = time.time()
@@ -85,6 +93,51 @@ class StaffTokenResponse(BaseModel):
     token_type: str = "bearer"
     staff_id: str
     email: str
+
+
+class InviteCreateRequest(BaseModel):
+    email: EmailStr
+    role: Literal["admin", "member", "viewer"]
+
+
+class InviteResponse(BaseModel):
+    id: str
+    email: str
+    role: str
+    expires_at: datetime
+
+
+class InviteAcceptRequest(BaseModel):
+    full_name: str
+    password: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    org_slug: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: str | None = None
+    email: EmailStr | None = None
+
+
+class ProfileResponse(BaseModel):
+    id: str
+    org_id: str
+    email: str
+    full_name: str | None
+    role: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 # ── Register ──────────────────────────────────────────────────────────────────
@@ -169,6 +222,274 @@ async def staff_login(body: StaffLoginRequest, request: Request, db: AsyncSessio
         staff_id=str(staff.id),
         email=staff.email,
     )
+
+
+def _require_org_admin(user: User) -> None:
+    if user.role not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Owner or admin role required")
+
+
+def _token_response(user: User, org: Organization) -> TokenResponse:
+    token = create_access_token(sub=str(user.id), org_id=str(org.id), org_slug=org.slug)
+    return TokenResponse(
+        access_token=token,
+        org_slug=org.slug,
+        org_name=org.name,
+        user_role=user.role,
+    )
+
+
+def _now_utc() -> datetime:
+    return datetime.now(UTC)
+
+
+async def _current_user_org(
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> tuple[User, Organization]:
+    return await get_current_user_from_jwt(authorization=authorization, db=db)
+
+
+# ── Invites ───────────────────────────────────────────────────────────────────
+
+@router.post("/invites", response_model=InviteResponse)
+async def create_invite(
+    body: InviteCreateRequest,
+    current: tuple[User, Organization] = Depends(_current_user_org),
+    db: AsyncSession = Depends(get_db),
+):
+    user, org = current
+    _require_org_admin(user)
+    await enforce_member_limit(org, db)
+
+    existing_member = await db.scalar(
+        select(User).where(User.org_id == org.id, User.email == str(body.email))
+    )
+    if existing_member:
+        raise HTTPException(status_code=409, detail="Email is already a member of this workspace")
+
+    existing_pending = await db.scalar(
+        select(Invite).where(
+            Invite.org_id == org.id,
+            Invite.email == str(body.email),
+            Invite.accepted_at.is_(None),
+            Invite.expires_at > _now_utc(),
+        )
+    )
+    if existing_pending:
+        raise HTTPException(status_code=409, detail="Pending invite already exists for this email")
+
+    invite = Invite(
+        org_id=org.id,
+        email=str(body.email),
+        role=body.role,
+        token=str(uuid.uuid4()),
+        invited_by=user.id,
+        expires_at=_now_utc() + timedelta(days=7),
+    )
+    db.add(invite)
+    await db.flush()
+
+    inviter_name = user.full_name or user.email
+    if not email_service.send_invite_email(invite.email, org.name, inviter_name, invite.token, invite.role):
+        await db.rollback()
+        raise HTTPException(status_code=502, detail="Failed to send invite email")
+
+    await db.commit()
+    return InviteResponse(
+        id=str(invite.id),
+        email=invite.email,
+        role=invite.role,
+        expires_at=invite.expires_at,
+    )
+
+
+@router.post("/invites/{token}/accept", response_model=TokenResponse)
+async def accept_invite(
+    token: str,
+    body: InviteAcceptRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    invite = await db.scalar(select(Invite).where(Invite.token == token))
+    if not invite or invite.accepted_at is not None or invite.expires_at <= _now_utc():
+        raise HTTPException(status_code=400, detail="Invalid or expired invite")
+
+    org = await db.get(Organization, invite.org_id)
+    if not org:
+        raise HTTPException(status_code=400, detail="Invite workspace no longer exists")
+
+    existing_org_user = await db.scalar(
+        select(User).where(User.org_id == invite.org_id, User.email == invite.email)
+    )
+    if existing_org_user:
+        raise HTTPException(status_code=409, detail="Email is already a member of this workspace")
+
+    existing_user = await db.scalar(select(User).where(User.email == invite.email))
+    if existing_user:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    user = User(
+        org_id=invite.org_id,
+        email=invite.email,
+        password_hash=hash_password(body.password),
+        role=invite.role,
+        full_name=body.full_name,
+    )
+    db.add(user)
+    invite.accepted_at = _now_utc()
+    await db.commit()
+    await db.refresh(user)
+
+    email_service.send_welcome_email(user.email, user.full_name or "", org.name)
+    return _token_response(user, org)
+
+
+@router.get("/invites", response_model=list[InviteResponse])
+async def list_pending_invites(
+    current: tuple[User, Organization] = Depends(_current_user_org),
+    db: AsyncSession = Depends(get_db),
+):
+    _user, org = current
+    invites = (
+        await db.scalars(
+            select(Invite)
+            .where(
+                Invite.org_id == org.id,
+                Invite.accepted_at.is_(None),
+                Invite.expires_at > _now_utc(),
+            )
+            .order_by(Invite.created_at.desc())
+        )
+    ).all()
+    return [
+        InviteResponse(
+            id=str(invite.id),
+            email=invite.email,
+            role=invite.role,
+            expires_at=invite.expires_at,
+        )
+        for invite in invites
+    ]
+
+
+@router.delete("/invites/{invite_id}")
+async def revoke_invite(
+    invite_id: str,
+    current: tuple[User, Organization] = Depends(_current_user_org),
+    db: AsyncSession = Depends(get_db),
+):
+    user, org = current
+    _require_org_admin(user)
+    invite = await db.get(Invite, invite_id)
+    if not invite or invite.org_id != org.id:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    await db.delete(invite)
+    await db.commit()
+    return {"ok": True}
+
+
+# ── Password reset ────────────────────────────────────────────────────────────
+
+@router.post("/reset-password/request")
+async def request_password_reset(
+    body: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    org = await db.scalar(select(Organization).where(Organization.slug == body.org_slug))
+    user = None
+    if org:
+        user = await db.scalar(
+            select(User).where(User.org_id == org.id, User.email == str(body.email))
+        )
+
+    if user:
+        token = str(uuid.uuid4())
+        async with _password_reset_lock:
+            _password_reset_tokens[token] = {
+                "email": user.email,
+                "org_slug": org.slug,
+                "expires": _now_utc() + timedelta(hours=1),
+            }
+        email_service.send_password_reset_email(user.email, token)
+
+    return {"message": "If an account exists, a password reset email has been sent"}
+
+
+@router.post("/reset-password/confirm")
+async def confirm_password_reset(
+    body: PasswordResetConfirmRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    async with _password_reset_lock:
+        record = _password_reset_tokens.get(body.token)
+        if not record or record["expires"] <= _now_utc():
+            _password_reset_tokens.pop(body.token, None)
+            raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    org = await db.scalar(select(Organization).where(Organization.slug == record["org_slug"]))
+    user = None
+    if org:
+        user = await db.scalar(select(User).where(User.org_id == org.id, User.email == record["email"]))
+    if not user:
+        async with _password_reset_lock:
+            _password_reset_tokens.pop(body.token, None)
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.password_hash = hash_password(body.new_password)
+    async with _password_reset_lock:
+        _password_reset_tokens.pop(body.token, None)
+    await db.commit()
+    return {"message": "Password updated"}
+
+
+# ── Profile settings ──────────────────────────────────────────────────────────
+
+@router.patch("/profile", response_model=ProfileResponse)
+async def update_profile(
+    body: ProfileUpdateRequest,
+    current: tuple[User, Organization] = Depends(_current_user_org),
+    db: AsyncSession = Depends(get_db),
+):
+    user, org = current
+    if body.email is not None and str(body.email) != user.email:
+        existing = await db.scalar(select(User).where(User.email == str(body.email), User.id != user.id))
+        if existing:
+            raise HTTPException(status_code=409, detail="Email already registered")
+        user.email = str(body.email)
+    if body.full_name is not None:
+        user.full_name = body.full_name
+
+    await db.commit()
+    await db.refresh(user)
+    return ProfileResponse(
+        id=str(user.id),
+        org_id=str(org.id),
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+    )
+
+
+@router.patch("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current: tuple[User, Organization] = Depends(_current_user_org),
+    db: AsyncSession = Depends(get_db),
+):
+    user, _org = current
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    user.password_hash = hash_password(body.new_password)
+    await db.commit()
+    return {"message": "Password updated"}
 
 
 # ── Dependencies ──────────────────────────────────────────────────────────────

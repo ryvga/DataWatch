@@ -5,16 +5,24 @@ import {
   CheckCircle2,
   CreditCard,
   Database,
+  KeyRound,
+  Loader2,
   MoreHorizontal,
   Plus,
   Send,
   Table2,
   Trash2,
+  User,
   Users,
   XCircle,
 } from 'lucide-react'
 import {
+  cancelBillingSubscription,
+  captureBillingSubscription,
+  changePassword,
   createAlert,
+  createBillingSubscription,
+  createInvite,
   createSource,
   createTable,
   deleteAlert,
@@ -22,13 +30,19 @@ import {
   deleteTable,
   discoverSource,
   getAlerts,
+  getBillingStatus,
+  getInvites,
+  getMe,
   getSources,
   getTables,
+  revokeInvite,
   testAlert,
   testSource,
+  updateProfile,
 } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import { EmptyState, PageHeader } from '../components/app-ui'
+import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -118,6 +132,13 @@ const ALERT_FIELD_DEFAULTS = {
 
 const SETTINGS_SECTIONS = [
   {
+    value: 'profile',
+    label: 'Profile',
+    description: 'Account details and password',
+    icon: User,
+    Component: ProfileTab,
+  },
+  {
     value: 'sources',
     label: 'Data sources',
     description: 'Warehouse credentials and connection checks',
@@ -160,6 +181,13 @@ function parseJson(value, label) {
   } catch (err) {
     return [null, `${label} must be valid JSON: ${err.message}`]
   }
+}
+
+function getApiError(err, fallback) {
+  const detail = err.response?.data?.detail || err.response?.data?.error || err.message
+  if (Array.isArray(detail)) return detail.map((item) => item.msg || item.message || String(item)).join(', ')
+  if (detail && typeof detail === 'object') return detail.message || JSON.stringify(detail)
+  return detail || fallback
 }
 
 function SourceForm({ open, onOpenChange, onCreated }) {
@@ -801,59 +829,358 @@ function AlertsTab() {
   )
 }
 
-const ROLES = [
-  { value: 'admin', label: 'Admin', desc: 'Full access — sources, tables, alerts, settings' },
-  { value: 'member', label: 'Member', desc: 'View dashboards, incidents, and reports' },
-  { value: 'viewer', label: 'Viewer (client)', desc: 'Read-only health score and reports — no raw data' },
-]
+function ProfileTab() {
+  const [profile, setProfile] = useState(() => ({
+    full_name: storage.getItem('dw_user_name') || '',
+    email: storage.getItem('dw_user_email') || '',
+  }))
+  const [canChangeEmail, setCanChangeEmail] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwords, setPasswords] = useState({ current_password: '', new_password: '', confirm_password: '' })
 
-function TeamTab() {
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState('member')
-  const [sent, setSent] = useState(false)
+  useEffect(() => {
+    let active = true
+    getMe()
+      .then((response) => {
+        if (!active) return
+        const user = response.data || {}
+        const nextProfile = {
+          full_name: user.full_name || user.name || '',
+          email: user.email || '',
+        }
+        setProfile(nextProfile)
+        setCanChangeEmail(Boolean(user.can_update_email || user.can_change_email))
+        if (nextProfile.full_name) storage.setItem('dw_user_name', nextProfile.full_name)
+        if (nextProfile.email) storage.setItem('dw_user_email', nextProfile.email)
+      })
+      .catch((err) => {
+        if (!profile.email && err.response?.status !== 404) {
+          notify.err(getApiError(err, 'Could not load profile'))
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => { active = false }
+  }, [])
 
-  const invite = (e) => {
-    e.preventDefault()
-    if (!email) return
-    setSent(true)
-    setTimeout(() => setSent(false), 3000)
-    setEmail('')
+  const submitProfile = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    try {
+      const payload = { full_name: profile.full_name }
+      if (canChangeEmail) payload.email = profile.email
+      const response = await updateProfile(payload)
+      const updated = response.data || profile
+      const nextProfile = {
+        full_name: updated.full_name || updated.name || profile.full_name,
+        email: updated.email || profile.email,
+      }
+      setProfile(nextProfile)
+      storage.setItem('dw_user_name', nextProfile.full_name)
+      storage.setItem('dw_user_email', nextProfile.email)
+      notify.ok('Profile updated')
+    } catch (err) {
+      notify.err(getApiError(err, 'Failed to update profile'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const submitPassword = async (event) => {
+    event.preventDefault()
+    if (passwords.new_password !== passwords.confirm_password) {
+      notify.err('Passwords do not match')
+      return
+    }
+    setPasswordSaving(true)
+    try {
+      await changePassword({
+        current_password: passwords.current_password,
+        new_password: passwords.new_password,
+        confirm_password: passwords.confirm_password,
+      })
+      setPasswords({ current_password: '', new_password: '', confirm_password: '' })
+      notify.ok('Password changed')
+    } catch (err) {
+      notify.err(getApiError(err, 'Failed to change password'))
+    } finally {
+      setPasswordSaving(false)
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <CardContent className="pt-6 flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-4 pt-6">
           <div>
-            <h2 className="flex items-center gap-2 text-base font-medium"><Users className="size-4 text-muted-foreground" />Invite team members</h2>
-            <p className="text-sm text-muted-foreground mt-1">Members are isolated to your workspace — they cannot access other workspaces.</p>
+            <h2 className="flex items-center gap-2 text-base font-medium"><User className="size-4 text-muted-foreground" />Profile</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Update the account details shown inside this workspace.</p>
           </div>
-          <form onSubmit={invite} className="flex flex-col sm:flex-row gap-2">
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="colleague@company.com"
-              className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-            />
-            <select value={role} onChange={e => setRole(e.target.value)} className="rounded-md border bg-background px-3 py-2 text-sm outline-none">
-              {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-            <Button type="submit" size="sm" disabled={!email}>{sent ? '✓ Invite sent!' : 'Send invite'}</Button>
+          <form onSubmit={submitProfile} className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="profile-full-name">Full name</Label>
+              <Input
+                id="profile-full-name"
+                value={profile.full_name}
+                onChange={(event) => setProfile((prev) => ({ ...prev, full_name: event.target.value }))}
+                disabled={loading}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="profile-email">Email</Label>
+              <Input
+                id="profile-email"
+                type="email"
+                value={profile.email}
+                readOnly={!canChangeEmail}
+                disabled={loading}
+                onChange={(event) => setProfile((prev) => ({ ...prev, email: event.target.value }))}
+                className={!canChangeEmail ? 'bg-muted/50 text-muted-foreground' : undefined}
+              />
+              {!canChangeEmail && <p className="text-xs text-muted-foreground">Email changes are managed by your workspace administrator.</p>}
+            </div>
+            <div className="sm:col-span-2">
+              <Button type="submit" disabled={loading || saving}>
+                {saving && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                {saving ? 'Saving...' : 'Save profile'}
+              </Button>
+            </div>
           </form>
-          <div className="rounded-lg border border-dashed bg-muted/20 p-5 text-center">
-            <p className="text-xs text-muted-foreground">No team members yet. Invite backend is coming in the next release.</p>
-          </div>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-medium"><KeyRound className="size-4 text-muted-foreground" />Change password</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Use a strong password that is not shared with other services.</p>
+          </div>
+          <form onSubmit={submitPassword} className="grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="current-password">Current password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={passwords.current_password}
+                onChange={(event) => setPasswords((prev) => ({ ...prev, current_password: event.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="new-password">New password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                minLength={8}
+                value={passwords.new_password}
+                onChange={(event) => setPasswords((prev) => ({ ...prev, new_password: event.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="confirm-password">Confirm new password</Label>
+              <Input
+                id="confirm-password"
+                type="password"
+                minLength={8}
+                value={passwords.confirm_password}
+                onChange={(event) => setPasswords((prev) => ({ ...prev, confirm_password: event.target.value }))}
+                required
+              />
+            </div>
+            <div className="sm:col-span-3">
+              <Button type="submit" variant="outline" disabled={passwordSaving}>
+                {passwordSaving && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                {passwordSaving ? 'Changing...' : 'Change password'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+const ROLES = [
+  { value: 'admin', label: 'Admin', desc: 'Full access to sources, tables, alerts, team settings, and billing.' },
+  { value: 'member', label: 'Member', desc: 'Can use dashboards, monitored tables, incidents, alerts, and reports.' },
+  { value: 'viewer', label: 'Viewer', desc: 'Read-only access to workspace health, incidents, and reports.' },
+]
+
+function normalizeInvites(data) {
+  if (Array.isArray(data)) return data
+  return data?.invites || data?.items || []
+}
+
+function TeamTab() {
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('member')
+  const [invites, setInvites] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [sending, setSending] = useState(false)
+  const [revoking, setRevoking] = useState({})
+
+  const loadInvites = async () => {
+    setLoading(true)
+    try {
+      const response = await getInvites()
+      setInvites(normalizeInvites(response.data))
+    } catch (err) {
+      notify.err(getApiError(err, 'Could not load pending invites'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadInvites()
+  }, [])
+
+  const invite = async (event) => {
+    event.preventDefault()
+    if (!email) return
+    const invitedEmail = email.trim()
+    setSending(true)
+    try {
+      const response = await createInvite({ email: invitedEmail, role })
+      const created = response.data
+      if (created?.id) setInvites((prev) => [created, ...prev])
+      else await loadInvites()
+      setEmail('')
+      notify.ok(`Invite sent to ${invitedEmail}`)
+    } catch (err) {
+      notify.err(getApiError(err, 'Failed to send invite'))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const revoke = async (invite) => {
+    setRevoking((prev) => ({ ...prev, [invite.id]: true }))
+    try {
+      await revokeInvite(invite.id)
+      setInvites((prev) => prev.filter((item) => item.id !== invite.id))
+      notify.ok(`Invite revoked for ${invite.email}`)
+    } catch (err) {
+      notify.err(getApiError(err, 'Failed to revoke invite'))
+    } finally {
+      setRevoking((prev) => {
+        const next = { ...prev }
+        delete next[invite.id]
+        return next
+      })
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div>
+            <h2 className="flex items-center gap-2 text-base font-medium"><Users className="size-4 text-muted-foreground" />Invite team members</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Members are isolated to your workspace and cannot access other workspaces.</p>
+          </div>
+          <form onSubmit={invite} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
+            <Input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="colleague@company.com"
+              required
+            />
+            <Select value={role} onValueChange={setRole}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {ROLES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <Button type="submit" disabled={sending || !email}>
+              {sending && <Loader2 data-icon="inline-start" className="animate-spin" />}
+              {sending ? 'Sending...' : 'Send invite'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div>
+            <h3 className="text-sm font-medium">Pending invites</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Invites remain pending until the recipient accepts or the token expires.</p>
+          </div>
+          {loading ? (
+            <div className="flex items-center gap-2 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              Loading pending invites...
+            </div>
+          ) : invites.length === 0 ? (
+            <EmptyState icon={Send} title="No pending invites" description="Send an invite to add a teammate to this workspace." />
+          ) : (
+            <div className="dw-table-wrap">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Expires</TableHead>
+                    <TableHead className="w-24" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invites.map((invite) => (
+                    <TableRow key={invite.id || invite.email}>
+                      <TableCell className="font-medium">{invite.email}</TableCell>
+                      <TableCell className="capitalize text-muted-foreground">{invite.role}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {invite.expires_at ? new Date(invite.expires_at).toLocaleString() : 'Not set'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => revoke(invite)}
+                          disabled={!invite.id || revoking[invite.id]}
+                        >
+                          {revoking[invite.id] ? 'Revoking...' : 'Revoke'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="pt-6">
-          <h3 className="text-sm font-medium mb-3">Role permissions</h3>
-          <div className="flex flex-col gap-2">
-            {ROLES.map(r => (
-              <div key={r.value} className="flex items-start gap-3 rounded-lg border bg-muted/20 px-3 py-2">
-                <span className="mt-0.5 rounded-full border px-2 py-0.5 text-xs font-medium">{r.label}</span>
-                <span className="text-xs text-muted-foreground">{r.desc}</span>
-              </div>
-            ))}
+          <h3 className="mb-3 text-sm font-medium">Role permissions</h3>
+          <div className="dw-table-wrap">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ROLES.map((item) => (
+                  <TableRow key={item.value}>
+                    <TableCell><Badge variant="outline">{item.label}</Badge></TableCell>
+                    <TableCell className="text-muted-foreground">{item.desc}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
@@ -862,50 +1189,192 @@ function TeamTab() {
 }
 
 const PLANS = [
-  { name: 'Free', price: '$0', limit: '1 source · 5 tables · 7-day history' },
-  { name: 'Starter', price: '$49/mo', limit: '3 sources · 50 tables · 90-day history · Slack alerts' },
-  { name: 'Growth', price: '$149/mo', limit: 'Unlimited · 1yr history · AI features · PDF reports' },
-  { name: 'Agency', price: '$299/mo', limit: 'Multi-client · White-label reports · 15 members' },
+  { id: 'free', name: 'Free', monthlyPrice: 0, limit: '1 source, 5 tables, 7-day history' },
+  { id: 'starter', name: 'Starter', monthlyPrice: 49, limit: '3 sources, 50 tables, 90-day history, Slack alerts' },
+  { id: 'growth', name: 'Growth', monthlyPrice: 149, limit: 'Unlimited sources and tables, 1-year history, AI reports' },
+  { id: 'agency', name: 'Agency', monthlyPrice: 299, limit: 'Multi-client workspaces, white-label reports, 15 members' },
 ]
+
+function planPrice(plan, billingCycle) {
+  if (plan.monthlyPrice === 0) return '$0'
+  if (billingCycle === 'yearly') return `$${Math.round(plan.monthlyPrice * 12 * 0.8)}/yr`
+  return `$${plan.monthlyPrice}/mo`
+}
 
 function BillingTab() {
   const orgName = storage.getItem('dw_org_name') || 'Your workspace'
-  const plan = storage.getItem('dw_plan') || 'free'
+  const [billingCycle, setBillingCycle] = useState('monthly')
+  const [status, setStatus] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [upgrading, setUpgrading] = useState('')
+  const [canceling, setCanceling] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+
+  const loadStatus = async () => {
+    setLoading(true)
+    try {
+      const response = await getBillingStatus()
+      setStatus(response.data)
+      if (response.data?.plan) storage.setItem('dw_plan', response.data.plan)
+    } catch (err) {
+      notify.err(getApiError(err, 'Could not load billing status'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadStatus()
+  }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const hasPayPalReturn = params.get('billing_return') === 'paypal' || params.has('subscription_id') || params.has('ba_token') || params.has('token')
+    if (!hasPayPalReturn) return
+
+    const pendingPlan = params.get('plan') || storage.getItem('dw_billing_pending_plan')
+    const pendingPeriod = params.get('billing_period') || storage.getItem('dw_billing_pending_period')
+    const subscriptionId = params.get('subscription_id') || params.get('subscriptionID') || params.get('subscriptionId')
+    if (!subscriptionId || !pendingPlan) {
+      notify.err('Failed to capture PayPal subscription', 'PayPal did not return enough subscription details.')
+      return
+    }
+
+    setCapturing(true)
+    captureBillingSubscription({
+      subscription_id: subscriptionId,
+      plan: pendingPlan,
+      billing_period: pendingPeriod || undefined,
+    })
+      .then((response) => {
+        setStatus(response.data)
+        if (response.data?.plan) storage.setItem('dw_plan', response.data.plan)
+        storage.removeItem('dw_billing_pending_plan')
+        storage.removeItem('dw_billing_pending_period')
+        notify.ok('Subscription activated')
+        const cleanUrl = `${window.location.pathname}?tab=billing`
+        window.history.replaceState(null, '', cleanUrl)
+      })
+      .catch((err) => notify.err(getApiError(err, 'Failed to capture PayPal subscription')))
+      .finally(() => setCapturing(false))
+  }, [])
+
+  const currentPlan = (status?.plan || storage.getItem('dw_plan') || 'free').toLowerCase()
+  const subscriptionStatus = status?.subscription_status || status?.status || (currentPlan === 'free' ? 'free' : 'unknown')
+
+  const upgrade = async (plan) => {
+    setUpgrading(plan.id)
+    try {
+      const response = await createBillingSubscription({
+        plan: plan.id,
+        billing_period: billingCycle,
+        return_url: `${window.location.origin}/settings?tab=billing&billing_return=paypal&plan=${plan.id}&billing_period=${billingCycle}`,
+        cancel_url: `${window.location.origin}/settings?tab=billing`,
+      })
+      const approvalUrl = response.data?.approval_url
+      if (!approvalUrl) throw new Error('PayPal approval URL was not returned')
+      storage.setItem('dw_billing_pending_plan', plan.id)
+      storage.setItem('dw_billing_pending_period', billingCycle)
+      window.location.assign(approvalUrl)
+    } catch (err) {
+      notify.err(getApiError(err, 'Failed to start PayPal checkout'))
+      setUpgrading('')
+    }
+  }
+
+  const cancel = async () => {
+    setCanceling(true)
+    try {
+      const response = await cancelBillingSubscription()
+      setStatus(response.data || { ...(status || {}), subscription_status: 'canceled' })
+      notify.ok('Subscription canceled')
+    } catch (err) {
+      notify.err(getApiError(err, 'Failed to cancel subscription'))
+    } finally {
+      setCanceling(false)
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <CardContent className="pt-6 flex flex-col gap-4">
-          <div className="flex items-start justify-between">
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="flex items-center gap-2 text-base font-medium"><CreditCard className="size-4 text-muted-foreground" />Current plan</h2>
-              <p className="text-sm text-muted-foreground mt-1">{orgName}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{orgName}</p>
             </div>
-            <span className="rounded-full border px-3 py-1 text-sm font-semibold capitalize">{plan}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="capitalize">{loading ? 'Loading' : currentPlan}</Badge>
+              <Badge variant={subscriptionStatus === 'active' ? 'default' : 'secondary'} className="capitalize">{capturing ? 'capturing' : subscriptionStatus}</Badge>
+            </div>
           </div>
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-            💳 Stripe billing integration is coming soon. You'll be able to upgrade, manage payment methods, and view invoices here.
-          </div>
+          {(status?.current_period_end || status?.next_billing_date) && (
+            <p className="text-sm text-muted-foreground">
+              Next billing date {new Date(status.current_period_end || status.next_billing_date).toLocaleDateString()}.
+            </p>
+          )}
+          {currentPlan !== 'free' && (
+            <Button type="button" variant="outline" className="w-fit" onClick={cancel} disabled={canceling}>
+              {canceling ? 'Canceling...' : 'Cancel subscription'}
+            </Button>
+          )}
         </CardContent>
       </Card>
+
       <Card>
-        <CardContent className="pt-6">
-          <h3 className="text-sm font-medium mb-3">Available plans</h3>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {PLANS.map(p => (
-              <div key={p.name} className={cn('rounded-lg border p-3', p.name.toLowerCase() === plan && 'border-primary/40 bg-primary/5')}>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">{p.name}</span>
-                  <span className="font-bold text-sm">{p.price}</span>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">{p.limit}</p>
-                {p.name.toLowerCase() !== plan && (
-                  <Button size="sm" variant="outline" className="mt-2 w-full h-7 text-xs" disabled>Upgrade (coming soon)</Button>
-                )}
-              </div>
-            ))}
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-medium">Available plans</h3>
+              <p className="mt-1 text-sm text-muted-foreground">PayPal checkout opens after you choose a plan.</p>
+            </div>
+            <div className="inline-flex w-fit rounded-md border bg-muted/30 p-1">
+              {['monthly', 'yearly'].map((cycle) => (
+                <button
+                  key={cycle}
+                  type="button"
+                  onClick={() => setBillingCycle(cycle)}
+                  className={cn(
+                    'rounded-sm px-3 py-1.5 text-xs font-medium capitalize transition-colors',
+                    billingCycle === cycle ? 'bg-background text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {cycle === 'yearly' ? 'Yearly -20%' : 'Monthly'}
+                </button>
+              ))}
+            </div>
           </div>
-          <p className="mt-3 text-xs text-center text-muted-foreground">Annual billing saves 20%. Enterprise pricing available on request.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {PLANS.map((plan) => {
+              const isCurrent = plan.id === currentPlan
+              return (
+                <div key={plan.id} className={cn('rounded-lg border p-4', isCurrent && 'border-primary/40 bg-primary/5')}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="font-medium text-sm">{plan.name}</span>
+                      {isCurrent && <Badge variant="secondary" className="ml-2">Current</Badge>}
+                    </div>
+                    <span className="text-sm font-bold">{planPrice(plan, billingCycle)}</span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">{plan.limit}</p>
+                  {!isCurrent && plan.id !== 'free' && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-3 w-full"
+                      onClick={() => upgrade(plan)}
+                      disabled={Boolean(upgrading)}
+                    >
+                      {upgrading === plan.id && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                      {upgrading === plan.id ? 'Opening PayPal...' : 'Upgrade'}
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -913,7 +1382,10 @@ function BillingTab() {
 }
 
 export default function Settings() {
-  const [active, setActive] = useState('sources')
+  const [active, setActive] = useState(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab')
+    return SETTINGS_SECTIONS.some((section) => section.value === tab) ? tab : 'profile'
+  })
   const activeSection = SETTINGS_SECTIONS.find((section) => section.value === active) || SETTINGS_SECTIONS[0]
   const ActiveComponent = activeSection.Component
 

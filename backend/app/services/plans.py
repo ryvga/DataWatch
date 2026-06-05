@@ -16,10 +16,10 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 PLAN_LIMITS: dict[str, dict] = {
-    "free":       {"sources": 1,  "tables": 5,   "retention_days": 7,   "profile_runs_day": 500,  "llm_calls_day": 20},
-    "starter":    {"sources": 3,  "tables": 50,  "retention_days": 90,  "profile_runs_day": 2000, "llm_calls_day": 100},
-    "growth":     {"sources": -1, "tables": -1,  "retention_days": 365, "profile_runs_day": -1,   "llm_calls_day": -1},
-    "enterprise": {"sources": -1, "tables": -1,  "retention_days": -1,  "profile_runs_day": -1,   "llm_calls_day": -1},
+    "free":       {"sources": 1,  "tables": 5,   "members": 3,   "retention_days": 7,   "profile_runs_day": 500,  "llm_calls_day": 20},
+    "starter":    {"sources": 3,  "tables": 50,  "members": 10,  "retention_days": 90,  "profile_runs_day": 2000, "llm_calls_day": 100},
+    "growth":     {"sources": -1, "tables": -1,  "members": -1,  "retention_days": 365, "profile_runs_day": -1,   "llm_calls_day": -1},
+    "enterprise": {"sources": -1, "tables": -1,  "members": -1,  "retention_days": -1,  "profile_runs_day": -1,   "llm_calls_day": -1},
 }
 
 UPGRADE_URL = "https://datawatch.io/pricing"
@@ -75,6 +75,41 @@ async def enforce_table_limit(org, db: AsyncSession) -> None:
                 "resource": "tables",
                 "limit": max_tables,
                 "current": count,
+                "plan": org.plan,
+                "upgrade_url": UPGRADE_URL,
+            },
+        )
+
+
+async def enforce_member_limit(org, db: AsyncSession) -> None:
+    from app.models.invite import Invite
+    from app.models.user import User
+
+    limits = get_limits(org.plan)
+    max_members = limits["members"]
+    if max_members == -1:
+        return
+
+    now = datetime.now(UTC)
+    active_users = await db.scalar(
+        select(func.count()).select_from(User).where(User.org_id == org.id)
+    ) or 0
+    pending_invites = await db.scalar(
+        select(func.count()).select_from(Invite).where(
+            Invite.org_id == org.id,
+            Invite.accepted_at.is_(None),
+            Invite.expires_at > now,
+        )
+    ) or 0
+    current = active_users + pending_invites
+    if current >= max_members:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "plan_limit_exceeded",
+                "resource": "members",
+                "limit": max_members,
+                "current": current,
                 "plan": org.plan,
                 "upgrade_url": UPGRADE_URL,
             },

@@ -31,8 +31,21 @@ class Settings(BaseSettings):
     STAFF_FULL_NAME: str = "DataWatch Admin"
 
     # Email
+    APP_BASE_URL: str = "http://localhost:5173"
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = False
+    SMTP_TIMEOUT: int = 10
     SENDGRID_API_KEY: str = ""
     FROM_EMAIL: str = "alerts@datawatch.io"
+
+    # PayPal billing
+    PAYPAL_CLIENT_ID: str = ""
+    PAYPAL_CLIENT_SECRET: str = ""
+    PAYPAL_BASE_URL: str = "https://api-m.sandbox.paypal.com"
+    PAYPAL_WEBHOOK_ID: str = ""
 
     @property
     def is_production(self) -> bool:

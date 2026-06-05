@@ -8,7 +8,7 @@ from sqlalchemy import select, text
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.routers import alerts, auth, incidents, orgs, sources, tables
+from app.routers import alerts, auth, billing, incidents, orgs, sources, tables
 from app.routers import admin, reports
 
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -72,6 +72,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(billing.router)
 app.include_router(orgs.router)
 app.include_router(sources.router)
 app.include_router(tables.router)

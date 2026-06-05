@@ -3,6 +3,8 @@ import { isSessionValid, storage } from './lib/storage'
 import { getHostContext, DEV_MODE } from './lib/subdomain'
 import Layout from './components/Layout'
 import Login from './pages/Login'
+import AcceptInvite from './pages/AcceptInvite'
+import ResetPassword from './pages/ResetPassword'
 import Landing from './pages/Landing'
 import Overview from './pages/Overview'
 import Tables from './pages/Tables'
@@ -14,6 +16,7 @@ import Settings from './pages/Settings'
 import Reports from './pages/Reports'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminLayout from './pages/admin/AdminLayout'
+import AdminStats from './pages/admin/AdminStats'
 import AdminOrgs from './pages/admin/AdminOrgs'
 import AdminOrgDetail from './pages/admin/AdminOrgDetail'
 import AdminUsers from './pages/admin/AdminUsers'
@@ -55,13 +58,13 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<AdminLogin />} />
             <Route path="/" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-              <Route index element={<Navigate to="/orgs" replace />} />
+              <Route index element={<AdminStats />} />
               <Route path="orgs" element={<AdminOrgs />} />
               <Route path="orgs/:id" element={<AdminOrgDetail />} />
               <Route path="users" element={<AdminUsers />} />
               <Route path="staff" element={<AdminStaff />} />
             </Route>
-            <Route path="*" element={<Navigate to="/orgs" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
         <DevBadge ctx={ctx} />
@@ -75,6 +78,9 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
+            <Route path="/accept-invite/:token" element={<AcceptInvite />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
               <Route index element={<Overview />} />
               <Route path="tables" element={<Tables />} />
@@ -99,6 +105,9 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/accept-invite" element={<AcceptInvite />} />
+          <Route path="/accept-invite/:token" element={<AcceptInvite />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
