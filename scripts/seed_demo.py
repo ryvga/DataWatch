@@ -21,8 +21,12 @@ Environment (defaults work with docker-compose dev stack):
   API_URL          http://localhost:8000
   DEMO_EMAIL       demo@datawatch.io
   DEMO_PASSWORD    demo1234
+  DEMO_ORG_SLUG    demo-corp   (workspace slug used for login)
 
-After --full, log in at http://localhost:3000 with demo@datawatch.io / demo1234
+After --full, log in at http://localhost:5173 with:
+  Workspace: demo-corp
+  Email:     demo@datawatch.io
+  Password:  demo1234
 """
 
 import argparse
@@ -57,14 +61,11 @@ STATUSES = ["completed", "pending", "cancelled", "refunded"]
 # ── API helpers ────────────────────────────────────────────────────────────────
 
 _token = None
-_api_key = None
 
 
 def _headers():
     if _token:
         return {"Authorization": f"Bearer {_token}", "Content-Type": "application/json"}
-    if _api_key:
-        return {"x-api-key": _api_key, "Content-Type": "application/json"}
     return {"Content-Type": "application/json"}
 
 
@@ -75,10 +76,14 @@ def api(method, path, silent=False, **kwargs):
     return resp
 
 
-def login(email, password):
+DEMO_ORG_SLUG = os.environ.get("DEMO_ORG_SLUG", "demo-corp")
+
+
+def login(email, password, org_slug=None):
     global _token
+    slug = org_slug or DEMO_ORG_SLUG
     r = requests.post(f"{API_URL}/auth/login",
-                      json={"email": email, "password": password}, timeout=10)
+                      json={"email": email, "password": password, "org_slug": slug}, timeout=10)
     if r.status_code == 200:
         _token = r.json()["access_token"]
         return True
@@ -86,13 +91,11 @@ def login(email, password):
 
 
 def register(org_name, org_slug, email, password):
-    global _api_key
     r = requests.post(f"{API_URL}/auth/register",
                       json={"org_name": org_name, "org_slug": org_slug,
                             "email": email, "password": password}, timeout=10)
     if r.status_code == 201:
-        _api_key = r.json()["api_key"]
-        print(f"  ✓ Org '{org_name}' registered. API key: {_api_key[:20]}…")
+        print(f"  ✓ Org '{org_name}' registered (slug: {org_slug})")
         return True
     if r.status_code == 409:
         print(f"  ℹ Org '{org_slug}' already exists, logging in…")

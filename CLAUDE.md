@@ -8,9 +8,15 @@
 
 ## What This Project Is
 
-DataWatch is a **data quality monitoring SaaS**. It connects to warehouses (Postgres, BigQuery, DuckDB), profiles tables on a schedule, detects anomalies using statistical methods, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
+DataWatch is a **multi-tenant data quality monitoring SaaS**. It connects to warehouses (Postgres, MySQL, BigQuery, Snowflake, Redshift, ClickHouse, Databricks, Trino, DuckDB, SQLite), profiles tables on a schedule, detects anomalies using statistical methods, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
 
-The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions — powered by Claude (claude-sonnet-4-20250514).
+The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions.
+
+**Multi-tenancy model:**
+- Each customer gets a workspace at `{slug}.datawatch.io`
+- Login always requires `org_slug` (workspace identifier)
+- Main domain `datawatch.io` → landing page only
+- `admin.datawatch.io` (configurable) → staff portal (manage orgs, plans, LLM keys)
 
 ---
 
@@ -23,8 +29,8 @@ The primary differentiator is the **LLM narration layer**: every P1/P2 incident 
 | Scheduler | APScheduler (embedded in FastAPI lifespan) |
 | Database | PostgreSQL 16 (JSONB for metrics/narration) |
 | Cache | Redis (discovery, IsoForest models, LLM narration) |
-| AI | OpenRouter API (default: `nvidia/nemotron-3-ultra-550b-a55b:free`, model configurable via `LLM_MODEL`) |
-| Connectors | psycopg3 (Postgres), google-cloud-bigquery, duckdb |
+| AI | OpenRouter API (per-org key set via admin portal; global fallback via `OPENROUTER_API_KEY`) |
+| Connectors | psycopg3, aiomysql, clickhouse-connect, aiosqlite, databricks-sql-connector, trino, bigquery, duckdb |
 | Frontend | React 18, Vite, Tailwind CSS, Recharts |
 | Infra | Docker Compose (dev), Railway (production) |
 | Testing | pytest-asyncio, httpx AsyncClient |
@@ -117,13 +123,17 @@ POST /tables → scheduler.add_job()
 
 ---
 
-## Database Schema (9 tables)
+## Database Schema (14 tables)
 
 | Table | Purpose |
 |---|---|
-| `organizations` | Tenant — id, name, slug, plan |
-| `users` | Org members — email, password_hash, is_admin |
-| `api_keys` | Programmatic access — key_hash (bcrypt), never returned in API |
+| `organizations` | Tenant — id, name, slug, plan, llm_api_key_encrypted, stripe_customer_id, subscription_status |
+| `users` | Org members — email, password_hash, role (owner/admin/member), full_name |
+| `staff_users` | DataWatch team — separate from org users, access admin portal only |
+| `api_keys` | Programmatic access — staff-managed, key_hash (bcrypt), never returned in API |
+| `invites` | Org member invitations — email, role, token, expires_at, accepted_at |
+| `teams` | Team groups within an org (future feature, structure defined) |
+| `team_members` | Team membership — user_id, team_id, role |
 | `data_sources` | Warehouse connections — type, connection_config (Fernet-encrypted JSONB) |
 | `monitored_tables` | What to watch — schema, table, interval, sensitivity, freshness_column |
 | `table_profiles` | Profile snapshots — row_count, freshness_seconds, schema_fingerprint, column_metrics (JSONB) |
@@ -141,8 +151,17 @@ POST /tables → scheduler.add_job()
 | **Rule-Based** | row_count=0, freshness SLA breach, schema drift, null spike >20pp | 0 |
 | **Isolation Forest** | multivariate anomaly score < -0.1, contamination=0.05 | 21 profiles |
 | **STL Seasonal** | row_count residual > 3σ, period=7 | 21 daily profiles |
+| **Cardinality Drop** | distinct_ratio drops >30% relative vs 14-day avg | 7 profiles |
+| **Row Growth Rate** | z-score on per-profile row delta | 7 profiles |
 
 **Severity logic:** P1 = row_count=0 or freshness breach. P2 = schema drift or ≥3 failures. P3 = 1-2 statistical failures.
+
+## Profiler Column Metrics (per column, all types)
+
+- `null_rate`, `distinct_count`, `cardinality_ratio`
+- **Numeric:** min, max, mean, stddev, p25, p50, p75, p95, zero_rate, negative_rate
+- **Timestamp/Date:** min, max, range_seconds
+- **Text:** min_len, max_len, avg_len, empty_rate
 
 ---
 
@@ -192,8 +211,13 @@ Returns HTTP 402 with `{"error": "plan_limit_exceeded", "upgrade_url": ...}` on 
 | `FERNET_MASTER_KEY` | Credential encryption master key | ✅ |
 | `DATABASE_URL` | `postgresql+asyncpg://...` | ✅ |
 | `REDIS_URL` | `redis://...` | ✅ |
-| `OPENROUTER_API_KEY` | OpenRouter API key — `sk-or-v1-...` | For LLM narration |
-| `LLM_MODEL` | Model ID (default: `nvidia/nemotron-3-ultra-550b-a55b:free`) | Optional |
+| `BASE_DOMAIN` | Root domain (default: `datawatch.io`) | Optional |
+| `ADMIN_SUBDOMAIN` | Admin portal subdomain (default: `admin`) | Optional |
+| `STAFF_EMAIL` | Seed staff email (default: `admin@datawatch.io`) | Optional |
+| `STAFF_PASSWORD` | Seed staff password — **set this to enable seeding** | Optional |
+| `STAFF_FULL_NAME` | Seed staff name | Optional |
+| `OPENROUTER_API_KEY` | Global LLM fallback key (per-org keys override via admin portal) | Optional |
+| `LLM_MODEL` | Default model ID | Optional |
 | `LLM_BASE_URL` | LLM API base URL (default: OpenRouter) | Optional |
 | `SENDGRID_API_KEY` | Email alerts | Optional |
 | `FROM_EMAIL` | Alert sender | Optional |
@@ -269,17 +293,49 @@ When working on this project with Claude Code, these skills are relevant:
 
 ---
 
+## Auth Architecture
+
+**Client login flow:**
+1. User visits `{slug}.datawatch.io` → Login page pre-fills workspace from hostname
+2. POST `/auth/login` with `{email, password, org_slug}` → returns JWT + org_slug + user_role
+3. JWT carries `{sub: user_id, org_id, org_slug, type: "user"}`
+4. All protected routes validated via `get_current_org_from_jwt` dependency
+
+**Staff login flow:**
+1. Staff visits `admin.datawatch.io/login` → AdminLogin page
+2. POST `/auth/staff/login` with `{email, password}` → returns staff JWT
+3. JWT carries `{sub: staff_id, email, type: "staff"}`
+4. Admin routes validated via `get_current_staff` dependency
+
+**API keys:** Staff-only via `POST /admin/orgs/{id}/api-key`. Not client-manageable.
+
 ## Current State
 
-All 10 Linear tickets are Done. The project is **feature-complete for the PFE demo**. What remains before the jury:
+The project is in **MVP SaaS state**. Completed milestones:
 
-1. `cp .env.example .env` and fill in secrets
+1. Multi-tenant subdomain architecture (workspace + admin + landing)
+2. Staff portal with org management, plan/LLM key control
+3. 10 database connectors (Postgres, MySQL, Redshift, BigQuery, Snowflake, ClickHouse, Databricks, Trino, DuckDB, SQLite)
+4. 6 anomaly detection methods with enhanced column metrics
+5. Per-org LLM API keys (set by staff, encrypted at rest)
+6. Landing page, admin portal, improved connection forms
+
+**To run locally:**
+
+1. `cp .env.example .env` — fill in `SECRET_KEY`, `FERNET_MASTER_KEY`, `STAFF_PASSWORD`
 2. `docker-compose up -d && docker-compose exec api alembic upgrade head`
-3. `cd frontend && npm install && npm run dev`
-4. `python scripts/seed_demo.py --clean && python scripts/seed_demo.py --history`
-5. Test LLM narration: `python scripts/test_llm_prompt.py --fixture pipeline_failure`
-6. Run unit tests: `cd backend && pytest tests/test_anomaly.py tests/test_llm.py -v`
-7. Full e2e: `pytest tests/test_e2e.py -v` (requires `datawatch_test` DB)
+3. `cd frontend && npm install && npm run dev`  (http://localhost:5173)
+4. `python scripts/seed_demo.py --full`
+5. Login: workspace=`demo-corp`, email=`demo@datawatch.io`, password=`demo1234`
+6. Admin portal: set `STAFF_PASSWORD` → staff account auto-seeded on startup
+7. Tests: `cd backend && pytest tests/test_anomaly.py tests/test_llm.py -v`
+
+**What's next:**
+- Stripe billing integration (placeholder UI is in Settings → Billing)
+- Team invites (placeholder UI is in Settings → Team)  
+- SSO / SAML
+- More alert channels (webhooks, MS Teams)
+- CI/CD pipeline
 
 → See `docs/development.md` for full local setup.
 → See `docs/deployment.md` for Railway deploy.
