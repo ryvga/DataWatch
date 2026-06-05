@@ -66,15 +66,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { storage } from '@/lib/storage'
 
-const SOURCE_TYPES = ['postgres', 'mysql', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'databricks', 'trino', 'duckdb', 'sqlite']
+const SOURCE_TYPES = ['postgres', 'mysql', 'mongodb', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
 
 const SOURCE_TYPE_LABELS = {
   postgres: 'PostgreSQL',
   mysql: 'MySQL / MariaDB',
+  mongodb: 'MongoDB',
   redshift: 'Amazon Redshift',
   bigquery: 'Google BigQuery',
   snowflake: 'Snowflake',
   clickhouse: 'ClickHouse',
+  sqlserver: 'SQL Server',
   databricks: 'Databricks',
   trino: 'Trino / Presto',
   duckdb: 'DuckDB',
@@ -86,6 +88,8 @@ const SOURCE_CONFIG_TEMPLATES = {
   redshift: '{\n  "host": "cluster.region.redshift.amazonaws.com",\n  "port": 5439,\n  "database": "dev",\n  "username": "awsuser",\n  "password": ""\n}',
   bigquery: '{\n  "project_id": "my-gcp-project",\n  "credentials_json": null\n}',
   snowflake: '{\n  "account": "xy12345.us-east-1",\n  "user": "MYUSER",\n  "password": "",\n  "database": "MYDB",\n  "warehouse": "COMPUTE_WH"\n}',
+  mongodb: '{\n  "uri": "mongodb://user:pass@localhost:27017",\n  "database": "mydb"\n}',
+  sqlserver: '{\n  "host": "localhost",\n  "port": 1433,\n  "database": "MyDB",\n  "username": "sa",\n  "password": ""\n}',
   clickhouse: '{\n  "host": "localhost",\n  "port": 8123,\n  "database": "default",\n  "username": "default",\n  "password": ""\n}',
   databricks: '{\n  "server_hostname": "adb-xxx.azuredatabricks.net",\n  "http_path": "/sql/1.0/warehouses/xxx",\n  "access_token": "dapi...",\n  "catalog": "hive_metastore"\n}',
   trino: '{\n  "host": "localhost",\n  "port": 8080,\n  "user": "trino",\n  "catalog": "tpch",\n  "schema": "tiny",\n  "http_scheme": "http"\n}',

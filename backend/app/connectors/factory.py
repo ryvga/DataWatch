@@ -82,6 +82,24 @@ CONNECTOR_REGISTRY = {
         "label": "SQLite",
         "description": "SQLite file database",
     },
+    "mongodb": {
+        "module": "app.connectors.mongodb",
+        "class": "MongoDBConnector",
+        "required": ["uri"],
+        "optional": {"database": None},
+        "label": "MongoDB",
+        "description": "MongoDB document database (Tier 1 — field drift detection)",
+        "tier": 1,
+    },
+    "sqlserver": {
+        "module": "app.connectors.sqlserver",
+        "class": "SQLServerConnector",
+        "required": ["host", "database", "username", "password"],
+        "optional": {"port": 1433, "driver": "ODBC Driver 18 for SQL Server"},
+        "label": "SQL Server",
+        "description": "Microsoft SQL Server / Azure SQL",
+        "tier": 2,
+    },
 }
 
 

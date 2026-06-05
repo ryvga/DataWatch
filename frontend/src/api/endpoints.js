@@ -40,7 +40,16 @@ export const testAlert = (id) => api.post(`/api/v1/alerts/${id}/test`)
 
 // Org
 export const getOrg = () => api.get('/orgs/me')
+export const getOrgHealth = () => api.get('/orgs/me/health')
 export const getHealth = () => api.get('/health')
+
+// Reports
+export const getWeeklyReport = (days = 7) => api.get(`/api/v1/reports/weekly?window_days=${days}`)
+export const getIncidentReport = (id) => api.get(`/api/v1/reports/incident/${id}`)
+
+// AI features
+export const recommendMonitors = (sourceId, data) => api.post(`/api/v1/sources/${sourceId}/recommend-monitors`, data)
+export const nlRule = (tableId, data) => api.post(`/api/v1/tables/${tableId}/nl-rule`, data)
 
 // ── Admin (staff only) ────────────────────────────────────────────────────────
 

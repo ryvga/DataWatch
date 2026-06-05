@@ -123,3 +123,31 @@ async def resolve_incident(
     incident.status = "resolved"
     incident.resolved_at = datetime.now(timezone.utc)
     return _incident_response(incident)
+
+
+@router.post("/{incident_id}/narration/retry", response_model=IncidentResponse)
+async def retry_narration(
+    incident_id: str,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Clear a failed narration and re-queue LLM generation."""
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.services.llm import invalidate_narration_cache
+    from app.tasks import generate_llm_narration
+
+    incident = await _get_incident_or_404(incident_id, org, db)
+
+    # Clear the failed narration so the task doesn't see a cache hit
+    incident.llm_narration = None
+    flag_modified(incident, "llm_narration")
+    await db.commit()
+    await db.refresh(incident)
+
+    # Clear Redis cache entry
+    invalidate_narration_cache(incident_id)
+
+    # Re-queue the Celery task
+    generate_llm_narration.delay(incident_id)
+
+    return _incident_response(incident)

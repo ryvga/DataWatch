@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import {
   AlertTriangle,
+  BarChart3,
   Database,
   LayoutDashboard,
   LogOut,
@@ -34,6 +35,7 @@ const links = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/tables', label: 'Tables', icon: Table2 },
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
+  { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 

@@ -10,6 +10,7 @@ import Incidents from './pages/Incidents'
 import IncidentDetail from './pages/IncidentDetail'
 import TableDetail from './pages/TableDetail'
 import Settings from './pages/Settings'
+import Reports from './pages/Reports'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminOrgs from './pages/admin/AdminOrgs'
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="tables/:id" element={<TableDetail />} />
           <Route path="incidents" element={<Incidents />} />
           <Route path="incidents/:id" element={<IncidentDetail />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
