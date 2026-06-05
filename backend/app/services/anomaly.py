@@ -31,6 +31,7 @@ class AnomalyResult:
     observed_value: float | None
     expected_range: dict | None   # {"low": x, "high": y}
     deviation_score: float | None
+    details: dict | None = None
 
 
 # ── Metric extraction helpers ─────────────────────────────────────────────────
@@ -382,3 +383,73 @@ def run_row_growth_check(
         expected_range={"low": round(mean - threshold * std, 1), "high": round(mean + threshold * std, 1)},
         deviation_score=round(z, 4),
     )]
+
+
+# ── 7. Enum / Category Drift ──────────────────────────────────────────────────
+
+ENUM_DRIFT_MIN_HISTORY = 3
+ENUM_NEW_VALUE_THRESHOLD = 0.01  # flag if new value appears in >1% of rows
+
+
+def run_enum_drift_check(
+    current_profile,
+    history: list,
+) -> list[AnomalyResult]:
+    """
+    Detect when categorical columns gain unexpected new values or lose known values.
+    Requires column_metrics to contain top_values list: [{value, count}].
+    """
+    results: list[AnomalyResult] = []
+    if len(history) < ENUM_DRIFT_MIN_HISTORY:
+        return results
+
+    curr_metrics = current_profile.column_metrics or {}
+    curr_rows = current_profile.row_count or 1
+
+    for col_name, col_data in curr_metrics.items():
+        if not isinstance(col_data, dict):
+            continue
+        curr_top = col_data.get("top_values")
+        if not curr_top or not isinstance(curr_top, list):
+            continue
+
+        # Build historical value set
+        hist_values: set[str] = set()
+        for p in history[-ENUM_DRIFT_MIN_HISTORY:]:
+            if not p.column_metrics:
+                continue
+            hist_col = p.column_metrics.get(col_name, {})
+            for tv in hist_col.get("top_values", []):
+                if tv.get("value") is not None:
+                    hist_values.add(str(tv["value"]))
+
+        if not hist_values:
+            continue
+
+        # Check for new values above threshold
+        for tv in curr_top:
+            val = str(tv.get("value", ""))
+            count = tv.get("count", 0)
+            if val not in hist_values and count / curr_rows > ENUM_NEW_VALUE_THRESHOLD:
+                results.append(AnomalyResult(
+                    check_type="rule",
+                    check_name="enum_drift",
+                    column_name=col_name,
+                    status="failed",
+                    observed_value=round(count / curr_rows, 4),
+                    expected_range={"known_values": sorted(hist_values)[:20]},
+                    deviation_score=round(count / curr_rows, 4),
+                    details={"new_value": val, "count": count},
+                ))
+            elif val not in hist_values:
+                results.append(AnomalyResult(
+                    check_type="rule",
+                    check_name="enum_new_value",
+                    column_name=col_name,
+                    status="passed",  # informational
+                    observed_value=round(count / curr_rows, 4),
+                    expected_range=None,
+                    deviation_score=0,
+                ))
+
+    return results

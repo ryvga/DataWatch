@@ -158,6 +158,7 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
     from app.models.table_profile import TableProfile
     from app.services.anomaly import (
         run_cardinality_checks,
+        run_enum_drift_check,
         run_isolation_forest,
         run_row_growth_check,
         run_rule_checks,
@@ -206,6 +207,7 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         all_checks += run_stl_check(profile, list(history))
         all_checks += run_cardinality_checks(profile, list(history))
         all_checks += run_row_growth_check(profile, list(history), table.sensitivity)
+        all_checks += run_enum_drift_check(profile, list(history))
 
         if r_client:
             r_client.close()

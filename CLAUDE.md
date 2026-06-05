@@ -8,7 +8,7 @@
 
 ## What This Project Is
 
-DataWatch is a **multi-tenant data quality monitoring SaaS**. It connects to warehouses (Postgres, MySQL, BigQuery, Snowflake, Redshift, ClickHouse, Databricks, Trino, DuckDB, SQLite), profiles tables on a schedule, detects anomalies using statistical methods, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
+DataWatch is a **multi-tenant data quality monitoring SaaS**. It connects to databases and warehouses (PostgreSQL, MySQL, MongoDB, Cassandra, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Databricks, Trino, DuckDB, SQLite), profiles tables on a schedule, detects anomalies using 7 statistical methods, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
 
 The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions.
 
@@ -313,28 +313,37 @@ When working on this project with Claude Code, these skills are relevant:
 
 The project is in **MVP SaaS state**. Completed milestones:
 
-1. Multi-tenant subdomain architecture (workspace + admin + landing)
-2. Staff portal with org management, plan/LLM key control
-3. 10 database connectors (Postgres, MySQL, Redshift, BigQuery, Snowflake, ClickHouse, Databricks, Trino, DuckDB, SQLite)
-4. 6 anomaly detection methods with enhanced column metrics
-5. Per-org LLM API keys (set by staff, encrypted at rest)
-6. Landing page, admin portal, improved connection forms
+1. **Subdomain-first multi-tenancy** — `localhost` = landing, `slug.localhost` = workspace, `admin.localhost` = admin (env-configured subdomain, never guessable)
+2. **13 database connectors** — PostgreSQL, MySQL, MongoDB (Tier 1), + ClickHouse, Redshift, BigQuery, Snowflake, SQL Server, Cassandra, Databricks, Trino, DuckDB, SQLite
+3. **7 anomaly detection methods** — Z-Score, Isolation Forest, STL Seasonal, Cardinality Drop, Row Growth Rate, Rule-Based, **Enum/Category Drift** (new)
+4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
+5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)
+6. **AI features** — incident explanations, monitor recommender, natural language → SQL rule builder
+7. **Frontend** — Overview, Tables, Monitors, Incidents, Incident Detail, Reports, Settings (with Billing + Team placeholders)
+8. **Security** — HKDF per-org Fernet keys, login never reveals workspace existence, admin subdomain env-only
 
 **To run locally:**
 
 1. `cp .env.example .env` — fill in `SECRET_KEY`, `FERNET_MASTER_KEY`, `STAFF_PASSWORD`
-2. `docker-compose up -d && docker-compose exec api alembic upgrade head`
-3. `cd frontend && npm install && npm run dev`  (http://localhost:5173)
-4. `python scripts/seed_demo.py --full`
-5. Login: workspace=`demo-corp`, email=`demo@datawatch.io`, password=`demo1234`
-6. Admin portal: set `STAFF_PASSWORD` → staff account auto-seeded on startup
-7. Tests: `cd backend && pytest tests/test_anomaly.py tests/test_llm.py -v`
+2. Add to `.env`: `ADMIN_SUBDOMAIN=admin` (or any secret string)
+3. Add to `frontend/.env.local`: `VITE_ADMIN_SUBDOMAIN=admin`
+4. `docker-compose up -d postgres redis`
+5. `cd backend && venv/bin/alembic upgrade head`
+6. `venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000` (with all env vars set)
+7. `cd frontend && npm install && npm run dev`
+8. `python scripts/seed_demo.py --full`
+9. **Workspace**: `http://acme-corp.localhost:5173` → `mounir@acme.io` / `demo1234`
+10. **Landing**: `http://localhost:5173`
+11. **Admin**: `http://admin.localhost:5173` → `admin@datawatch.io` / `admin1234`
+12. Tests: `cd backend && pytest tests/test_anomaly.py tests/test_llm.py -v`
 
 **What's next:**
-- Stripe billing integration (placeholder UI is in Settings → Billing)
-- Team invites (placeholder UI is in Settings → Team)  
+- Stripe billing (placeholder UI in Settings → Billing)
+- Team invites backend (placeholder UI in Settings → Team)
+- Webhook + MS Teams alert channels
+- PDF report export
+- NL rule builder UI in table detail
 - SSO / SAML
-- More alert channels (webhooks, MS Teams)
 - CI/CD pipeline
 
 → See `docs/development.md` for full local setup.

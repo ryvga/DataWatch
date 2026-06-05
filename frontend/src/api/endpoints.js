@@ -22,8 +22,10 @@ export const updateTable = (id, data) => api.patch(`/api/v1/tables/${id}`, data)
 export const deleteTable = (id) => api.delete(`/api/v1/tables/${id}`)
 export const runTable = (id) => api.post(`/api/v1/tables/${id}/run`)
 export const getProfiles = (id, params) => api.get(`/api/v1/tables/${id}/profiles`, { params })
+export const getTableProfiles = getProfiles
 export const getProfile = (tableId, profileId) => api.get(`/api/v1/tables/${tableId}/profiles/${profileId}`)
 export const getChecks = (id, params) => api.get(`/api/v1/tables/${id}/checks`, { params })
+export const getTableCheckResults = getChecks
 
 // Incidents
 export const getIncidents = (params) => api.get('/api/v1/incidents', { params })
