@@ -27,8 +27,13 @@ DISCOVERY_TTL = 1800  # 30 min
 
 class DataSourceCreate(BaseModel):
     name: str
-    type: str  # postgres | bigquery | snowflake | duckdb
+    type: str
     connection_config: dict  # NEVER returned in responses
+
+
+class DataSourceTestRequest(BaseModel):
+    type: str
+    connection_config: dict
 
 
 class DataSourceResponse(BaseModel):
@@ -76,7 +81,66 @@ async def _redis() -> aioredis.Redis:
     return aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
+def _connector_metadata(source_type: str) -> dict:
+    metadata = next(
+        (item for item in ConnectorFactory.supported_types() if item["type"] == source_type),
+        None,
+    )
+    if not metadata:
+        valid_types = sorted(item["type"] for item in ConnectorFactory.supported_types())
+        raise HTTPException(status_code=400, detail=f"type must be one of {valid_types}")
+    return metadata
+
+
+def _validate_connection_config(source_type: str, config: dict) -> None:
+    metadata = _connector_metadata(source_type)
+    missing = [
+        field
+        for field in metadata["required"]
+        if config.get(field) in (None, "")
+    ]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required connection field(s): {', '.join(missing)}",
+        )
+
+
+async def _test_connection_config(source_type: str, config: dict) -> TestResult:
+    _validate_connection_config(source_type, config)
+    connector = None
+    start = time.monotonic()
+    try:
+        connector = ConnectorFactory.create(source_type, config)
+        ok = await connector.test_connection()
+        latency_ms = int((time.monotonic() - start) * 1000)
+        return TestResult(connected=ok, latency_ms=latency_ms, error=None if ok else "Connection test failed")
+    except NotImplementedError:
+        raise HTTPException(status_code=501, detail=f"{source_type} connector coming soon")
+    except Exception as e:
+        logger.warning("Source connection test failed: %s", type(e).__name__)
+        return TestResult(connected=False, latency_ms=0, error=str(e))
+    finally:
+        if connector:
+            await connector.close()
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/connector-types", tags=["sources"])
+async def get_connector_types():
+    """Return metadata for all supported connector types (for UI forms)."""
+    return ConnectorFactory.supported_types()
+
+
+@router.post("/test-connection", response_model=TestResult)
+async def preview_source_connection(
+    body: DataSourceTestRequest,
+    org: Organization = Depends(get_current_org_from_jwt),
+):
+    """Test a connection config before saving credentials."""
+    return await _test_connection_config(body.type, body.connection_config)
+
 
 @router.post("", response_model=DataSourceResponse, status_code=201)
 async def create_source(
@@ -84,10 +148,12 @@ async def create_source(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
-    # Validate type
-    valid_types = {"postgres", "bigquery", "snowflake", "duckdb"}
-    if body.type not in valid_types:
-        raise HTTPException(status_code=400, detail=f"type must be one of {valid_types}")
+    test_result = await _test_connection_config(body.type, body.connection_config)
+    if not test_result.connected:
+        raise HTTPException(
+            status_code=400,
+            detail=test_result.error or "Connection test must pass before saving this source",
+        )
 
     # Enforce plan limit
     from app.services.plans import enforce_source_limit
@@ -104,25 +170,8 @@ async def create_source(
     db.add(src)
     await db.flush()
 
-    # Test connection inline, update status
-    status = "error"
-    try:
-        if body.type == "snowflake":
-            status = "stub"
-        else:
-            connector = ConnectorFactory.create(body.type, body.connection_config)
-            ok = await connector.test_connection()
-            await connector.close()
-            status = "connected" if ok else "error"
-    except NotImplementedError:
-        status = "stub"
-    except Exception as e:
-        logger.warning("Source connection test failed during create: %s", type(e).__name__)
-        status = "error"
-
-    src.status = status
-    if status == "connected":
-        src.last_connected_at = datetime.now(timezone.utc)
+    src.status = "connected"
+    src.last_connected_at = datetime.now(timezone.utc)
 
     return DataSourceResponse(
         id=str(src.id),
@@ -178,23 +227,16 @@ async def test_source(
 ):
     src = await _get_source_or_404(source_id, org, db)
 
-    if src.type == "snowflake":
-        raise HTTPException(status_code=501, detail="Snowflake connector coming soon")
-
     try:
         config = decrypt_config(src.connection_config["encrypted"], str(org.id))
-        connector = ConnectorFactory.create(src.type, config)
-        start = time.monotonic()
-        ok = await connector.test_connection()
-        latency_ms = int((time.monotonic() - start) * 1000)
-        await connector.close()
+        result = await _test_connection_config(src.type, config)
 
-        status = "connected" if ok else "error"
+        status = "connected" if result.connected else "error"
         src.status = status
-        if ok:
+        if result.connected:
             src.last_connected_at = datetime.now(timezone.utc)
 
-        return TestResult(connected=ok, latency_ms=latency_ms)
+        return result
     except Exception as e:
         logger.warning("Source test error: %s", type(e).__name__)
         return TestResult(connected=False, latency_ms=0, error=str(e))
@@ -207,9 +249,6 @@ async def discover_source(
     db: AsyncSession = Depends(get_db),
 ):
     src = await _get_source_or_404(source_id, org, db)
-
-    if src.type == "snowflake":
-        raise HTTPException(status_code=501, detail="Snowflake connector coming soon")
 
     config = decrypt_config(src.connection_config["encrypted"], str(org.id))
     connector = ConnectorFactory.create(src.type, config)
@@ -234,12 +273,6 @@ async def discover_source(
     return DiscoveryResponse(**result)
 
 
-@router.get("/connector-types", tags=["sources"])
-async def get_connector_types():
-    """Return metadata for all supported connector types (for UI forms)."""
-    return ConnectorFactory.supported_types()
-
-
 @router.get("/{source_id}/schemas", response_model=DiscoveryResponse)
 async def get_schemas(
     source_id: str,
@@ -256,3 +289,27 @@ async def get_schemas(
 
     # Cache miss — trigger fresh discovery
     return await discover_source(source_id, org, db)
+
+
+@router.get("/{source_id}/table-schema")
+async def get_source_table_schema(
+    source_id: str,
+    schema_name: str,
+    table_name: str,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    src = await _get_source_or_404(source_id, org, db)
+    config = decrypt_config(src.connection_config["encrypted"], str(org.id))
+    connector = ConnectorFactory.create(src.type, config)
+    try:
+        ddl = await connector.get_table_ddl(schema_name, table_name)
+    finally:
+        await connector.close()
+
+    return {
+        "source_id": str(src.id),
+        "schema_name": schema_name,
+        "table_name": table_name,
+        "ddl": ddl,
+    }

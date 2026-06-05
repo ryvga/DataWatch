@@ -96,7 +96,7 @@ All endpoints: Auth JWT.
 `connection_config` is **never** returned in any response.
 
 ### `POST /api/v1/sources`
-Register a new warehouse connection. Tests connection inline.
+Register a new warehouse connection. The connection must pass testing before the source is saved.
 
 ```json
 // Request
@@ -130,7 +130,34 @@ Register a new warehouse connection. Tests connection inline.
 }
 ```
 
-Errors: `400` invalid type. `402` plan limit exceeded. `201` even if connection test fails (check `status` field).
+Errors: `400` invalid type, missing required connection fields, or failed connection test. `402` plan limit exceeded.
+
+---
+
+### `POST /api/v1/sources/test-connection`
+Test an unsaved connection configuration before storing credentials. Auth: JWT.
+
+```json
+// Request
+{
+  "type": "postgres",
+  "connection_config": {
+    "host": "db.example.com",
+    "port": 5432,
+    "database": "mydb",
+    "username": "readonly_user",
+    "password": "secret"
+  }
+}
+
+// Response 200
+{ "connected": true, "latency_ms": 42, "error": null }
+```
+
+---
+
+### `GET /api/v1/sources/connector-types`
+Returns connector metadata for dynamic UI forms: required fields, optional defaults, provider labels, version choices, and field input hints.
 
 ---
 
@@ -186,10 +213,26 @@ Returns cached discovery result. Triggers fresh discover if cache is stale.
 
 ---
 
+### `GET /api/v1/sources/{id}/table-schema`
+Returns DDL-like schema text for a discovered table.
+
+Query params: `schema_name`, `table_name`.
+
+```json
+{
+  "source_id": "uuid",
+  "schema_name": "public",
+  "table_name": "orders",
+  "ddl": "CREATE TABLE public.orders (...);"
+}
+```
+
+---
+
 ## Monitored Tables — `/api/v1/tables`
 
 ### `POST /api/v1/tables`
-Add a table to monitoring. Enqueues first profile run immediately. Creates APScheduler job.
+Add a table to monitoring. Enqueues first profile run immediately, creates an APScheduler job, and stores a table schema snapshot when DDL is available.
 
 ```json
 // Request

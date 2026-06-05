@@ -13,6 +13,7 @@ from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
 from app.models.table_profile import TableProfile
 from app.routers.auth import get_current_org_from_jwt
+from app.services.crypto import decrypt_config
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/tables", tags=["tables"])
@@ -59,6 +60,7 @@ class TableResponse(BaseModel):
     sensitivity: float
     is_active: bool
     last_profiled_at: datetime | None
+    schema_snapshot: str | None = None
     latest_profile: ProfileSummary | None = None
 
 
@@ -137,6 +139,7 @@ def _table_response(table: MonitoredTable, profile: ProfileSummary | None = None
         sensitivity=table.sensitivity,
         is_active=table.is_active,
         last_profiled_at=table.last_profiled_at,
+        schema_snapshot=table.dbt_model_yaml,
         latest_profile=profile,
     )
 
@@ -149,11 +152,25 @@ async def create_table(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
-    await _resolve_org_from_source(body.source_id, org, db)
+    source = await _resolve_org_from_source(body.source_id, org, db)
 
     # Enforce plan limit
     from app.services.plans import enforce_table_limit
     await enforce_table_limit(org, db)
+
+    schema_snapshot = body.dbt_model_yaml
+    if not schema_snapshot:
+        try:
+            from app.connectors.factory import ConnectorFactory
+
+            config = decrypt_config(source.connection_config["encrypted"], str(org.id))
+            connector = ConnectorFactory.create(source.type, config)
+            try:
+                schema_snapshot = await connector.get_table_ddl(body.schema_name, body.table_name)
+            finally:
+                await connector.close()
+        except Exception as e:
+            logger.warning("Table schema snapshot failed: %s", type(e).__name__)
 
     table = MonitoredTable(
         source_id=body.source_id,
@@ -162,7 +179,7 @@ async def create_table(
         freshness_column=body.freshness_column,
         check_interval_minutes=body.check_interval_minutes,
         sensitivity=body.sensitivity,
-        dbt_model_yaml=body.dbt_model_yaml,
+        dbt_model_yaml=schema_snapshot,
         is_active=True,
     )
     db.add(table)
