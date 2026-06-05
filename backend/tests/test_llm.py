@@ -75,7 +75,7 @@ def test_generate_narration_retry_on_bad_json():
     from app.services.llm import generate_narration
     call_count = {"n": 0}
 
-    def side_effect(msg):
+    def side_effect(msg, api_key=None, model=None):
         call_count["n"] += 1
         if call_count["n"] == 1:
             return "this is not json at all"
