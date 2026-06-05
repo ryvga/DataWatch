@@ -10,16 +10,25 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
 
+    # Multi-tenancy
+    BASE_DOMAIN: str = "datawatch.io"
+    ADMIN_SUBDOMAIN: str = "admin"  # admin.datawatch.io
+
     # Database
     DATABASE_URL: str
 
     # Redis / Celery
     REDIS_URL: str = "redis://redis:6379/0"
 
-    # AI — change LLM_MODEL to swap models without code changes
+    # AI — global fallback; per-org key takes priority
     OPENROUTER_API_KEY: str = ""
     LLM_BASE_URL: str = "https://openrouter.ai/api/v1"
-    LLM_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    LLM_MODEL: str = "nvidia/nemotron-3-super-120b-a12b:free"
+
+    # Staff seed — first staff account bootstrapped on startup
+    STAFF_EMAIL: str = "admin@datawatch.io"
+    STAFF_PASSWORD: str = ""  # must be set in .env for seeding to run
+    STAFF_FULL_NAME: str = "DataWatch Admin"
 
     # Email
     SENDGRID_API_KEY: str = ""
@@ -28,6 +37,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT == "production"
+
+    @property
+    def admin_origin(self) -> str:
+        return f"https://{self.ADMIN_SUBDOMAIN}.{self.BASE_DOMAIN}"
 
 
 settings = Settings()

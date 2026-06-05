@@ -8,7 +8,8 @@ from jose import JWTError, jwt
 from app.config import settings
 
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_MINUTES = 15
+JWT_EXPIRE_MINUTES = 60 * 8  # 8h for regular users
+JWT_STAFF_EXPIRE_MINUTES = 60 * 8
 
 
 # ── Password ──────────────────────────────────────────────────────────────────
@@ -36,10 +37,19 @@ def verify_api_key(raw: str, hashed: str) -> bool:
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
 
-def create_access_token(sub: str, org_id: str) -> str:
+def create_access_token(sub: str, org_id: str, org_slug: str) -> str:
     expire = datetime.now(UTC) + timedelta(minutes=JWT_EXPIRE_MINUTES)
     return jwt.encode(
-        {"sub": sub, "org_id": org_id, "exp": expire},
+        {"sub": sub, "org_id": org_id, "org_slug": org_slug, "type": "user", "exp": expire},
+        settings.SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
+    )
+
+
+def create_staff_token(staff_id: str, email: str) -> str:
+    expire = datetime.now(UTC) + timedelta(minutes=JWT_STAFF_EXPIRE_MINUTES)
+    return jwt.encode(
+        {"sub": staff_id, "email": email, "type": "staff", "exp": expire},
         settings.SECRET_KEY,
         algorithm=JWT_ALGORITHM,
     )
@@ -48,3 +58,7 @@ def create_access_token(sub: str, org_id: str) -> str:
 def decode_access_token(token: str) -> dict:
     """Raises JWTError on invalid/expired token."""
     return jwt.decode(token, settings.SECRET_KEY, algorithms=[JWT_ALGORITHM])
+
+
+def generate_invite_token() -> str:
+    return secrets.token_urlsafe(32)

@@ -41,3 +41,15 @@ def decrypt_config(encrypted: str, org_id: str) -> dict:
     key = _derive_key(org_id)
     f = Fernet(key)
     return json.loads(f.decrypt(encrypted.encode()).decode())
+
+
+class CryptoService:
+    """Instance-based helper for encrypting/decrypting per-org secrets."""
+
+    def encrypt_for_org(self, value: str, org_id: str) -> str:
+        key = _derive_key(org_id)
+        return Fernet(key).encrypt(value.encode()).decode()
+
+    def decrypt_for_org(self, encrypted: str, org_id: str) -> str:
+        key = _derive_key(org_id)
+        return Fernet(key).decrypt(encrypted.encode()).decode()
