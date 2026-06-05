@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.organization import Organization
 from app.routers.auth import get_current_org_from_jwt
+from app.services.reports import ReportService
 
 router = APIRouter(prefix="/api/v1", tags=["reports"])
 
@@ -18,8 +19,7 @@ async def get_weekly_report(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.services.reports import generate_weekly_report
-    return await generate_weekly_report(str(org.id), db, window_days=window_days)
+    return await ReportService.generate_weekly_report(org.id, db, window_days=window_days)
 
 
 @router.get("/reports/incident/{incident_id}")
@@ -28,7 +28,6 @@ async def get_incident_report(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.services.reports import generate_incident_report
     from app.models.incident import Incident
     from sqlalchemy import select
 
@@ -39,7 +38,7 @@ async def get_incident_report(
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
 
-    return await generate_incident_report(incident_id, db)
+    return await ReportService.generate_incident_report(incident_id, db)
 
 
 # ── AI Monitor Recommender ────────────────────────────────────────────────────
