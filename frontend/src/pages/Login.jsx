@@ -22,11 +22,13 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Pre-fill workspace from subdomain if available
   useEffect(() => {
     if (isSessionValid()) { nav('/'); return }
+    // Pre-fill workspace from subdomain (production) or stored value
     const ws = getWorkspaceFromHost()
     if (ws) setForm((f) => ({ ...f, org_slug: ws }))
+    // ?register=1 → open register tab directly
+    if (new URLSearchParams(window.location.search).get('register') === '1') setMode('register')
   }, [])
 
   const set = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }))

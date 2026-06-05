@@ -53,15 +53,16 @@ export const nlRule = (tableId, data) => api.post(`/api/v1/tables/${tableId}/nl-
 
 // ── Admin (staff only) ────────────────────────────────────────────────────────
 
-export const adminGetOrgs = () => adminApi.get('/admin/orgs')
-export const adminGetOrg = (id) => adminApi.get(`/admin/orgs/${id}`)
-export const adminUpdatePlan = (id, data) => adminApi.patch(`/admin/orgs/${id}/plan`, data)
-export const adminSetLLMKey = (id, data) => adminApi.put(`/admin/orgs/${id}/llm-key`, data)
-export const adminRemoveLLMKey = (id) => adminApi.delete(`/admin/orgs/${id}/llm-key`)
-export const adminCreateApiKey = (id, data) => adminApi.post(`/admin/orgs/${id}/api-key`, data)
-export const adminGetOrgUsers = (id) => adminApi.get(`/admin/orgs/${id}/users`)
-export const adminGetAllUsers = () => adminApi.get('/admin/users')
-export const adminGetStaff = () => adminApi.get('/admin/staff')
-export const adminCreateStaff = (data) => adminApi.post('/admin/staff', data)
-export const adminDeactivateStaff = (id) => adminApi.patch(`/admin/staff/${id}/deactivate`)
-export const adminGetInvites = (orgId) => adminApi.get(`/admin/orgs/${orgId}/invites`)
+const ADMIN = '/api/v1/admin'
+export const adminGetOrgs = () => adminApi.get(`${ADMIN}/orgs`)
+export const adminGetOrg = (id) => adminApi.get(`${ADMIN}/orgs/${id}`)
+export const adminUpdatePlan = (id, data) => adminApi.patch(`${ADMIN}/orgs/${id}/plan`, data)
+export const adminSetLLMKey = (id, data) => adminApi.put(`${ADMIN}/orgs/${id}/llm-key`, data)
+export const adminRemoveLLMKey = (id) => adminApi.delete(`${ADMIN}/orgs/${id}/llm-key`)
+export const adminCreateApiKey = (id, data) => adminApi.post(`${ADMIN}/orgs/${id}/api-key`, data)
+export const adminGetOrgUsers = (id) => adminApi.get(`${ADMIN}/orgs/${id}/users`)
+export const adminGetAllUsers = () => adminApi.get(`${ADMIN}/users`)
+export const adminGetStaff = () => adminApi.get(`${ADMIN}/staff`)
+export const adminCreateStaff = (data) => adminApi.post(`${ADMIN}/staff`, data)
+export const adminDeactivateStaff = (id) => adminApi.patch(`${ADMIN}/staff/${id}/deactivate`)
+export const adminGetInvites = (orgId) => adminApi.get(`${ADMIN}/orgs/${orgId}/invites`)

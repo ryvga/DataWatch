@@ -93,17 +93,20 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
+_INVALID = HTTPException(status_code=401, detail="Invalid email or password")
+
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+    # Never reveal whether workspace or user exists — always same error
     org = await db.scalar(select(Organization).where(Organization.slug == body.org_slug))
     if not org:
-        raise HTTPException(status_code=401, detail="Workspace not found")
+        raise _INVALID
 
     user = await db.scalar(
         select(User).where(User.email == body.email, User.org_id == org.id)
     )
     if not user or not verify_password(body.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise _INVALID
 
     # Update last login
     await db.execute(

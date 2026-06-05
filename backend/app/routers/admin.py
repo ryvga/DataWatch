@@ -14,7 +14,7 @@ from app.models.user import ApiKey, StaffUser, User
 from app.routers.auth import get_current_staff
 from app.services.crypto import CryptoService
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────

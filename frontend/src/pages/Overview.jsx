@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { RefreshCw, Server, Table2 } from 'lucide-react'
-import { getHealth, getIncidents, getSources, getTables } from '../api/endpoints'
+import { getIncidents, getSources, getTables } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import IncidentCard from '../components/IncidentCard'
 import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatDateTime, formatNumber } from '../components/app-ui'
@@ -33,7 +33,6 @@ export default function Overview() {
   const [sources, setSources] = useState([])
   const [tables, setTables] = useState([])
   const [incidents, setIncidents] = useState([])
-  const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
@@ -42,16 +41,14 @@ export default function Overview() {
     setError('')
     if (isRefresh) setRefreshing(true)
     try {
-      const [s, t, i, h] = await Promise.all([
+      const [s, t, i] = await Promise.all([
         getSources(),
         getTables(),
         getIncidents({ status: 'open', limit: 20 }),
-        getHealth(),
       ])
       setSources(s.data)
       setTables(t.data)
       setIncidents(i.data)
-      setHealth(h.data)
     } catch (err) {
       setError(err.response?.data?.detail || err.message || 'Failed to load overview data')
     } finally {
@@ -77,7 +74,7 @@ export default function Overview() {
     <div className="dw-page">
       <PageHeader
         title="Overview"
-        description={`${tables.length} monitored tables, ${incidents.length} open incidents${health ? `, ${health.scheduler_jobs} scheduler jobs` : ''}`}
+        description={`${tables.length} monitored tables · ${incidents.length} open incident${incidents.length !== 1 ? 's' : ''}`}
         actions={
           <Button type="button" variant="outline" onClick={() => load(true)} disabled={refreshing}>
             <RefreshCw data-icon="inline-start" className={refreshing ? 'animate-spin' : ''} />

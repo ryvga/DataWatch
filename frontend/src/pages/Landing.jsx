@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Activity, BarChart3, Bell, ChevronRight, Database, FileText, Shield, Users, Zap, Check, ArrowRight, GitBranch } from 'lucide-react'
 import { BrandMark, ThemeToggle } from '../components/app-ui'
+import { workspaceUrl } from '@/lib/subdomain'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -104,9 +105,14 @@ export default function Landing() {
   const [workspaceInput, setWorkspaceInput] = useState('')
 
   const goToWorkspace = () => {
-    const slug = workspaceInput.trim().toLowerCase()
+    const slug = workspaceInput.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
     if (!slug) return
-    window.location.href = `/login?ws=${slug}`
+    window.location.href = workspaceUrl(slug)
+  }
+
+  const scrollToWorkspace = () => {
+    document.getElementById('workspace-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setTimeout(() => document.getElementById('workspace-input')?.focus(), 400)
   }
 
   return (
@@ -124,8 +130,8 @@ export default function Landing() {
           </nav>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" size="sm" onClick={() => window.location.href = '/login'}>Sign in</Button>
-            <Button size="sm" onClick={() => window.location.href = '/login'}>Start free</Button>
+            <Button variant="outline" size="sm" onClick={scrollToWorkspace}>Sign in</Button>
+            <Button size="sm" onClick={scrollToWorkspace}>Start free</Button>
           </div>
         </div>
       </header>
@@ -146,7 +152,7 @@ export default function Landing() {
             Connect PostgreSQL, MySQL, MongoDB, and 9+ more databases. DataWatch detects silent data problems — freshness failures, null spikes, schema drift, duplicate records — then explains every incident with AI and sends reports your clients actually understand.
           </p>
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <Button size="lg" className="gap-2 font-semibold px-8" onClick={() => window.location.href = '/login'}>
+            <Button size="lg" className="gap-2 font-semibold px-8" onClick={scrollToWorkspace}>
               Start for free
               <ArrowRight className="size-4" />
             </Button>
@@ -156,7 +162,7 @@ export default function Landing() {
           </div>
 
           {/* Workspace jump */}
-          <div className="mt-12 flex items-center justify-center mx-auto max-w-sm overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div id="workspace-input" className="mt-12 flex items-center justify-center mx-auto max-w-sm overflow-hidden rounded-xl border bg-card shadow-sm">
             <div className="flex items-center pl-4 text-sm text-muted-foreground select-none whitespace-nowrap">
               <span>datawatch.io /</span>
             </div>
@@ -313,7 +319,7 @@ export default function Landing() {
                 </li>
               ))}
             </ul>
-            <Button className="mt-6 gap-2" onClick={() => window.location.href = '/login'}>
+            <Button className="mt-6 gap-2" onClick={scrollToWorkspace}>
               Try Agency plan <ArrowRight className="size-4" />
             </Button>
           </div>
@@ -377,7 +383,7 @@ export default function Landing() {
                   className="mt-6 w-full"
                   variant={plan.highlight ? 'default' : 'outline'}
                   size="sm"
-                  onClick={() => window.location.href = '/login'}
+                  onClick={scrollToWorkspace}
                 >
                   Get started
                 </Button>
@@ -396,10 +402,10 @@ export default function Landing() {
           <h2 className="text-3xl font-bold tracking-tight">Your data is breaking silently right now.</h2>
           <p className="mt-4 text-muted-foreground text-lg">DataWatch catches it — and explains it — before your clients or dashboards do.</p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Button size="lg" className="gap-2 px-10 font-semibold" onClick={() => window.location.href = '/login'}>
+            <Button size="lg" className="gap-2 px-10 font-semibold" onClick={scrollToWorkspace}>
               Start for free <ArrowRight className="size-4" />
             </Button>
-            <Button size="lg" variant="outline" onClick={() => window.location.href = '/login'}>
+            <Button size="lg" variant="outline" onClick={scrollToWorkspace}>
               Sign in to workspace
             </Button>
           </div>
@@ -414,8 +420,8 @@ export default function Landing() {
           <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} DataWatch. Database observability for every team.</p>
           <div className="flex gap-4 text-xs text-muted-foreground">
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
-            <a href="/login" className="hover:text-foreground">Sign in</a>
-            <a href="/login" className="hover:text-foreground">Get started</a>
+            <a href="#workspace-input" className="hover:text-foreground">Sign in</a>
+            <a href="#workspace-input" className="hover:text-foreground">Get started</a>
           </div>
         </div>
       </footer>

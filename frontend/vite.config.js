@@ -29,9 +29,10 @@ export default defineConfig({
     proxy: {
       '/api': { target: 'http://localhost:8000', changeOrigin: true },
       '/auth': { target: 'http://localhost:8000', changeOrigin: true },
-      '/admin': { target: 'http://localhost:8000', changeOrigin: true },
       '/orgs': { target: 'http://localhost:8000', changeOrigin: true },
       '/health': { target: 'http://localhost:8000', changeOrigin: true },
     },
+    // Allow *.localhost subdomains for dev subdomain routing
+    host: '0.0.0.0',
   },
 })
