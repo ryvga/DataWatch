@@ -291,3 +291,94 @@ def run_stl_check(current_profile, history: list) -> list[AnomalyResult]:
     except Exception as e:
         logger.warning("STL check failed: %s", e)
         return []
+
+
+# ── 5. Cardinality Drop Check ─────────────────────────────────────────────────
+
+CARDINALITY_DROP_THRESHOLD = 0.30  # 30% relative drop is suspicious
+
+def run_cardinality_checks(
+    current_profile,
+    history: list,
+) -> list[AnomalyResult]:
+    """Detect when a column's distinct count ratio drops significantly."""
+    results: list[AnomalyResult] = []
+    if len(history) < Z_SCORE_MIN_POINTS:
+        return results
+
+    curr_metrics = current_profile.column_metrics or {}
+    for col_name, col_data in curr_metrics.items():
+        if not isinstance(col_data, dict):
+            continue
+        curr_card = col_data.get("cardinality_ratio")
+        if curr_card is None:
+            continue
+
+        hist_cards = []
+        for p in history[-Z_SCORE_WINDOW:]:
+            if p.column_metrics and col_name in p.column_metrics:
+                v = p.column_metrics[col_name]
+                if isinstance(v, dict) and v.get("cardinality_ratio") is not None:
+                    hist_cards.append(float(v["cardinality_ratio"]))
+
+        if len(hist_cards) < Z_SCORE_MIN_POINTS:
+            continue
+
+        avg_hist = float(np.mean(hist_cards))
+        if avg_hist == 0:
+            continue
+
+        relative_drop = (avg_hist - float(curr_card)) / avg_hist
+        results.append(AnomalyResult(
+            check_type="rule",
+            check_name="cardinality_drop",
+            column_name=col_name,
+            status="failed" if relative_drop > CARDINALITY_DROP_THRESHOLD else "passed",
+            observed_value=round(float(curr_card), 4),
+            expected_range={"low": round(avg_hist * (1 - CARDINALITY_DROP_THRESHOLD), 4), "high": 1.0},
+            deviation_score=round(relative_drop, 4),
+        ))
+
+    return results
+
+
+# ── 6. Row Count Growth Rate ──────────────────────────────────────────────────
+
+def run_row_growth_check(
+    current_profile,
+    history: list,
+    threshold: float = 3.0,
+) -> list[AnomalyResult]:
+    """Detect abnormal row count growth rate (rows added per interval)."""
+    if len(history) < Z_SCORE_MIN_POINTS:
+        return []
+
+    counts = [p.row_count for p in history if p.row_count is not None]
+    if len(counts) < 2:
+        return []
+
+    deltas = [counts[i] - counts[i - 1] for i in range(1, len(counts))]
+    deltas = deltas[-Z_SCORE_WINDOW:]
+
+    if len(deltas) < Z_SCORE_MIN_POINTS - 1:
+        return []
+
+    arr = np.array(deltas, dtype=float)
+    mean = float(np.mean(arr))
+    std = float(np.std(arr))
+
+    if std == 0:
+        return []
+
+    current_delta = (current_profile.row_count or 0) - (history[-1].row_count or 0)
+    z = (current_delta - mean) / std
+
+    return [AnomalyResult(
+        check_type="z_score",
+        check_name="row_count_growth_rate",
+        column_name=None,
+        status="failed" if abs(z) > threshold else "passed",
+        observed_value=float(current_delta),
+        expected_range={"low": round(mean - threshold * std, 1), "high": round(mean + threshold * std, 1)},
+        deviation_score=round(z, 4),
+    )]

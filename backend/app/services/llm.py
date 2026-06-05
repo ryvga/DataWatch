@@ -92,20 +92,21 @@ RETRY_SUFFIX = (
 
 # ── Core generation ────────────────────────────────────────────────────────────
 
-def _get_client() -> OpenAI:
+def _get_client(api_key: str | None = None) -> OpenAI:
     return OpenAI(
-        api_key=settings.OPENROUTER_API_KEY,
+        api_key=api_key or settings.OPENROUTER_API_KEY,
         base_url=settings.LLM_BASE_URL,
     )
 
 
-def _call_llm(user_message: str) -> str:
+def _call_llm(user_message: str, api_key: str | None = None, model: str | None = None) -> str:
     """OpenRouter call — returns text content."""
-    client = _get_client()
+    client = _get_client(api_key)
     response = client.chat.completions.create(
-        model=settings.LLM_MODEL,
-        max_tokens=1024,
+        model=model or settings.LLM_MODEL,
+        max_tokens=4096,
         temperature=0,
+        response_format={"type": "json_object"},
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_message},
@@ -114,30 +115,80 @@ def _call_llm(user_message: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def _parse_and_validate(raw: str) -> NarrationResult:
-    """Strip markdown fences if present, then parse + validate."""
-    text = raw
+def _repair_truncated_json(raw: str) -> str:
+    """Best-effort repair of a JSON string truncated mid-stream."""
+    text = raw.strip()
+    # Strip markdown fences
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    return NarrationResult.model_validate(json.loads(text))
+
+    # Try to close any open string — find last unescaped quote pair imbalance
+    # Simple heuristic: count open braces/brackets and close them
+    in_string = False
+    escape_next = False
+    open_braces = 0
+    open_brackets = 0
+
+    for ch in text:
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_string:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if not in_string:
+            if ch == "{":
+                open_braces += 1
+            elif ch == "}":
+                open_braces -= 1
+            elif ch == "[":
+                open_brackets += 1
+            elif ch == "]":
+                open_brackets -= 1
+
+    # Close unclosed string first
+    if in_string:
+        text += '"'
+    # Close unclosed arrays then objects
+    text += "]" * max(0, open_brackets) + "}" * max(0, open_braces)
+    return text
 
 
-def generate_narration(context: str) -> dict:
+def _parse_and_validate(raw: str) -> NarrationResult:
+    """Strip markdown fences if present, attempt repair on decode error, then validate."""
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    try:
+        return NarrationResult.model_validate(json.loads(text))
+    except json.JSONDecodeError:
+        # Attempt repair on truncated response before giving up
+        repaired = _repair_truncated_json(raw)
+        return NarrationResult.model_validate(json.loads(repaired))
+
+
+def generate_narration(context: str, org_api_key: str | None = None, org_model: str | None = None) -> dict:
     """
     Call OpenRouter with 1 validation retry.
+    org_api_key / org_model: per-org overrides set by staff (take priority over global env).
     Returns dict (NarrationResult.model_dump() or error dict).
     """
-    if not settings.OPENROUTER_API_KEY:
-        return {"error": "narration_failed", "reason": "OPENROUTER_API_KEY not set"}
+    effective_key = org_api_key or settings.OPENROUTER_API_KEY
+    effective_model = org_model or settings.LLM_MODEL
+    if not effective_key:
+        return {"error": "narration_failed", "reason": "No LLM API key configured"}
 
     user_msg = f"Here is the incident context:\n\n{context}\n\nGenerate the incident report JSON."
 
     # Attempt 1
     raw = None
     try:
-        raw = _call_llm(user_msg)
+        raw = _call_llm(user_msg, api_key=effective_key, model=effective_model)
         result = _parse_and_validate(raw)
-        logger.info("LLM narration generated (attempt 1), model=%s confidence=%s", settings.LLM_MODEL, result.confidence)
+        logger.info("LLM narration generated (attempt 1), model=%s confidence=%s", effective_model, result.confidence)
         return result.model_dump()
     except (json.JSONDecodeError, ValidationError) as e:
         logger.warning("LLM attempt 1 failed validation: %s", e)
@@ -150,17 +201,32 @@ def generate_narration(context: str) -> dict:
     try:
         raw2 = _call_llm(user_msg + RETRY_SUFFIX)
         result = _parse_and_validate(raw2)
-        logger.info("LLM narration generated (attempt 2 retry), model=%s confidence=%s", settings.LLM_MODEL, result.confidence)
+        logger.info("LLM narration generated (attempt 2), model=%s confidence=%s", settings.LLM_MODEL, result.confidence)
         return result.model_dump()
     except (json.JSONDecodeError, ValidationError) as e:
-        logger.error("LLM attempt 2 also failed: %s", e)
-        return {
-            "error": "validation_failed",
-            "reason": str(e),
-            "raw": raw1[:500],
-        }
+        logger.warning("LLM attempt 2 also failed: %s", e)
     except Exception as e:
-        logger.error("LLM API error on retry: %s", e)
+        logger.error("LLM API error on attempt 2: %s", e)
+        return {"error": "narration_failed", "reason": str(e)}
+
+    # Attempt 3 — minimal prompt to maximise chance of clean JSON
+    MINIMAL_PROMPT = (
+        "Output ONLY a JSON object with these exact keys: "
+        "summary (string), likely_causes (array of objects with hypothesis+probability), "
+        "impact_assessment (string), recommended_actions (array of strings), "
+        "data_pattern_notes (string), confidence (high|medium|low). "
+        f"Context: {user_msg[:800]}"
+    )
+    try:
+        raw3 = _call_llm(MINIMAL_PROMPT)
+        result = _parse_and_validate(raw3)
+        logger.info("LLM narration generated (attempt 3 minimal), model=%s", settings.LLM_MODEL)
+        return result.model_dump()
+    except (json.JSONDecodeError, ValidationError) as e:
+        logger.error("LLM all 3 attempts failed: %s", e)
+        return {"error": "validation_failed", "reason": str(e)}
+    except Exception as e:
+        logger.error("LLM API error on attempt 3: %s", e)
         return {"error": "narration_failed", "reason": str(e)}
 
 

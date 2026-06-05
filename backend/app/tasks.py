@@ -157,7 +157,9 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
     from app.models.monitored_table import MonitoredTable
     from app.models.table_profile import TableProfile
     from app.services.anomaly import (
+        run_cardinality_checks,
         run_isolation_forest,
+        run_row_growth_check,
         run_rule_checks,
         run_stl_check,
         run_z_score_checks,
@@ -202,6 +204,8 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         all_checks += run_rule_checks(profile, prev_profile, table)
         all_checks += run_isolation_forest(profile, list(history), table_id, r_client)
         all_checks += run_stl_check(profile, list(history))
+        all_checks += run_cardinality_checks(profile, list(history))
+        all_checks += run_row_growth_check(profile, list(history), table.sensitivity)
 
         if r_client:
             r_client.close()
@@ -274,9 +278,25 @@ async def _generate_llm_narration_async(incident_id: str) -> dict:
         logger.info("LLM narration cache hit for incident %s", incident_id)
         return {"status": "cached", "incident_id": incident_id}
 
-    # Build context and call LLM
+    # Build context and call LLM — use per-org key if configured
     context_json = await build_context(incident_id)
-    narration = generate_narration(context_json)
+    org_api_key: str | None = None
+    org_model: str | None = None
+    async with AsyncSessionLocal() as db:
+        from app.models.incident import Incident as IncidentModel
+        from app.models.organization import Organization
+        from app.services.crypto import CryptoService
+        inc = await db.get(IncidentModel, incident_id)
+        if inc:
+            org = await db.get(Organization, inc.org_id)
+            if org and org.llm_api_key_encrypted:
+                try:
+                    org_api_key = CryptoService().decrypt_for_org(org.llm_api_key_encrypted, str(org.id))
+                    org_model = org.llm_model
+                except Exception:
+                    pass
+
+    narration = generate_narration(context_json, org_api_key=org_api_key, org_model=org_model)
 
     # Persist to DB + cache
     async with AsyncSessionLocal() as db:

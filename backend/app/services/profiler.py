@@ -144,6 +144,10 @@ class ProfilerService:
                     f"MAX({safe}) AS max_{safe}",
                     f"AVG({safe}::FLOAT) AS mean_{safe}",
                     f"STDDEV({safe}::FLOAT) AS stddev_{safe}",
+                    f"PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY {safe}) AS p25_{safe}",
+                    f"PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY {safe}) AS p50_{safe}",
+                    f"PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY {safe}) AS p75_{safe}",
+                    f"PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY {safe}) AS p95_{safe}",
                     f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END)::FLOAT "
                     f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) AS zero_rate_{safe}",
                     f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END)::FLOAT "
@@ -153,15 +157,46 @@ class ProfilerService:
                 parts += [
                     f"MIN({safe}) AS min_{safe}",
                     f"MAX({safe}) AS max_{safe}",
+                    f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) AS range_seconds_{safe}",
                 ]
             else:  # text / other
                 parts += [
-                    f"MIN({safe}::TEXT) AS min_{safe}",
-                    f"MAX({safe}::TEXT) AS max_{safe}",
+                    f"MIN(LENGTH({safe}::TEXT)) AS min_len_{safe}",
+                    f"MAX(LENGTH({safe}::TEXT)) AS max_len_{safe}",
+                    f"AVG(LENGTH({safe}::TEXT)) AS avg_len_{safe}",
+                    f"SUM(CASE WHEN {safe}::TEXT = '' THEN 1 ELSE 0 END)::FLOAT "
+                    f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) AS empty_rate_{safe}",
                 ]
 
         select_clause = ",\n       ".join(parts)
         return f"SELECT {select_clause}\nFROM {schema}.{table}"
+
+    async def get_top_values(
+        self,
+        connector: BaseConnector,
+        schema: str,
+        table: str,
+        columns: list[ColumnInfo],
+        limit: int = 10,
+    ) -> dict[str, list[dict]]:
+        """Fetch top N most frequent values for categorical columns (max 5 cols to avoid query bloat)."""
+        text_cols = [c for c in columns if c.category == "text"][:5]
+        top_values: dict[str, list[dict]] = {}
+        for col in text_cols:
+            try:
+                q = (
+                    f"SELECT {col.name}::TEXT AS val, COUNT(*) AS cnt "
+                    f"FROM {schema}.{table} "
+                    f"WHERE {col.name} IS NOT NULL "
+                    f"GROUP BY {col.name} ORDER BY cnt DESC LIMIT {limit}"
+                )
+                # execute_profile_query only returns one row — use raw query method if available
+                if hasattr(connector, "execute_query_many"):
+                    rows = await connector.execute_query_many(q)
+                    top_values[col.name] = [{"value": r["val"], "count": r["cnt"]} for r in rows]
+            except Exception:
+                pass
+        return top_values
 
     def parse_results(
         self,
@@ -196,6 +231,13 @@ class ProfilerService:
                         metrics[metric_name] = val.isoformat()
                     else:
                         metrics[metric_name] = val
+            # Cardinality ratio: distinct / non-null
+            if "distinct_count" in metrics and result.row_count > 0:
+                null_count = (metrics.get("null_rate", 0) or 0) * result.row_count
+                non_null = result.row_count - null_count
+                metrics["cardinality_ratio"] = (
+                    float(metrics["distinct_count"]) / non_null if non_null > 0 else 0.0
+                )
             col_metrics[col.name] = metrics
 
         result.column_metrics = col_metrics
