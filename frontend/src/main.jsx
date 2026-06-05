@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { ThemeProvider } from 'next-themes'
+import '@fontsource-variable/plus-jakarta-sans'
 import App from './App'
 import './index.css'
 import { Toaster } from '@/components/ui/sonner'

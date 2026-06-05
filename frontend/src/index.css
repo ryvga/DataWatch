@@ -1,7 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/plus-jakarta-sans";
 
 /* ── Class-based dark mode ── */
 @custom-variant dark (&:where(.dark, .dark *));
