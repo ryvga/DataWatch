@@ -234,6 +234,12 @@ async def discover_source(
     return DiscoveryResponse(**result)
 
 
+@router.get("/connector-types", tags=["sources"])
+async def get_connector_types():
+    """Return metadata for all supported connector types (for UI forms)."""
+    return ConnectorFactory.supported_types()
+
+
 @router.get("/{source_id}/schemas", response_model=DiscoveryResponse)
 async def get_schemas(
     source_id: str,
