@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Play } from 'lucide-react'
-import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, runTable } from '../api/endpoints'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Play, Sparkles, Wand2 } from 'lucide-react'
+import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import MetricChart from '../components/MetricChart'
 import SeverityBadge from '../components/SeverityBadge'
@@ -10,6 +10,114 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+// ── AI Monitor Recommender ────────────────────────────────────────────────────
+
+function AIMonitorRecommender({ tableId, sourceId, tableName }) {
+  const [recs, setRecs] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const run = async () => {
+    setLoading(true); setError(''); setRecs(null)
+    try {
+      const r = await recommendMonitors(sourceId, { source_id: sourceId, table_name: tableName.split('.')[1] || tableName, schema_name: tableName.split('.')[0] || 'public' })
+      setRecs(r.data.recommendations || [])
+    } catch (e) {
+      setError(e.response?.data?.detail || 'AI recommendation failed — LLM key may not be configured.')
+    } finally { setLoading(false) }
+  }
+
+  const SEVERITY_COLORS = { P1: 'text-red-600 dark:text-red-400', P2: 'text-orange-600 dark:text-orange-400', P3: 'text-yellow-600 dark:text-yellow-400' }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base flex items-center gap-2"><Sparkles className="size-4 text-primary" />AI Monitor Recommendations</CardTitle>
+        <Button size="sm" variant="outline" onClick={run} disabled={loading} className="gap-1.5">
+          {loading ? <span className="animate-pulse">Generating…</span> : 'Generate for this table'}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {!recs && !error && <p className="text-sm text-muted-foreground">Click to let AI analyze your table schema and suggest monitors.</p>}
+        {recs?.length === 0 && <p className="text-sm text-muted-foreground">No recommendations generated.</p>}
+        {recs && recs.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {recs.map((r, i) => (
+              <div key={i} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold ${SEVERITY_COLORS[r.severity] || ''}`}>{r.severity}</span>
+                  <span className="text-sm font-medium">{r.name}</span>
+                  <span className="ml-auto rounded-full border px-2 py-0.5 text-xs font-mono">{r.monitor_type}</span>
+                </div>
+                {r.rationale && <p className="text-xs text-muted-foreground">{r.rationale}</p>}
+                {r.column_name && <p className="text-xs text-muted-foreground">Column: <code className="text-primary">{r.column_name}</code></p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Natural Language Rule Builder ─────────────────────────────────────────────
+
+function NLRuleBuilder({ tableId, tableName }) {
+  const [rule, setRule] = useState('')
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const generate = async (e) => {
+    e.preventDefault()
+    if (!rule.trim()) return
+    setLoading(true); setError(''); setResult(null)
+    try {
+      const r = await nlRule(tableId, { rule, table_name: tableName })
+      setResult(r.data)
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Failed to generate SQL — LLM key may not be configured.')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Wand2 className="size-4 text-primary" />Natural Language Rule Builder</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm text-muted-foreground">Describe a business rule in plain English. AI converts it to a SQL check that counts violations.</p>
+        <form onSubmit={generate} className="flex gap-2">
+          <input
+            className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+            placeholder="e.g. Paid orders must have a payment reference"
+            value={rule}
+            onChange={e => setRule(e.target.value)}
+          />
+          <Button type="submit" size="sm" disabled={loading || !rule.trim()}>
+            {loading ? 'Generating…' : 'Generate'}
+          </Button>
+        </form>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {result?.sql && (
+          <div className="flex flex-col gap-2">
+            <div className="rounded-lg bg-muted/60 border p-3">
+              <p className="text-xs text-muted-foreground mb-1 font-semibold uppercase tracking-wide">Generated SQL (violation count)</p>
+              <pre className="text-xs font-mono whitespace-pre-wrap text-foreground">{result.sql}</pre>
+            </div>
+            {result.explanation && <p className="text-sm text-muted-foreground">{result.explanation}</p>}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              {result.severity && <span>Severity: <strong>{result.severity}</strong></span>}
+              {result.estimated_impact && <span>Impact: {result.estimated_impact}</span>}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 const NULL_RATE_STYLES = {
   good: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
@@ -288,6 +396,12 @@ export default function TableDetail() {
           )}
         </CardContent>
       </Card>
+
+      {/* ── AI: Monitor Recommender ── */}
+      <AIMonitorRecommender tableId={id} sourceId={table.source_id} tableName={`${table.schema_name}.${table.table_name}`} />
+
+      {/* ── NL Rule Builder ── */}
+      <NLRuleBuilder tableId={id} tableName={`${table.schema_name}.${table.table_name}`} />
 
       <Card>
         <CardHeader>
