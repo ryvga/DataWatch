@@ -91,3 +91,35 @@ async def test_get_source_table_schema_returns_connector_ddl(monkeypatch):
     assert calls["table"] == ("public", "orders")
     assert calls["closed"] is True
 
+
+@pytest.mark.asyncio
+async def test_pause_source_archives_source_and_deactivates_tables(monkeypatch):
+    source = SimpleNamespace(id="source-1", status="connected")
+    tables = [
+        SimpleNamespace(id="table-1", is_active=True),
+        SimpleNamespace(id="table-2", is_active=True),
+    ]
+    removed_jobs = []
+
+    class ScalarResult:
+        def all(self):
+            return tables
+
+    class FakeSession:
+        async def scalar(self, _query):
+            return source
+
+        async def scalars(self, _query):
+            return ScalarResult()
+
+    monkeypatch.setattr("app.scheduler.remove_table_job", lambda table_id: removed_jobs.append(table_id))
+
+    await sources.pause_source(
+        source_id="source-1",
+        org=SimpleNamespace(id="org-1"),
+        db=FakeSession(),
+    )
+
+    assert source.status == "paused"
+    assert [table.is_active for table in tables] == [False, False]
+    assert removed_jobs == ["table-1", "table-2"]
