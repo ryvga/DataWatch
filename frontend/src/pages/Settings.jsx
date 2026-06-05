@@ -103,6 +103,13 @@ const ALERT_EXAMPLES = {
   slack: '{\n  "webhook_url": "https://hooks.slack.com/...",\n  "min_severity": "P2"\n}',
   email: '{\n  "to": ["you@company.com"],\n  "min_severity": "P3"\n}',
   pagerduty: '{\n  "routing_key": "YOUR_KEY",\n  "min_severity": "P1"\n}',
+  webhook: '{\n  "url": "https://example.com/webhook",\n  "secret": ""\n}',
+  teams: '{\n  "webhook_url": "https://outlook.office.com/webhook/..."\n}',
+}
+
+const ALERT_FIELD_DEFAULTS = {
+  webhook: { url: '', secret: '' },
+  teams: { webhook_url: '' },
 }
 
 const SETTINGS_SECTIONS = [
@@ -123,7 +130,7 @@ const SETTINGS_SECTIONS = [
   {
     value: 'alerts',
     label: 'Alerts',
-    description: 'Slack, email, and PagerDuty routing',
+    description: 'Slack, email, PagerDuty, webhook, and Teams routing',
     icon: Bell,
     Component: AlertsTab,
   },
@@ -367,17 +374,23 @@ function TableForm({ open, onOpenChange, sources, onCreated }) {
 }
 
 function AlertForm({ open, onOpenChange, onCreated }) {
-  const [form, setForm] = useState({ channel: 'slack', config: ALERT_EXAMPLES.slack })
+  const [form, setForm] = useState({ channel: 'slack', config: ALERT_EXAMPLES.slack, fields: {} })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const submit = async (event) => {
     event.preventDefault()
-    const [config, parseError] = parseJson(form.config, 'Alert config')
-    if (parseError) {
-      setError(parseError)
-      return
+    let config = form.fields
+
+    if (!ALERT_FIELD_DEFAULTS[form.channel]) {
+      const [parsedConfig, parseError] = parseJson(form.config, 'Alert config')
+      if (parseError) {
+        setError(parseError)
+        return
+      }
+      config = parsedConfig
     }
+
     setSaving(true)
     setError('')
     try {
@@ -406,7 +419,7 @@ function AlertForm({ open, onOpenChange, onCreated }) {
             <Label>Channel</Label>
             <Select
               value={form.channel}
-              onValueChange={(channel) => setForm({ channel, config: ALERT_EXAMPLES[channel] })}
+              onValueChange={(channel) => setForm({ channel, config: ALERT_EXAMPLES[channel], fields: ALERT_FIELD_DEFAULTS[channel] || {} })}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -416,15 +429,55 @@ function AlertForm({ open, onOpenChange, onCreated }) {
                   <SelectItem value="slack">Slack</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
                   <SelectItem value="pagerduty">PagerDuty</SelectItem>
+                  <SelectItem value="webhook">Webhook (Generic)</SelectItem>
+                  <SelectItem value="teams">Microsoft Teams</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="alert-config">Config</Label>
-            <Textarea id="alert-config" className="min-h-36 font-mono text-xs" value={form.config} onChange={(e) => setForm((prev) => ({ ...prev, config: e.target.value }))} />
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
+          {form.channel === 'webhook' ? (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="webhook-url">Webhook URL</Label>
+                <Input
+                  id="webhook-url"
+                  type="text"
+                  value={form.fields.url || ''}
+                  onChange={(e) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, url: e.target.value } }))}
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="webhook-secret">Signing secret (optional)</Label>
+                <Input
+                  id="webhook-secret"
+                  type="text"
+                  value={form.fields.secret || ''}
+                  onChange={(e) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, secret: e.target.value } }))}
+                />
+                <p className="text-xs text-muted-foreground">Used for HMAC-SHA256 signature verification</p>
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+          ) : form.channel === 'teams' ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="teams-webhook-url">Teams Incoming Webhook URL</Label>
+              <Input
+                id="teams-webhook-url"
+                type="text"
+                value={form.fields.webhook_url || ''}
+                onChange={(e) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, webhook_url: e.target.value } }))}
+                required
+              />
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="alert-config">Config</Label>
+              <Textarea id="alert-config" className="min-h-36 font-mono text-xs" value={form.config} onChange={(e) => setForm((prev) => ({ ...prev, config: e.target.value }))} />
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create alert'}</Button>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
@@ -677,7 +730,7 @@ function AlertsTab() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-medium">Alert routes</h2>
-            <p className="text-sm text-muted-foreground">Slack, email, and PagerDuty delivery rules for incidents.</p>
+            <p className="text-sm text-muted-foreground">Slack, email, PagerDuty, webhook, and Teams delivery rules for incidents.</p>
           </div>
           <Button type="button" onClick={() => setOpen(true)}>
             <Plus data-icon="inline-start" />
