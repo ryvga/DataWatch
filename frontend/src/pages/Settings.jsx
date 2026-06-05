@@ -65,6 +65,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { storage } from '@/lib/storage'
+import SourceConnectionDialog from '@/components/SourceConnectionDialog'
+import TableSetupDialog from '@/components/TableSetupDialog'
 
 const SOURCE_TYPES = ['postgres', 'mysql', 'mongodb', 'cassandra', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
 
@@ -516,11 +518,13 @@ function SourcesTab() {
   }, [])
 
   const test = async (id) => {
+    const source = sources.find((item) => item.id === id)
     setTesting((prev) => ({ ...prev, [id]: 'testing' }))
     try {
       const response = await testSource(id)
       setTesting((prev) => ({ ...prev, [id]: response.data.connected ? 'ok' : 'fail' }))
-      toast[response.data.connected ? 'success' : 'error'](response.data.connected ? 'Connection succeeded' : 'Connection failed')
+      if (response.data.connected) notify.ok('Connection succeeded', `${source?.name || 'Source'} responded in ${response.data.latency_ms}ms.`)
+      else notify.source.failed(source?.name || 'Source', response.data.error)
     } catch (_) {
       setTesting((prev) => ({ ...prev, [id]: 'fail' }))
       notify.source.failed(source?.name || 'Source', 'Could not reach the warehouse.')
@@ -529,12 +533,13 @@ function SourcesTab() {
   }
 
   const remove = async (id) => {
+    const source = sources.find((item) => item.id === id)
     try {
       await deleteSource(id)
       setSources((prev) => prev.filter((source) => source.id !== id))
-      notify.source.deleted(source.name)
+      notify.source.deleted(source?.name || 'Source')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to delete source')
+      notify.err(err.response?.data?.detail || 'Failed to delete source')
     }
   }
 
@@ -599,7 +604,7 @@ function SourcesTab() {
             </Table>
           </div>
         )}
-        <SourceForm open={open} onOpenChange={setOpen} onCreated={(source) => setSources((prev) => [...prev, source])} />
+        <SourceConnectionDialog open={open} onOpenChange={setOpen} onCreated={(source) => setSources((prev) => [...prev, source])} />
       </CardContent>
     </Card>
   )
@@ -618,12 +623,13 @@ function TablesTab() {
   }, [])
 
   const remove = async (id) => {
+    const table = tables.find((item) => item.id === id)
     try {
       await deleteTable(id)
       setTables((prev) => prev.filter((table) => table.id !== id))
-      notify.table.removed(table.schema_name + '.' + table.table_name)
+      notify.table.removed(table ? `${table.schema_name}.${table.table_name}` : 'Table')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to remove table')
+      notify.err(err.response?.data?.detail || 'Failed to remove table')
     }
   }
 
@@ -686,7 +692,7 @@ function TablesTab() {
             </Table>
           </div>
         )}
-        <TableForm open={open} onOpenChange={setOpen} sources={sources} onCreated={(table) => setTables((prev) => [...prev, table])} />
+        <TableSetupDialog open={open} onOpenChange={setOpen} sources={sources} onCreated={(table) => setTables((prev) => [...prev, table])} />
       </CardContent>
     </Card>
   )
@@ -702,25 +708,27 @@ function AlertsTab() {
   }, [])
 
   const test = async (id) => {
+    const alert = alerts.find((item) => item.id === id)
     setTesting((prev) => ({ ...prev, [id]: 'testing' }))
     try {
       await testAlert(id)
       setTesting((prev) => ({ ...prev, [id]: 'ok' }))
-      notify.alert.testSent(alert.channel)
+      notify.alert.testSent(alert?.channel || 'alert')
     } catch (_) {
       setTesting((prev) => ({ ...prev, [id]: 'fail' }))
-      notify.alert.testFailed(alert.channel)
+      notify.alert.testFailed(alert?.channel || 'alert')
     }
     setTimeout(() => setTesting((prev) => { const next = { ...prev }; delete next[id]; return next }), 3000)
   }
 
   const remove = async (id) => {
+    const alert = alerts.find((item) => item.id === id)
     try {
       await deleteAlert(id)
       setAlerts((prev) => prev.filter((alert) => alert.id !== id))
-      notify.alert.deleted(alert.channel)
+      notify.alert.deleted(alert?.channel || 'alert')
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to delete alert')
+      notify.err(err.response?.data?.detail || 'Failed to delete alert')
     }
   }
 

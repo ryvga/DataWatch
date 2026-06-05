@@ -9,10 +9,12 @@ export const staffLogin = (data) => api.post('/auth/staff/login', data)
 export const getSources = () => api.get('/api/v1/sources')
 export const createSource = (data) => api.post('/api/v1/sources', data)
 export const testSource = (id) => api.post(`/api/v1/sources/${id}/test`)
+export const testSourceConfig = (data) => api.post('/api/v1/sources/test-connection', data)
 export const discoverSource = (id) => api.post(`/api/v1/sources/${id}/discover`)
 export const deleteSource = (id) => api.delete(`/api/v1/sources/${id}`)
 export const getConnectorTypes = () => api.get('/api/v1/sources/connector-types')
 export const getSchemas = (id) => api.get(`/api/v1/sources/${id}/schemas`)
+export const getSourceTableSchema = (id, params) => api.get(`/api/v1/sources/${id}/table-schema`, { params })
 
 // Tables
 export const getTables = () => api.get('/api/v1/tables')
