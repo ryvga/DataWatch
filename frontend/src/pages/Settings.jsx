@@ -1,334 +1,832 @@
 import { useEffect, useState } from 'react'
+import { notify } from '@/lib/notify'
 import {
-  getSources, createSource, testSource, deleteSource,
-  getTables, createTable, discoverSource,
-  getAlerts, createAlert, deleteAlert, testAlert,
+  Bell,
+  CheckCircle2,
+  CreditCard,
+  Database,
+  MoreHorizontal,
+  Plus,
+  Send,
+  Table2,
+  Trash2,
+  Users,
+  XCircle,
+} from 'lucide-react'
+import {
+  createAlert,
+  createSource,
+  createTable,
+  deleteAlert,
+  deleteSource,
+  deleteTable,
+  discoverSource,
+  getAlerts,
+  getSources,
+  getTables,
+  testAlert,
+  testSource,
 } from '../api/endpoints'
+import HealthBadge from '../components/HealthBadge'
+import { EmptyState, PageHeader } from '../components/app-ui'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
+import { cn } from '@/lib/utils'
+import { storage } from '@/lib/storage'
 
-const TABS = ['Data Sources', 'Tables', 'Alerts', 'API Keys']
+const SOURCE_TYPES = ['postgres', 'mysql', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'databricks', 'trino', 'duckdb', 'sqlite']
 
-// ── Data Sources Tab ──────────────────────────────────────────────────────────
-function SourcesTab() {
-  const [sources, setSources] = useState([])
-  const [form, setForm] = useState({ name: '', type: 'postgres', connection_config: '{}' })
-  const [adding, setAdding] = useState(false)
-  const [testing, setTesting] = useState({})
+const SOURCE_TYPE_LABELS = {
+  postgres: 'PostgreSQL',
+  mysql: 'MySQL / MariaDB',
+  redshift: 'Amazon Redshift',
+  bigquery: 'Google BigQuery',
+  snowflake: 'Snowflake',
+  clickhouse: 'ClickHouse',
+  databricks: 'Databricks',
+  trino: 'Trino / Presto',
+  duckdb: 'DuckDB',
+  sqlite: 'SQLite',
+}
+const SOURCE_CONFIG_TEMPLATES = {
+  postgres: '{\n  "host": "localhost",\n  "port": 5432,\n  "database": "mydb",\n  "username": "user",\n  "password": ""\n}',
+  mysql: '{\n  "host": "localhost",\n  "port": 3306,\n  "database": "mydb",\n  "username": "root",\n  "password": ""\n}',
+  redshift: '{\n  "host": "cluster.region.redshift.amazonaws.com",\n  "port": 5439,\n  "database": "dev",\n  "username": "awsuser",\n  "password": ""\n}',
+  bigquery: '{\n  "project_id": "my-gcp-project",\n  "credentials_json": null\n}',
+  snowflake: '{\n  "account": "xy12345.us-east-1",\n  "user": "MYUSER",\n  "password": "",\n  "database": "MYDB",\n  "warehouse": "COMPUTE_WH"\n}',
+  clickhouse: '{\n  "host": "localhost",\n  "port": 8123,\n  "database": "default",\n  "username": "default",\n  "password": ""\n}',
+  databricks: '{\n  "server_hostname": "adb-xxx.azuredatabricks.net",\n  "http_path": "/sql/1.0/warehouses/xxx",\n  "access_token": "dapi...",\n  "catalog": "hive_metastore"\n}',
+  trino: '{\n  "host": "localhost",\n  "port": 8080,\n  "user": "trino",\n  "catalog": "tpch",\n  "schema": "tiny",\n  "http_scheme": "http"\n}',
+  duckdb: '{\n  "path": ":memory:"\n}',
+  sqlite: '{\n  "path": "/data/mydb.sqlite"\n}',
+}
 
-  useEffect(() => { getSources().then(r => setSources(r.data)) }, [])
+const ALERT_EXAMPLES = {
+  slack: '{\n  "webhook_url": "https://hooks.slack.com/...",\n  "min_severity": "P2"\n}',
+  email: '{\n  "to": ["you@company.com"],\n  "min_severity": "P3"\n}',
+  pagerduty: '{\n  "routing_key": "YOUR_KEY",\n  "min_severity": "P1"\n}',
+}
 
-  const submit = async (e) => {
-    e.preventDefault()
+const SETTINGS_SECTIONS = [
+  {
+    value: 'sources',
+    label: 'Data sources',
+    description: 'Warehouse credentials and connection checks',
+    icon: Database,
+    Component: SourcesTab,
+  },
+  {
+    value: 'tables',
+    label: 'Tables',
+    description: 'Profiling cadence and monitored objects',
+    icon: Table2,
+    Component: TablesTab,
+  },
+  {
+    value: 'alerts',
+    label: 'Alerts',
+    description: 'Slack, email, and PagerDuty routing',
+    icon: Bell,
+    Component: AlertsTab,
+  },
+  {
+    value: 'team',
+    label: 'Team',
+    description: 'Members and invitations',
+    icon: Users,
+    Component: TeamTab,
+  },
+  {
+    value: 'billing',
+    label: 'Billing',
+    description: 'Plan and payment details',
+    icon: CreditCard,
+    Component: BillingTab,
+  },
+]
+
+function parseJson(value, label) {
+  try {
+    return [JSON.parse(value), '']
+  } catch (err) {
+    return [null, `${label} must be valid JSON: ${err.message}`]
+  }
+}
+
+function SourceForm({ open, onOpenChange, onCreated }) {
+  const [form, setForm] = useState({ name: '', type: 'postgres', connection_config: SOURCE_CONFIG_TEMPLATES['postgres'] })
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const [config, parseError] = parseJson(form.connection_config, 'Connection config')
+    if (parseError) {
+      setError(parseError)
+      return
+    }
+    setSaving(true)
+    setError('')
     try {
-      const config = JSON.parse(form.connection_config)
-      const r = await createSource({ name: form.name, type: form.type, connection_config: config })
-      setSources(prev => [...prev, r.data])
-      setAdding(false)
-      setForm({ name: '', type: 'postgres', connection_config: '{}' })
+      const response = await createSource({ name: form.name, type: form.type, connection_config: config })
+      onCreated(response.data)
+      setForm({ name: '', type: 'postgres', connection_config: SOURCE_CONFIG_TEMPLATES['postgres'] })
+      onOpenChange(false)
+      notify.source.connected(form.name)
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to create source')
+      const message = err.response?.data?.detail || 'Failed to create source'
+      setError(message)
+      notify.err(message)
+    } finally {
+      setSaving(false)
     }
   }
 
-  const test = async (id) => {
-    setTesting(prev => ({ ...prev, [id]: 'testing' }))
-    try {
-      const r = await testSource(id)
-      setTesting(prev => ({ ...prev, [id]: r.data.connected ? 'ok' : 'fail' }))
-    } catch (_) { setTesting(prev => ({ ...prev, [id]: 'fail' })) }
-    setTimeout(() => setTesting(prev => { const n = {...prev}; delete n[id]; return n }), 3000)
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-sm font-semibold text-gray-300">Data Sources</h2>
-        <button onClick={() => setAdding(!adding)} className="btn-primary text-xs">+ Add Source</button>
-      </div>
-
-      {adding && (
-        <form onSubmit={submit} className="card space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="label">Name</label><input className="input" value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))} required /></div>
-            <div>
-              <label className="label">Type</label>
-              <select className="input" value={form.type} onChange={e => setForm(p => ({...p, type: e.target.value}))}>
-                {['postgres', 'bigquery', 'duckdb', 'snowflake'].map(t => <option key={t}>{t}</option>)}
-              </select>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Add data source</SheetTitle>
+          <SheetDescription>Store encrypted connection details for a warehouse connector.</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={submit} className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col gap-4 px-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="source-name">Name</Label>
+              <Input id="source-name" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} required />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Type</Label>
+              <Select value={form.type} onValueChange={(type) => setForm((prev) => ({ ...prev, type, connection_config: SOURCE_CONFIG_TEMPLATES[type] || '{}' }))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {SOURCE_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>{SOURCE_TYPE_LABELS[type] || type}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="connection-config">Connection config</Label>
+              <Textarea
+                id="connection-config"
+                className="min-h-52 font-mono text-xs"
+                value={form.connection_config}
+                onChange={(e) => setForm((prev) => ({ ...prev, connection_config: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Credentials are encrypted with HKDF per-org keys.</p>
+              {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
           </div>
-          <div>
-            <label className="label">Connection Config (JSON)</label>
-            <textarea
-              className="input font-mono text-xs h-28"
-              value={form.connection_config}
-              onChange={e => setForm(p => ({...p, connection_config: e.target.value}))}
-              placeholder={'{\n  "host": "localhost",\n  "port": 5432,\n  "database": "mydb",\n  "username": "user",\n  "password": "pass"\n}'}
-            />
-          </div>
-          <div className="flex gap-2">
-            <button type="submit" className="btn-primary text-xs">Create</button>
-            <button type="button" onClick={() => setAdding(false)} className="btn-secondary text-xs">Cancel</button>
-          </div>
+          <SheetFooter>
+            <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create source'}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          </SheetFooter>
         </form>
-      )}
-
-      <div className="card p-0 overflow-hidden">
-        {sources.length === 0 ? (
-          <p className="p-6 text-center text-gray-500 text-sm">No data sources yet</p>
-        ) : sources.map(s => (
-          <div key={s.id} className="flex items-center gap-3 px-4 py-3 table-row">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-200">{s.name}</p>
-              <p className="text-xs text-gray-500">{s.type} · {s.status}</p>
-            </div>
-            <button
-              onClick={() => test(s.id)}
-              className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
-                testing[s.id] === 'ok' ? 'border-green-500 text-green-400' :
-                testing[s.id] === 'fail' ? 'border-red-500 text-red-400' :
-                'border-gray-700 text-gray-400 hover:border-gray-500'
-              }`}
-            >
-              {testing[s.id] === 'testing' ? '…' : testing[s.id] === 'ok' ? '✓ Connected' : testing[s.id] === 'fail' ? '✗ Failed' : 'Test'}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
-// ── Tables Tab ────────────────────────────────────────────────────────────────
-function TablesTab() {
-  const [sources, setSources] = useState([])
-  const [tables, setTables] = useState([])
+function TableForm({ open, onOpenChange, sources, onCreated }) {
   const [schemas, setSchemas] = useState([])
-  const [form, setForm] = useState({ source_id: '', schema_name: '', table_name: '', freshness_column: '', check_interval_minutes: 60, sensitivity: 3.0 })
-  const [adding, setAdding] = useState(false)
+  const [discovering, setDiscovering] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [form, setForm] = useState({
+    source_id: sources[0]?.id || '',
+    schema_name: '',
+    table_name: '',
+    freshness_column: '',
+    check_interval_minutes: 60,
+    sensitivity: 3.0,
+  })
 
   useEffect(() => {
-    Promise.all([getSources(), getTables()]).then(([s, t]) => {
-      setSources(s.data)
-      setTables(t.data)
-      if (s.data.length) setForm(p => ({...p, source_id: s.data[0].id}))
-    })
-  }, [])
+    if (!form.source_id && sources[0]?.id) setForm((prev) => ({ ...prev, source_id: sources[0].id }))
+  }, [form.source_id, sources])
 
   const discover = async (sourceId) => {
+    if (!sourceId) return
+    setDiscovering(true)
     try {
-      const r = await discoverSource(sourceId)
-      setSchemas(r.data.schemas)
-    } catch (_) { setSchemas([]) }
+      const response = await discoverSource(sourceId)
+      setSchemas(response.data.schemas || [])
+    } catch (_) {
+      setSchemas([])
+      notify.err('Schema discovery failed', 'Could not reach the warehouse — check source credentials.')
+    } finally {
+      setDiscovering(false)
+    }
   }
 
-  const submit = async (e) => {
-    e.preventDefault()
+  const submit = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
     try {
-      const r = await createTable({
+      const response = await createTable({
         ...form,
         check_interval_minutes: Number(form.check_interval_minutes),
         sensitivity: Number(form.sensitivity),
       })
-      setTables(prev => [...prev, r.data])
-      setAdding(false)
+      onCreated(response.data)
+      onOpenChange(false)
+      notify.table.added(form.schema_name + '.' + form.table_name)
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed')
+      const message = err.response?.data?.detail || 'Failed to add table'
+      setError(message)
+      notify.err(message)
+    } finally {
+      setSaving(false)
     }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-sm font-semibold text-gray-300">Monitored Tables</h2>
-        <button onClick={() => setAdding(!adding)} className="btn-primary text-xs">+ Add Table</button>
-      </div>
-
-      {adding && (
-        <form onSubmit={submit} className="card space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="label">Source</label>
-              <select className="input" value={form.source_id}
-                onChange={e => { setForm(p => ({...p, source_id: e.target.value})); discover(e.target.value) }}>
-                {sources.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Add monitored table</SheetTitle>
+          <SheetDescription>Choose a warehouse table and the profiling cadence for scheduled checks.</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={submit} className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col gap-4 px-4">
+            <div className="flex flex-col gap-2">
+              <Label>Source</Label>
+              <Select
+                value={String(form.source_id)}
+                onValueChange={(source_id) => {
+                  setForm((prev) => ({ ...prev, source_id }))
+                  discover(source_id)
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {sources.map((source) => (
+                      <SelectItem key={source.id} value={String(source.id)}>{source.name}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Button type="button" variant="outline" size="sm" onClick={() => discover(form.source_id)} disabled={!form.source_id || discovering}>
+                {discovering ? 'Discovering...' : 'Discover schemas'}
+              </Button>
             </div>
-            <div>
-              <label className="label">Schema</label>
-              {schemas.length > 0 ? (
-                <select className="input" value={form.schema_name}
-                  onChange={e => setForm(p => ({...p, schema_name: e.target.value}))}>
-                  <option value="">Select schema…</option>
-                  {schemas.map(s => <option key={s.name}>{s.name}</option>)}
-                </select>
-              ) : (
-                <input className="input" value={form.schema_name} placeholder="public"
-                  onChange={e => setForm(p => ({...p, schema_name: e.target.value}))} />
-              )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <Label>Schema</Label>
+                {schemas.length > 0 ? (
+                  <Select value={form.schema_name} onValueChange={(schema_name) => setForm((prev) => ({ ...prev, schema_name }))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select schema" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {schemas.map((schema) => (
+                          <SelectItem key={schema.name} value={schema.name}>{schema.name}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={form.schema_name} placeholder="public" onChange={(e) => setForm((prev) => ({ ...prev, schema_name: e.target.value }))} />
+                )}
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="table-name">Table name</Label>
+                <Input id="table-name" value={form.table_name} onChange={(e) => setForm((prev) => ({ ...prev, table_name: e.target.value }))} required />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="freshness-column">Freshness column</Label>
+                <Input id="freshness-column" value={form.freshness_column} placeholder="updated_at" onChange={(e) => setForm((prev) => ({ ...prev, freshness_column: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="interval">Interval minutes</Label>
+                <Input id="interval" type="number" min={1} value={form.check_interval_minutes} onChange={(e) => setForm((prev) => ({ ...prev, check_interval_minutes: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="sensitivity">Sensitivity</Label>
+                <Input id="sensitivity" type="number" step="0.1" min={1} value={form.sensitivity} onChange={(e) => setForm((prev) => ({ ...prev, sensitivity: e.target.value }))} />
+              </div>
             </div>
-            <div><label className="label">Table Name</label><input className="input" value={form.table_name} onChange={e => setForm(p => ({...p, table_name: e.target.value}))} required /></div>
-            <div><label className="label">Freshness Column</label><input className="input" value={form.freshness_column} placeholder="updated_at" onChange={e => setForm(p => ({...p, freshness_column: e.target.value}))} /></div>
-            <div><label className="label">Check Interval (min)</label><input className="input" type="number" min={1} value={form.check_interval_minutes} onChange={e => setForm(p => ({...p, check_interval_minutes: e.target.value}))} /></div>
-            <div><label className="label">Sensitivity (z-score)</label><input className="input" type="number" step="0.1" min={1} value={form.sensitivity} onChange={e => setForm(p => ({...p, sensitivity: e.target.value}))} /></div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
-          <div className="flex gap-2">
-            <button type="submit" className="btn-primary text-xs">Add Table</button>
-            <button type="button" onClick={() => setAdding(false)} className="btn-secondary text-xs">Cancel</button>
-          </div>
+          <SheetFooter>
+            <Button type="submit" disabled={saving || !form.source_id}>{saving ? 'Adding...' : 'Add table'}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          </SheetFooter>
         </form>
-      )}
-
-      <div className="card p-0 overflow-hidden">
-        {tables.length === 0 ? (
-          <p className="p-6 text-center text-gray-500 text-sm">No tables monitored yet</p>
-        ) : tables.map(t => (
-          <div key={t.id} className="flex items-center gap-3 px-4 py-3 table-row">
-            <div className="flex-1">
-              <p className="text-sm font-mono text-gray-200">{t.schema_name}.{t.table_name}</p>
-              <p className="text-xs text-gray-500">every {t.check_interval_minutes}m · sensitivity {t.sensitivity}</p>
-            </div>
-            <span className={`text-xs px-2 py-0.5 rounded-full border ${
-              t.is_active ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-            }`}>{t.is_active ? 'active' : 'paused'}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }
 
-// ── Alerts Tab ────────────────────────────────────────────────────────────────
-function AlertsTab() {
-  const [alerts, setAlerts] = useState([])
-  const [form, setForm] = useState({ channel: 'slack', config: '{}' })
-  const [adding, setAdding] = useState(false)
+function AlertForm({ open, onOpenChange, onCreated }) {
+  const [form, setForm] = useState({ channel: 'slack', config: ALERT_EXAMPLES.slack })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const [config, parseError] = parseJson(form.config, 'Alert config')
+    if (parseError) {
+      setError(parseError)
+      return
+    }
+    setSaving(true)
+    setError('')
+    try {
+      const response = await createAlert({ channel: form.channel, config })
+      onCreated(response.data)
+      onOpenChange(false)
+      notify.alert.created(form.channel)
+    } catch (err) {
+      const message = err.response?.data?.detail || 'Failed to create alert'
+      setError(message)
+      notify.err(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add alert route</DialogTitle>
+          <DialogDescription>Configure where incident notifications are sent.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label>Channel</Label>
+            <Select
+              value={form.channel}
+              onValueChange={(channel) => setForm({ channel, config: ALERT_EXAMPLES[channel] })}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="slack">Slack</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="pagerduty">PagerDuty</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="alert-config">Config</Label>
+            <Textarea id="alert-config" className="min-h-36 font-mono text-xs" value={form.config} onChange={(e) => setForm((prev) => ({ ...prev, config: e.target.value }))} />
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create alert'}</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ConfirmDelete({ label, onConfirm, children }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{children}</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {label}?</AlertDialogTitle>
+          <AlertDialogDescription>This action updates DataWatch configuration and cannot be undone from this screen.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+function SourcesTab() {
+  const [sources, setSources] = useState([])
+  const [open, setOpen] = useState(false)
   const [testing, setTesting] = useState({})
 
-  useEffect(() => { getAlerts().then(r => setAlerts(r.data)) }, [])
-
-  const EXAMPLES = {
-    slack: '{\n  "webhook_url": "https://hooks.slack.com/...",\n  "min_severity": "P2"\n}',
-    email: '{\n  "to": ["you@company.com"],\n  "min_severity": "P3"\n}',
-    pagerduty: '{\n  "routing_key": "YOUR_KEY",\n  "min_severity": "P1"\n}',
-  }
-
-  const submit = async (e) => {
-    e.preventDefault()
-    try {
-      const r = await createAlert({ channel: form.channel, config: JSON.parse(form.config) })
-      setAlerts(prev => [...prev, r.data])
-      setAdding(false)
-    } catch (err) { alert(err.response?.data?.detail || 'Failed') }
-  }
+  useEffect(() => {
+    getSources().then((response) => setSources(response.data))
+  }, [])
 
   const test = async (id) => {
-    setTesting(prev => ({...prev, [id]: 'testing'}))
+    setTesting((prev) => ({ ...prev, [id]: 'testing' }))
     try {
-      await testAlert(id)
-      setTesting(prev => ({...prev, [id]: 'ok'}))
-    } catch (_) { setTesting(prev => ({...prev, [id]: 'fail'})) }
-    setTimeout(() => setTesting(prev => { const n = {...prev}; delete n[id]; return n }), 3000)
+      const response = await testSource(id)
+      setTesting((prev) => ({ ...prev, [id]: response.data.connected ? 'ok' : 'fail' }))
+      toast[response.data.connected ? 'success' : 'error'](response.data.connected ? 'Connection succeeded' : 'Connection failed')
+    } catch (_) {
+      setTesting((prev) => ({ ...prev, [id]: 'fail' }))
+      notify.source.failed(source?.name || 'Source', 'Could not reach the warehouse.')
+    }
+    setTimeout(() => setTesting((prev) => { const next = { ...prev }; delete next[id]; return next }), 3000)
+  }
+
+  const remove = async (id) => {
+    try {
+      await deleteSource(id)
+      setSources((prev) => prev.filter((source) => source.id !== id))
+      notify.source.deleted(source.name)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to delete source')
+    }
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-sm font-semibold text-gray-300">Alert Configs</h2>
-        <button onClick={() => setAdding(!adding)} className="btn-primary text-xs">+ Add Alert</button>
-      </div>
-
-      {adding && (
-        <form onSubmit={submit} className="card space-y-3">
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <label className="label">Channel</label>
-            <select className="input" value={form.channel}
-              onChange={e => setForm(p => ({...p, channel: e.target.value, config: EXAMPLES[e.target.value]}))}>
-              <option value="slack">Slack</option>
-              <option value="email">Email</option>
-              <option value="pagerduty">PagerDuty</option>
-            </select>
+            <h2 className="text-base font-medium">Data sources</h2>
+            <p className="text-sm text-muted-foreground">Warehouse connectors available to monitored tables.</p>
           </div>
-          <div>
-            <label className="label">Config (JSON)</label>
-            <textarea className="input font-mono text-xs h-28" value={form.config}
-              onChange={e => setForm(p => ({...p, config: e.target.value}))} />
-          </div>
-          <div className="flex gap-2">
-            <button type="submit" className="btn-primary text-xs">Create</button>
-            <button type="button" onClick={() => setAdding(false)} className="btn-secondary text-xs">Cancel</button>
-          </div>
-        </form>
-      )}
-
-      <div className="card p-0 overflow-hidden">
-        {alerts.length === 0 ? (
-          <p className="p-6 text-center text-gray-500 text-sm">No alert configs yet</p>
-        ) : alerts.map(a => (
-          <div key={a.id} className="flex items-center gap-3 px-4 py-3 table-row">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-200 capitalize">{a.channel}</p>
-              <p className="text-xs text-gray-500">min severity: {a.config?.min_severity ?? 'P3'}</p>
-            </div>
-            <button onClick={() => test(a.id)} className={`text-xs px-3 py-1 rounded-lg border transition-colors ${
-              testing[a.id] === 'ok' ? 'border-green-500 text-green-400' :
-              testing[a.id] === 'fail' ? 'border-red-500 text-red-400' :
-              'border-gray-700 text-gray-400 hover:border-gray-500'
-            }`}>
-              {testing[a.id] === 'testing' ? '…' : testing[a.id] === 'ok' ? '✓ Sent' : testing[a.id] === 'fail' ? '✗ Failed' : 'Test'}
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ── API Keys Tab ──────────────────────────────────────────────────────────────
-function ApiKeysTab() {
-  const [key] = useState(localStorage.getItem('dw_api_key') || '')
-  return (
-    <div className="space-y-4">
-      <h2 className="text-sm font-semibold text-gray-300">API Keys</h2>
-      <div className="card">
-        <p className="text-xs text-gray-500 mb-2">Your current API key (stored locally)</p>
-        <div className="flex items-center gap-3">
-          <code className="flex-1 bg-gray-800 px-3 py-2 rounded text-sm font-mono text-green-400 truncate">
-            {key ? key.slice(0, 10) + '•'.repeat(20) : 'Not set'}
-          </code>
+          <Button type="button" onClick={() => setOpen(true)}>
+            <Plus data-icon="inline-start" />
+            Add source
+          </Button>
         </div>
-        {!key && (
-          <p className="mt-3 text-xs text-yellow-400">
-            Set your API key: <code className="bg-gray-800 px-1 rounded">localStorage.setItem('dw_api_key', 'dw_...')</code>
-          </p>
+        {sources.length === 0 ? (
+          <EmptyState icon={Database} title="No data sources" description="Add a connector before configuring table monitoring." />
+        ) : (
+          <div className="dw-table-wrap">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-12" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sources.map((source) => (
+                  <TableRow key={source.id}>
+                    <TableCell className="font-medium">{source.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{source.type}</TableCell>
+                    <TableCell><HealthBadge status={source.status} /></TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Actions for ${source.name}`}>
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem onClick={() => test(source.id)}>
+                              {testing[source.id] === 'ok' ? <CheckCircle2 data-icon="inline-start" /> : testing[source.id] === 'fail' ? <XCircle data-icon="inline-start" /> : <Send data-icon="inline-start" />}
+                              {testing[source.id] === 'testing' ? 'Testing...' : 'Test connection'}
+                            </DropdownMenuItem>
+                            <ConfirmDelete label={source.name} onConfirm={() => remove(source.id)}>
+                              <DropdownMenuItem onSelect={(event) => event.preventDefault()} variant="destructive">
+                                <Trash2 data-icon="inline-start" />
+                                Delete
+                              </DropdownMenuItem>
+                            </ConfirmDelete>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
-    </div>
+        <SourceForm open={open} onOpenChange={setOpen} onCreated={(source) => setSources((prev) => [...prev, source])} />
+      </CardContent>
+    </Card>
   )
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
-export default function Settings() {
-  const [tab, setTab] = useState(0)
-  const COMPONENTS = [SourcesTab, TablesTab, AlertsTab, ApiKeysTab]
-  const TabComponent = COMPONENTS[tab]
+function TablesTab() {
+  const [sources, setSources] = useState([])
+  const [tables, setTables] = useState([])
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    Promise.all([getSources(), getTables()]).then(([sourcesResponse, tablesResponse]) => {
+      setSources(sourcesResponse.data)
+      setTables(tablesResponse.data)
+    })
+  }, [])
+
+  const remove = async (id) => {
+    try {
+      await deleteTable(id)
+      setTables((prev) => prev.filter((table) => table.id !== id))
+      notify.table.removed(table.schema_name + '.' + table.table_name)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to remove table')
+    }
+  }
 
   return (
-    <div className="p-8 space-y-6">
-      <h1 className="text-2xl font-bold text-white">Settings</h1>
-      <div className="flex gap-1 border-b border-gray-800">
-        {TABS.map((t, i) => (
-          <button
-            key={t}
-            onClick={() => setTab(i)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              tab === i ? 'text-blue-400 border-b-2 border-blue-500' : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-medium">Monitored tables</h2>
+            <p className="text-sm text-muted-foreground">Tables scheduled for profiling and anomaly checks.</p>
+          </div>
+          <Button type="button" onClick={() => setOpen(true)} disabled={sources.length === 0}>
+            <Plus data-icon="inline-start" />
+            Add table
+          </Button>
+        </div>
+        {tables.length === 0 ? (
+          <EmptyState icon={Table2} title="No monitored tables" description="Add a table after connecting a source." />
+        ) : (
+          <div className="dw-table-wrap">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Table</TableHead>
+                  <TableHead>Interval</TableHead>
+                  <TableHead>Sensitivity</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-12" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {tables.map((table) => (
+                  <TableRow key={table.id}>
+                    <TableCell className="font-mono text-xs">{table.schema_name}.{table.table_name}</TableCell>
+                    <TableCell className="text-muted-foreground">{table.check_interval_minutes}m</TableCell>
+                    <TableCell className="text-muted-foreground">{table.sensitivity}</TableCell>
+                    <TableCell><HealthBadge status={table.is_active ? 'healthy' : 'paused'} /></TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Actions for ${table.schema_name}.${table.table_name}`}>
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuGroup>
+                            <ConfirmDelete label={`${table.schema_name}.${table.table_name}`} onConfirm={() => remove(table.id)}>
+                              <DropdownMenuItem onSelect={(event) => event.preventDefault()} variant="destructive">
+                                <Trash2 data-icon="inline-start" />
+                                Delete
+                              </DropdownMenuItem>
+                            </ConfirmDelete>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        <TableForm open={open} onOpenChange={setOpen} sources={sources} onCreated={(table) => setTables((prev) => [...prev, table])} />
+      </CardContent>
+    </Card>
+  )
+}
+
+function AlertsTab() {
+  const [alerts, setAlerts] = useState([])
+  const [open, setOpen] = useState(false)
+  const [testing, setTesting] = useState({})
+
+  useEffect(() => {
+    getAlerts().then((response) => setAlerts(response.data))
+  }, [])
+
+  const test = async (id) => {
+    setTesting((prev) => ({ ...prev, [id]: 'testing' }))
+    try {
+      await testAlert(id)
+      setTesting((prev) => ({ ...prev, [id]: 'ok' }))
+      notify.alert.testSent(alert.channel)
+    } catch (_) {
+      setTesting((prev) => ({ ...prev, [id]: 'fail' }))
+      notify.alert.testFailed(alert.channel)
+    }
+    setTimeout(() => setTesting((prev) => { const next = { ...prev }; delete next[id]; return next }), 3000)
+  }
+
+  const remove = async (id) => {
+    try {
+      await deleteAlert(id)
+      setAlerts((prev) => prev.filter((alert) => alert.id !== id))
+      notify.alert.deleted(alert.channel)
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to delete alert')
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-medium">Alert routes</h2>
+            <p className="text-sm text-muted-foreground">Slack, email, and PagerDuty delivery rules for incidents.</p>
+          </div>
+          <Button type="button" onClick={() => setOpen(true)}>
+            <Plus data-icon="inline-start" />
+            Add alert
+          </Button>
+        </div>
+        {alerts.length === 0 ? (
+          <EmptyState icon={Bell} title="No alert routes" description="Create a route before relying on incident notifications." />
+        ) : (
+          <div className="dw-table-wrap">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Channel</TableHead>
+                  <TableHead>Minimum severity</TableHead>
+                  <TableHead className="w-12" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {alerts.map((alert) => (
+                  <TableRow key={alert.id}>
+                    <TableCell className="capitalize">{alert.channel}</TableCell>
+                    <TableCell className="text-muted-foreground">{alert.config?.min_severity ?? 'P3'}</TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button type="button" variant="ghost" size="icon-sm" aria-label={`Actions for ${alert.channel}`}>
+                            <MoreHorizontal />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem onClick={() => test(alert.id)}>
+                              {testing[alert.id] === 'ok' ? <CheckCircle2 data-icon="inline-start" /> : testing[alert.id] === 'fail' ? <XCircle data-icon="inline-start" /> : <Send data-icon="inline-start" />}
+                              {testing[alert.id] === 'testing' ? 'Sending...' : 'Send test'}
+                            </DropdownMenuItem>
+                            <ConfirmDelete label={`${alert.channel} route`} onConfirm={() => remove(alert.id)}>
+                              <DropdownMenuItem onSelect={(event) => event.preventDefault()} variant="destructive">
+                                <Trash2 data-icon="inline-start" />
+                                Delete
+                              </DropdownMenuItem>
+                            </ConfirmDelete>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        <AlertForm open={open} onOpenChange={setOpen} onCreated={(alert) => setAlerts((prev) => [...prev, alert])} />
+      </CardContent>
+    </Card>
+  )
+}
+
+function TeamTab() {
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-medium">
+            <Users className="size-4 text-muted-foreground" />
+            Team members
+          </h2>
+          <p className="text-sm text-muted-foreground">Invite colleagues to your workspace and manage their roles.</p>
+        </div>
+        <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center">
+          <Users className="mx-auto size-8 text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium">Team invitations coming soon</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            You'll be able to invite team members by email and assign roles (admin / member).
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function BillingTab() {
+  const orgName = storage.getItem('dw_org_name') || 'Your workspace'
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <div>
+          <h2 className="flex items-center gap-2 text-base font-medium">
+            <CreditCard className="size-4 text-muted-foreground" />
+            Billing & Plan
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Manage your plan, payment method, and usage limits for <strong>{orgName}</strong>.
+          </p>
+        </div>
+        <div className="rounded-lg border border-dashed bg-muted/20 p-8 text-center">
+          <CreditCard className="mx-auto size-8 text-muted-foreground/40 mb-3" />
+          <p className="text-sm font-medium">Payment integration coming soon</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Stripe-powered billing will be available here. Contact us to discuss enterprise plans.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default function Settings() {
+  const [active, setActive] = useState('sources')
+  const activeSection = SETTINGS_SECTIONS.find((section) => section.value === active) || SETTINGS_SECTIONS[0]
+  const ActiveComponent = activeSection.Component
+
+  return (
+    <div className="dw-page">
+      <PageHeader title="Settings" description="Configure warehouse connectors, monitored tables, alert routing, team members, and billing." />
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="h-fit min-w-0 rounded-lg border bg-card p-2 shadow-xs">
+          <nav className="flex max-w-full snap-x gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
+            {SETTINGS_SECTIONS.map((section) => {
+              const Icon = section.icon
+              const selected = active === section.value
+              return (
+                <button
+                  key={section.value}
+                  type="button"
+                  onClick={() => setActive(section.value)}
+                  className={cn(
+                    'dw-nav-link group/settings flex w-[min(78vw,260px)] shrink-0 snap-start items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors lg:w-auto lg:min-w-0',
+                    selected
+                      ? 'border-primary/25 bg-primary/10 text-foreground shadow-xs'
+                      : 'border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors',
+                      selected ? 'border-primary/25 bg-primary text-primary-foreground' : 'border-border bg-card group-hover/settings:bg-card'
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{section.label}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{section.description}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </nav>
+        </aside>
+
+        <section className="min-w-0">
+          <ActiveComponent />
+        </section>
       </div>
-      <TabComponent />
     </div>
   )
 }

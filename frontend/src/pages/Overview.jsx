@@ -1,26 +1,31 @@
 import { useEffect, useState } from 'react'
-import { getIncidents, getSources, getTables, getHealth } from '../api/endpoints'
+import { RefreshCw, Server, Table2 } from 'lucide-react'
+import { getHealth, getIncidents, getSources, getTables } from '../api/endpoints'
+import HealthBadge from '../components/HealthBadge'
 import IncidentCard from '../components/IncidentCard'
+import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatDateTime, formatNumber } from '../components/app-ui'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-function HealthCard({ source, tables }) {
-  const healthy = tables.filter((t) => !t.latest_profile?.error).length
+function SourceHealthRow({ source, tables }) {
+  const healthy = tables.filter((table) => !table.latest_profile?.error).length
   const total = tables.length
   const pct = total ? Math.round((healthy / total) * 100) : 0
-  const color = pct >= 90 ? 'text-green-400' : pct >= 70 ? 'text-yellow-400' : 'text-red-400'
+  const status = source.status === 'connected' ? 'connected' : 'error'
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-gray-300 truncate">{source.name}</span>
-        <span className={`text-xs px-2 py-0.5 rounded-full border ${
-          source.status === 'connected'
-            ? 'bg-green-500/10 text-green-400 border-green-500/20'
-            : 'bg-red-500/10 text-red-400 border-red-500/20'
-        }`}>{source.status}</span>
-      </div>
-      <div className={`text-3xl font-bold ${color}`}>{pct}%</div>
-      <div className="text-xs text-gray-500 mt-1">{healthy}/{total} tables healthy</div>
-    </div>
+    <TableRow>
+      <TableCell>
+        <div className="font-medium">{source.name}</div>
+        <div className="text-xs text-muted-foreground">{source.type}</div>
+      </TableCell>
+      <TableCell>
+        <HealthBadge status={status} />
+      </TableCell>
+      <TableCell className="text-muted-foreground">{healthy}/{total}</TableCell>
+      <TableCell className="font-medium tabular-nums">{pct}%</TableCell>
+    </TableRow>
   )
 }
 
@@ -30,132 +35,148 @@ export default function Overview() {
   const [incidents, setIncidents] = useState([])
   const [health, setHealth] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
 
-  const load = async () => {
+  const load = async (isRefresh = false) => {
     setError('')
+    if (isRefresh) setRefreshing(true)
     try {
       const [s, t, i, h] = await Promise.all([
-        getSources(), getTables(), getIncidents({ status: 'open', limit: 20 }), getHealth()
+        getSources(),
+        getTables(),
+        getIncidents({ status: 'open', limit: 20 }),
+        getHealth(),
       ])
       setSources(s.data)
       setTables(t.data)
       setIncidents(i.data)
       setHealth(h.data)
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Failed to load data')
+      setError(err.response?.data?.detail || err.message || 'Failed to load overview data')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => {
     load()
-    const timer = setInterval(load, 60000)
+    const timer = setInterval(() => load(true), 60000)
     return () => clearInterval(timer)
   }, [])
 
-  if (loading) return <div className="p-8 text-gray-500">Loading…</div>
+  if (loading) return <LoadingState label="Loading overview" />
+
+  const sortedIncidents = [...incidents].sort((a, b) => {
+    const severity = { P1: 0, P2: 1, P3: 2 }
+    return (severity[a.severity] ?? 3) - (severity[b.severity] ?? 3)
+  })
 
   return (
-    <div className="p-8 space-y-8">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Overview</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {tables.length} tables monitored · {incidents.length} open incidents
-            {health && ` · ${health.scheduler_jobs} scheduler jobs`}
-          </p>
-        </div>
-        <button onClick={load} className="btn-secondary">Refresh</button>
+    <div className="dw-page">
+      <PageHeader
+        title="Overview"
+        description={`${tables.length} monitored tables, ${incidents.length} open incidents${health ? `, ${health.scheduler_jobs} scheduler jobs` : ''}`}
+        actions={
+          <Button type="button" variant="outline" onClick={() => load(true)} disabled={refreshing}>
+            <RefreshCw data-icon="inline-start" className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </Button>
+        }
+      />
+
+      <ErrorNotice message={error} onDismiss={() => setError('')} />
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(320px,0.55fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Server className="size-4 text-muted-foreground" />
+              Data sources
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {sources.length === 0 ? (
+              <EmptyState icon={Server} title="No data sources" description="Connect a warehouse in Settings to start monitoring." />
+            ) : (
+              <div className="dw-table-wrap">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Healthy tables</TableHead>
+                      <TableHead>Score</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sources.map((source) => (
+                      <SourceHealthRow key={source.id} source={source} tables={tables.filter((table) => table.source_id === source.id)} />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Active incidents</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {sortedIncidents.length === 0 ? (
+              <EmptyState title="No open incidents" description="Current table profiles are not reporting open anomalies." />
+            ) : (
+              <div className="overflow-hidden rounded-lg border">
+                {sortedIncidents.map((incident) => (
+                  <IncidentCard key={incident.id} incident={incident} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400 flex items-center justify-between">
-          <span>{error}</span>
-          <button onClick={() => setError('')} className="text-red-400/60 hover:text-red-400 ml-4">✕</button>
-        </div>
-      )}
-
-      {/* Health cards */}
-      {sources.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Data Sources</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {sources.map((s) => (
-              <HealthCard key={s.id} source={s} tables={tables.filter((t) => t.source_id === s.id)} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Active incidents */}
-      <section>
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
-          Active Incidents {incidents.length > 0 && `(${incidents.length})`}
-        </h2>
-        <div className="card p-0 overflow-hidden">
-          {incidents.length === 0 ? (
-            <div className="px-4 py-8 text-center text-gray-600 text-sm">
-              ✅ No open incidents
-            </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Table2 className="size-4 text-muted-foreground" />
+            Monitored tables
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {tables.length === 0 ? (
+            <EmptyState icon={Table2} title="No tables monitored" description="Add monitored tables after connecting a data source." />
           ) : (
-            incidents
-              .sort((a, b) => {
-                const sev = { P1: 0, P2: 1, P3: 2 }
-                return (sev[a.severity] ?? 3) - (sev[b.severity] ?? 3)
-              })
-              .map((i) => <IncidentCard key={i.id} incident={i} />)
+            <div className="dw-table-wrap">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Table</TableHead>
+                    <TableHead>Rows</TableHead>
+                    <TableHead>Last profile</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {tables.slice(0, 12).map((table) => (
+                    <TableRow key={table.id}>
+                      <TableCell className="font-mono text-xs">{table.schema_name}.{table.table_name}</TableCell>
+                      <TableCell className="tabular-nums text-muted-foreground">{formatNumber(table.latest_profile?.row_count)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatDateTime(table.last_profiled_at)}</TableCell>
+                      <TableCell>
+                        <HealthBadge status={table.latest_profile?.error ? 'error' : table.is_active ? 'healthy' : 'paused'} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
-        </div>
-      </section>
-
-      {/* Recent tables */}
-      {tables.length > 0 && (
-        <section>
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Monitored Tables</h2>
-          <div className="card p-0 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Table</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Rows</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Last Profile</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tables.map((t) => (
-                  <tr key={t.id} className="table-row">
-                    <td className="px-4 py-3 font-mono text-gray-200">
-                      {t.schema_name}.{t.table_name}
-                    </td>
-                    <td className="px-4 py-3 text-gray-400">
-                      {t.latest_profile?.row_count?.toLocaleString() ?? '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {t.last_profiled_at
-                        ? new Date(t.last_profiled_at).toLocaleString()
-                        : 'Never'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                        t.latest_profile?.error
-                          ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                          : t.is_active
-                            ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                            : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-                      }`}>
-                        {t.latest_profile?.error ? 'error' : t.is_active ? 'active' : 'paused'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

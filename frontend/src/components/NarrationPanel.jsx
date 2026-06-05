@@ -1,15 +1,43 @@
-import { useEffect, useState } from 'react'
-import { getIncident } from '../api/endpoints'
+import { useEffect, useRef, useState } from 'react'
+import { BrainCircuit, Loader2, RefreshCw } from 'lucide-react'
+import { getIncident, retryNarration } from '../api/endpoints'
+import { notify } from '@/lib/notify'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 
-const CONFIDENCE_COLORS = { high: 'text-green-400', medium: 'text-yellow-400', low: 'text-gray-400' }
-const PROB_COLORS = { high: 'bg-red-500/15 text-red-400', medium: 'bg-orange-500/15 text-orange-400', low: 'bg-gray-500/15 text-gray-400' }
+const CONFIDENCE_STYLES = {
+  high: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
+  medium: 'border-amber-600/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+  low: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
+}
 
-function Skeleton() {
+const PROBABILITY_STYLES = {
+  high: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
+  medium: 'border-amber-600/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+  low: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
+}
+
+// Stop polling after 90 seconds (30 × 3s intervals)
+const MAX_POLLS = 30
+
+function AnalysisSkeleton() {
   return (
-    <div className="space-y-3 animate-pulse">
-      <div className="h-4 bg-gray-800 rounded w-3/4" />
-      <div className="h-4 bg-gray-800 rounded w-1/2" />
-      <div className="h-4 bg-gray-800 rounded w-5/6" />
+    <div className="flex flex-col gap-3">
+      <Skeleton className="h-4 w-3/4" />
+      <Skeleton className="h-4 w-1/2" />
+      <Skeleton className="h-4 w-5/6" />
+    </div>
+  )
+}
+
+function Section({ title, children }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <h4 className="text-sm font-medium text-foreground">{title}</h4>
+      {children}
     </div>
   )
 }
@@ -17,14 +45,28 @@ function Skeleton() {
 export default function NarrationPanel({ incidentId, initialNarration }) {
   const [narration, setNarration] = useState(initialNarration)
   const [polling, setPolling] = useState(!initialNarration || !!initialNarration?.error)
+  const [timedOut, setTimedOut] = useState(false)
+  const [retrying, setRetrying] = useState(false)
+  const pollCount = useRef(0)
 
   useEffect(() => {
     if (!polling) return
     const id = setInterval(async () => {
+      pollCount.current += 1
+      if (pollCount.current >= MAX_POLLS) {
+        clearInterval(id)
+        setPolling(false)
+        setTimedOut(true)
+        return
+      }
       try {
         const res = await getIncident(incidentId)
         const n = res.data.llm_narration
         if (n && !n.error) {
+          setNarration(n)
+          setPolling(false)
+        } else if (n?.error) {
+          // Backend returned an explicit error — stop polling
           setNarration(n)
           setPolling(false)
         }
@@ -33,77 +75,130 @@ export default function NarrationPanel({ incidentId, initialNarration }) {
     return () => clearInterval(id)
   }, [incidentId, polling])
 
-  if (!narration || polling) {
+  if (polling) {
     return (
-      <div className="card space-y-4">
-        <div className="flex items-center gap-2 text-gray-400 text-sm">
-          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-          Generating AI analysis…
-        </div>
-        <Skeleton />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            Generating incident analysis
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <AnalysisSkeleton />
+          <p className="mt-3 text-xs text-muted-foreground">
+            The AI is analysing this incident. This usually takes 10–30 seconds.
+          </p>
+        </CardContent>
+      </Card>
     )
   }
 
-  if (narration.error) {
+  const handleRetry = async () => {
+    setRetrying(true)
+    try {
+      notify.narration.retrying()
+      await retryNarration(incidentId)
+      setNarration(null)
+      setTimedOut(false)
+      pollCount.current = 0
+      setPolling(true)
+    } catch (_) {
+      notify.narration.failed()
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  if (timedOut || narration?.error) {
+    const message = timedOut
+      ? 'Analysis timed out — the LLM task is taking longer than expected.'
+      : `Analysis failed: ${narration?.reason || 'unknown error'}`
+
     return (
-      <div className="card text-gray-500 text-sm">
-        AI analysis unavailable — {narration.reason || 'unknown error'}
-      </div>
+      <Card>
+        <CardHeader className="flex-row items-center justify-between gap-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <BrainCircuit className="size-4 text-muted-foreground" />
+            Incident analysis
+          </CardTitle>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleRetry}
+            disabled={retrying}
+          >
+            <RefreshCw className={cn('size-3.5 mr-1.5', retrying && 'animate-spin')} />
+            {retrying ? 'Queuing…' : 'Retry analysis'}
+          </Button>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          {message}
+          <p className="mt-2 text-xs">
+            Using model: <code className="font-mono">{import.meta.env.VITE_LLM_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free'}</code>
+          </p>
+        </CardContent>
+      </Card>
     )
   }
+
+  if (!narration) return null
 
   return (
-    <div className="card space-y-5">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-gray-100">AI Incident Analysis</h3>
-        <span className={`text-xs font-medium ${CONFIDENCE_COLORS[narration.confidence] || 'text-gray-400'}`}>
+    <Card>
+      <CardHeader className="flex-row items-center justify-between gap-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <BrainCircuit className="size-4 text-muted-foreground" />
+          Incident analysis
+        </CardTitle>
+        <Badge variant="outline" className={cn('capitalize', CONFIDENCE_STYLES[narration.confidence] || CONFIDENCE_STYLES.low)}>
           {narration.confidence} confidence
-        </span>
-      </div>
+        </Badge>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5">
+        <p className="text-sm leading-6 text-foreground">{narration.summary}</p>
 
-      <p className="text-gray-200 text-sm leading-relaxed">{narration.summary}</p>
+        {narration.likely_causes?.length > 0 && (
+          <Section title="Likely causes">
+            <ul className="flex flex-col gap-2">
+              {narration.likely_causes.map((cause, i) => (
+                <li key={i} className="grid grid-cols-[auto_minmax(0,1fr)] gap-2 text-sm">
+                  <Badge
+                    variant="outline"
+                    className={cn('mt-0.5 capitalize', PROBABILITY_STYLES[cause.probability] || PROBABILITY_STYLES.low)}
+                  >
+                    {cause.probability}
+                  </Badge>
+                  <span className="leading-6 text-muted-foreground">{cause.hypothesis}</span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
-      {narration.likely_causes?.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Likely Causes</p>
-          <ul className="space-y-2">
-            {narration.likely_causes.map((c, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm">
-                <span className={`mt-0.5 text-xs px-1.5 py-0.5 rounded font-medium ${PROB_COLORS[c.probability] || PROB_COLORS.low}`}>
-                  {c.probability}
-                </span>
-                <span className="text-gray-300">{c.hypothesis}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+        {narration.impact_assessment && (
+          <Section title="Impact">
+            <p className="text-sm leading-6 text-muted-foreground">{narration.impact_assessment}</p>
+          </Section>
+        )}
 
-      {narration.impact_assessment && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Impact</p>
-          <p className="text-sm text-gray-300">{narration.impact_assessment}</p>
-        </div>
-      )}
+        {narration.recommended_actions?.length > 0 && (
+          <Section title="Recommended actions">
+            <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-6 text-muted-foreground">
+              {narration.recommended_actions.map((action, i) => (
+                <li key={i}>{action}</li>
+              ))}
+            </ol>
+          </Section>
+        )}
 
-      {narration.recommended_actions?.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Recommended Actions</p>
-          <ol className="space-y-1.5 list-decimal list-inside">
-            {narration.recommended_actions.map((a, i) => (
-              <li key={i} className="text-sm text-gray-300">{a}</li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      {narration.data_pattern_notes && (
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">Pattern Notes</p>
-          <p className="text-sm text-gray-400 italic">{narration.data_pattern_notes}</p>
-        </div>
-      )}
-    </div>
+        {narration.data_pattern_notes && (
+          <Section title="Pattern notes">
+            <p className="text-sm leading-6 text-muted-foreground">{narration.data_pattern_notes}</p>
+          </Section>
+        )}
+      </CardContent>
+    </Card>
   )
 }

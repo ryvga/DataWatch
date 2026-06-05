@@ -1,8 +1,9 @@
-import api from './client'
+import api, { adminApi } from './client'
 
 // Auth
 export const register = (data) => api.post('/auth/register', data)
 export const login = (data) => api.post('/auth/login', data)
+export const staffLogin = (data) => api.post('/auth/staff/login', data)
 
 // Sources
 export const getSources = () => api.get('/api/v1/sources')
@@ -10,6 +11,8 @@ export const createSource = (data) => api.post('/api/v1/sources', data)
 export const testSource = (id) => api.post(`/api/v1/sources/${id}/test`)
 export const discoverSource = (id) => api.post(`/api/v1/sources/${id}/discover`)
 export const deleteSource = (id) => api.delete(`/api/v1/sources/${id}`)
+export const getConnectorTypes = () => api.get('/api/v1/sources/connector-types')
+export const getSchemas = (id) => api.get(`/api/v1/sources/${id}/schemas`)
 
 // Tables
 export const getTables = () => api.get('/api/v1/tables')
@@ -27,6 +30,7 @@ export const getIncidents = (params) => api.get('/api/v1/incidents', { params })
 export const getIncident = (id) => api.get(`/api/v1/incidents/${id}`)
 export const acknowledgeIncident = (id) => api.patch(`/api/v1/incidents/${id}/acknowledge`)
 export const resolveIncident = (id) => api.patch(`/api/v1/incidents/${id}/resolve`)
+export const retryNarration = (id) => api.post(`/api/v1/incidents/${id}/narration/retry`)
 
 // Alerts
 export const getAlerts = () => api.get('/api/v1/alerts')
@@ -37,3 +41,18 @@ export const testAlert = (id) => api.post(`/api/v1/alerts/${id}/test`)
 // Org
 export const getOrg = () => api.get('/orgs/me')
 export const getHealth = () => api.get('/health')
+
+// ── Admin (staff only) ────────────────────────────────────────────────────────
+
+export const adminGetOrgs = () => adminApi.get('/admin/orgs')
+export const adminGetOrg = (id) => adminApi.get(`/admin/orgs/${id}`)
+export const adminUpdatePlan = (id, data) => adminApi.patch(`/admin/orgs/${id}/plan`, data)
+export const adminSetLLMKey = (id, data) => adminApi.put(`/admin/orgs/${id}/llm-key`, data)
+export const adminRemoveLLMKey = (id) => adminApi.delete(`/admin/orgs/${id}/llm-key`)
+export const adminCreateApiKey = (id, data) => adminApi.post(`/admin/orgs/${id}/api-key`, data)
+export const adminGetOrgUsers = (id) => adminApi.get(`/admin/orgs/${id}/users`)
+export const adminGetAllUsers = () => adminApi.get('/admin/users')
+export const adminGetStaff = () => adminApi.get('/admin/staff')
+export const adminCreateStaff = (data) => adminApi.post('/admin/staff', data)
+export const adminDeactivateStaff = (id) => adminApi.patch(`/admin/staff/${id}/deactivate`)
+export const adminGetInvites = (orgId) => adminApi.get(`/admin/orgs/${orgId}/invites`)

@@ -1,13 +1,21 @@
-export default function SeverityBadge({ severity }) {
-  const map = {
-    P1: 'bg-red-500/15 text-red-400 border-red-500/30',
-    P2: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-    P3: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-  }
-  const cls = map[severity?.toUpperCase()] || 'bg-gray-500/15 text-gray-400 border-gray-500/30'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+
+const SEVERITY_STYLES = {
+  P1: 'border-red-700/30 bg-red-700/10 text-red-800 dark:text-red-300',
+  P2: 'border-orange-700/30 bg-orange-600/10 text-orange-800 dark:text-orange-300',
+  P3: 'border-amber-700/30 bg-amber-500/12 text-amber-800 dark:text-amber-300',
+}
+
+export default function SeverityBadge({ severity, className }) {
+  const value = String(severity || 'P?').toUpperCase()
+
   return (
-    <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-bold ${cls}`}>
-      {severity?.toUpperCase()}
-    </span>
+    <Badge
+      variant="outline"
+      className={cn('font-semibold tabular-nums', SEVERITY_STYLES[value] || 'text-muted-foreground', className)}
+    >
+      {value}
+    </Badge>
   )
 }

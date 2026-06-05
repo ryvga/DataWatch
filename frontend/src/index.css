@@ -1,17 +1,292 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/plus-jakarta-sans";
 
-@layer base {
-  body { @apply bg-gray-950 text-gray-100 antialiased; }
+/* ── Class-based dark mode ── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Map CSS variables → Tailwind v4 color tokens ── */
+@theme inline {
+  --color-background:              hsl(var(--background));
+  --color-foreground:              hsl(var(--foreground));
+  --color-card:                    hsl(var(--card));
+  --color-card-foreground:         hsl(var(--card-foreground));
+  --color-popover:                 hsl(var(--popover));
+  --color-popover-foreground:      hsl(var(--popover-foreground));
+  --color-primary:                 hsl(var(--primary));
+  --color-primary-foreground:      hsl(var(--primary-foreground));
+  --color-secondary:               hsl(var(--secondary));
+  --color-secondary-foreground:    hsl(var(--secondary-foreground));
+  --color-muted:                   hsl(var(--muted));
+  --color-muted-foreground:        hsl(var(--muted-foreground));
+  --color-accent:                  hsl(var(--accent));
+  --color-accent-foreground:       hsl(var(--accent-foreground));
+  --color-destructive:             hsl(var(--destructive));
+  --color-destructive-foreground:  hsl(var(--destructive-foreground));
+  --color-border:                  hsl(var(--border));
+  --color-input:                   hsl(var(--input));
+  --color-ring:                    hsl(var(--ring));
+
+  --color-sidebar:                 hsl(var(--sidebar));
+  --color-sidebar-foreground:      hsl(var(--sidebar-foreground));
+  --color-sidebar-primary:         hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent:          hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border:          hsl(var(--sidebar-border));
+  --color-sidebar-ring:            hsl(var(--sidebar-ring));
+
+  --color-chart-1:                 hsl(var(--chart-1));
+  --color-chart-2:                 hsl(var(--chart-2));
+  --color-chart-3:                 hsl(var(--chart-3));
+  --color-chart-4:                 hsl(var(--chart-4));
+  --color-chart-5:                 hsl(var(--chart-5));
+
+  --radius-sm:  calc(var(--radius) - 4px);
+  --radius-md:  calc(var(--radius) - 2px);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) + 4px);
+
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+/* ── "Ops Steel" — Electric Teal × Deep Navy ── */
+@layer base {
+  :root {
+    /* Light: clean data-ops workspace */
+    --background:   203 28% 96%;
+    --foreground:   215 35% 12%;
+
+    --card:         0 0% 100%;
+    --card-foreground: 215 35% 12%;
+
+    --popover:      0 0% 100%;
+    --popover-foreground: 215 35% 12%;
+
+    /* Electric teal — data streams, monitoring precision */
+    --primary:      199 88% 44%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:    203 22% 92%;
+    --secondary-foreground: 215 30% 18%;
+
+    --muted:        203 22% 93%;
+    --muted-foreground: 215 18% 46%;
+
+    --accent:       157 60% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive:  0 78% 54%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:       203 22% 85%;
+    --input:        203 22% 87%;
+    --ring:         199 88% 44%;
+
+    --chart-1:      199 88% 44%;
+    --chart-2:      157 60% 38%;
+    --chart-3:      38 90% 50%;
+    --chart-4:      0 78% 54%;
+    --chart-5:      270 60% 54%;
+
+    --radius:       0.625rem;
+
+    --sidebar:          210 30% 93%;
+    --sidebar-foreground:    215 30% 16%;
+    --sidebar-primary:       199 88% 44%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent:        203 24% 86%;
+    --sidebar-accent-foreground: 215 30% 14%;
+    --sidebar-border:        203 22% 82%;
+    --sidebar-ring:          199 88% 44%;
+  }
+
+  .dark {
+    /* Dark: deep navy control room */
+    --background:   215 45% 7%;
+    --foreground:   210 28% 92%;
+
+    --card:         215 38% 10%;
+    --card-foreground: 210 28% 92%;
+
+    --popover:      215 42% 12%;
+    --popover-foreground: 210 28% 92%;
+
+    /* Bright teal in dark mode — glowing data streams */
+    --primary:      199 88% 58%;
+    --primary-foreground: 215 45% 8%;
+
+    --secondary:    215 30% 16%;
+    --secondary-foreground: 210 24% 84%;
+
+    --muted:        215 30% 14%;
+    --muted-foreground: 215 18% 56%;
+
+    --accent:       157 56% 50%;
+    --accent-foreground: 215 45% 8%;
+
+    --destructive:  0 78% 62%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:       215 28% 17%;
+    --input:        215 28% 19%;
+    --ring:         199 88% 58%;
+
+    --chart-1:      199 88% 58%;
+    --chart-2:      157 56% 50%;
+    --chart-3:      38 90% 56%;
+    --chart-4:      0 78% 62%;
+    --chart-5:      270 56% 64%;
+
+    --sidebar:          215 50% 5%;
+    --sidebar-foreground:    210 26% 88%;
+    --sidebar-primary:       199 88% 58%;
+    --sidebar-primary-foreground: 215 45% 8%;
+    --sidebar-accent:        215 34% 12%;
+    --sidebar-accent-foreground: 210 26% 88%;
+    --sidebar-border:        215 30% 13%;
+    --sidebar-ring:          199 88% 58%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+    outline-color: hsl(var(--ring) / 0.5);
+  }
+
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
+
+  body {
+    min-height: 100svh;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  button:not([disabled]),
+  [role="button"]:not([disabled]),
+  [role="menuitem"],
+  [role="option"],
+  label[for],
+  select:not([disabled]),
+  a[href] {
+    cursor: pointer;
+  }
+}
+
+/* ── Page transition ── */
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Sonner toast overrides — all variants need solid backgrounds ── */
 @layer components {
-  .card { @apply bg-gray-900 border border-gray-800 rounded-xl p-5; }
-  .btn-primary { @apply px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors; }
-  .btn-secondary { @apply px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium rounded-lg transition-colors; }
-  .btn-danger { @apply px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors; }
-  .input { @apply w-full bg-gray-800 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500; }
-  .label { @apply block text-sm font-medium text-gray-400 mb-1; }
-  .table-row { @apply border-b border-gray-800 hover:bg-gray-800/50 transition-colors; }
+  /* Base toast shell */
+  [data-sonner-toast] {
+    font-family: var(--font-sans) !important;
+    font-size: 0.8125rem !important;
+    border-radius: var(--radius) !important;
+  }
+
+  /* Success */
+  [data-sonner-toast][data-type="success"] {
+    background: hsl(157 55% 16%) !important;
+    border-color: hsl(157 50% 28%) !important;
+    color: hsl(157 55% 88%) !important;
+  }
+  .dark [data-sonner-toast][data-type="success"] {
+    background: hsl(157 45% 12%) !important;
+    border-color: hsl(157 48% 24%) !important;
+    color: hsl(157 60% 80%) !important;
+  }
+
+  /* Error */
+  [data-sonner-toast][data-type="error"] {
+    background: hsl(0 65% 16%) !important;
+    border-color: hsl(0 60% 30%) !important;
+    color: hsl(0 65% 90%) !important;
+  }
+  .dark [data-sonner-toast][data-type="error"] {
+    background: hsl(0 55% 12%) !important;
+    border-color: hsl(0 58% 26%) !important;
+    color: hsl(0 70% 84%) !important;
+  }
+
+  /* Warning */
+  [data-sonner-toast][data-type="warning"] {
+    background: hsl(38 80% 14%) !important;
+    border-color: hsl(38 70% 30%) !important;
+    color: hsl(38 80% 88%) !important;
+  }
+  .dark [data-sonner-toast][data-type="warning"] {
+    background: hsl(38 70% 11%) !important;
+    border-color: hsl(38 68% 26%) !important;
+    color: hsl(38 85% 82%) !important;
+  }
+
+  /* Info / default */
+  [data-sonner-toast][data-type="info"],
+  [data-sonner-toast][data-type="default"] {
+    background: hsl(var(--popover)) !important;
+    border-color: hsl(var(--border)) !important;
+    color: hsl(var(--popover-foreground)) !important;
+  }
+
+  /* Loading */
+  [data-sonner-toast][data-type="loading"] {
+    background: hsl(var(--card)) !important;
+    border-color: hsl(var(--border)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  /* Toast description text */
+  [data-sonner-toast] [data-description] {
+    opacity: 0.75 !important;
+    font-size: 0.75rem !important;
+    margin-top: 2px !important;
+  }
+
+  /* Toast title */
+  [data-sonner-toast] [data-title] {
+    font-weight: 600 !important;
+  }
+
+  /* Icon color inheritance */
+  [data-sonner-toast] [data-icon] svg {
+    color: inherit !important;
+  }
+
+  .dw-page {
+    display: flex;
+    width: 100%;
+    max-width: 82rem;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-inline: auto;
+    padding: 1.5rem 1rem;
+    animation: page-in 200ms ease both;
+  }
+
+  .dw-surface {
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    background: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+  }
+
+  .dw-table-wrap {
+    overflow: hidden;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    background: hsl(var(--card));
+  }
+
+  @media (min-width: 640px)  { .dw-page { padding-inline: 1.5rem; } }
+  @media (min-width: 1024px) { .dw-page { padding-inline: 2rem; } }
 }

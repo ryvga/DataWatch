@@ -1,29 +1,49 @@
 import axios from 'axios'
+import { storage, clearSession } from '@/lib/storage'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '',
   timeout: 15000,
 })
 
-// Inject API key or Bearer token
+// Inject Bearer JWT on every request (JWT-only auth — no more API key fallback for users)
 api.interceptors.request.use((config) => {
-  const apiKey = localStorage.getItem('dw_api_key')
-  const token = localStorage.getItem('dw_token')
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`
-  } else if (apiKey) {
-    config.headers['x-api-key'] = apiKey
-  }
+  const token = storage.getItem('dw_token')
+  if (token) config.headers['Authorization'] = `Bearer ${token}`
   return config
 })
 
-// Global error handling
+// On 401 clear session and redirect to login
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('dw_token')
-      localStorage.removeItem('dw_api_key')
+  async (err) => {
+    if (err.response?.status === 401 && !err.config._retry) {
+      err.config._retry = true
+      clearSession()
+      window.location.href = '/login'
+    }
+    return Promise.reject(err)
+  }
+)
+
+// Separate admin API client using staff JWT
+export const adminApi = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '',
+  timeout: 15000,
+})
+
+adminApi.interceptors.request.use((config) => {
+  const token = storage.getItem('dw_staff_token')
+  if (token) config.headers['Authorization'] = `Bearer ${token}`
+  return config
+})
+
+adminApi.interceptors.response.use(
+  (res) => res,
+  async (err) => {
+    if (err.response?.status === 401 && !err.config._retry) {
+      err.config._retry = true
+      storage.removeItem('dw_staff_token')
       window.location.href = '/login'
     }
     return Promise.reject(err)

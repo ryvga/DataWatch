@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getTables, getSources, runTable } from '../api/endpoints'
+import { Play, Plus, Search, Table2 } from 'lucide-react'
+import { getSources, getTables, runTable } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
+import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatDateTime, formatNumber } from '../components/app-ui'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 export default function Tables() {
   const nav = useNavigate()
@@ -10,103 +17,141 @@ export default function Tables() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [running, setRunning] = useState({})
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
 
   useEffect(() => {
     Promise.all([getTables(), getSources()])
-      .then(([t, s]) => { setTables(t.data); setSources(s.data) })
+      .then(([tablesResponse, sourcesResponse]) => {
+        setTables(tablesResponse.data)
+        setSources(sourcesResponse.data)
+      })
       .catch((err) => setError(err.response?.data?.detail || 'Failed to load tables'))
       .finally(() => setLoading(false))
   }, [])
 
-  const sourceMap = Object.fromEntries(sources.map((s) => [s.id, s]))
+  const sourceMap = Object.fromEntries(sources.map((source) => [source.id, source]))
+
+  const filteredTables = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return tables.filter((table) => {
+      const tableStatus = table.latest_profile?.error ? 'error' : table.is_active ? 'healthy' : 'paused'
+      const matchesStatus = status === 'all' || status === tableStatus
+      const label = `${table.schema_name}.${table.table_name} ${sourceMap[table.source_id]?.name || ''}`.toLowerCase()
+      return matchesStatus && (!needle || label.includes(needle))
+    })
+  }, [query, sourceMap, status, tables])
 
   const handleRun = async (e, id) => {
     e.stopPropagation()
-    setRunning((p) => ({ ...p, [id]: true }))
-    try { await runTable(id) } catch (_) {}
-    setTimeout(() => setRunning((p) => { const n = { ...p }; delete n[id]; return n }), 2000)
+    setRunning((prev) => ({ ...prev, [id]: true }))
+    try {
+      await runTable(id)
+    } catch (_) {
+    } finally {
+      setTimeout(() => {
+        setRunning((prev) => {
+          const next = { ...prev }
+          delete next[id]
+          return next
+        })
+      }, 2000)
+    }
   }
 
-  if (loading) return <div className="p-8 text-gray-500">Loading…</div>
+  if (loading) return <LoadingState label="Loading monitored tables" />
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Tables</h1>
-          <p className="text-sm text-gray-500 mt-1">{tables.length} monitored</p>
-        </div>
-        <button onClick={() => nav('/settings')} className="btn-primary text-sm">
-          + Add Table
-        </button>
-      </div>
+    <div className="dw-page">
+      <PageHeader
+        title="Tables"
+        description={`${filteredTables.length} of ${tables.length} monitored tables`}
+        actions={
+          <Button type="button" onClick={() => nav('/settings')}>
+            <Plus data-icon="inline-start" />
+            Add table
+          </Button>
+        }
+      />
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 text-sm text-red-400">
-          {error}
-        </div>
-      )}
+      <ErrorNotice message={error} />
 
-      {tables.length === 0 && !error ? (
-        <div className="card text-center py-16 space-y-3">
-          <p className="text-gray-400 font-medium">No tables monitored yet</p>
-          <p className="text-sm text-gray-600">Add a data source and configure tables in Settings.</p>
-          <button onClick={() => nav('/settings')} className="btn-primary text-sm mt-2">
-            Go to Settings
-          </button>
-        </div>
-      ) : (
-        <div className="card p-0 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-800">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Table</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Source</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Rows</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Last Profile</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Interval</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {tables.map((t) => (
-                <tr
-                  key={t.id}
-                  className="table-row cursor-pointer"
-                  onClick={() => nav(`/tables/${t.id}`)}
-                >
-                  <td className="px-4 py-3 font-mono text-gray-200">
-                    {t.schema_name}.{t.table_name}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
-                    {sourceMap[t.source_id]?.name ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-400">
-                    {t.latest_profile?.row_count?.toLocaleString() ?? '—'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
-                    {t.last_profiled_at ? new Date(t.last_profiled_at).toLocaleString() : 'Never'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{t.check_interval_minutes}m</td>
-                  <td className="px-4 py-3">
-                    <HealthBadge status={t.latest_profile?.error ? 'error' : t.is_active ? 'healthy' : 'paused'} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={(e) => handleRun(e, t.id)}
-                      disabled={!!running[t.id]}
-                      className="text-xs px-2 py-1 rounded border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200 transition-colors disabled:opacity-50"
-                    >
-                      {running[t.id] ? 'Queued…' : '▶ Run'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative sm:w-80">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input className="pl-8" placeholder="Search tables or sources" value={query} onChange={(e) => setQuery(e.target.value)} />
+            </div>
+            <Select value={status} onValueChange={setStatus}>
+              <SelectTrigger className="w-full sm:w-44">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="healthy">Healthy</SelectItem>
+                  <SelectItem value="paused">Paused</SelectItem>
+                  <SelectItem value="error">Error</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {tables.length === 0 && !error ? (
+            <EmptyState
+              icon={Table2}
+              title="No tables monitored"
+              description="Add a data source and configure the first monitored table in Settings."
+              action={
+                <Button type="button" onClick={() => nav('/settings')}>
+                  <Plus data-icon="inline-start" />
+                  Open settings
+                </Button>
+              }
+            />
+          ) : (
+            <div className="dw-table-wrap">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Table</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Rows</TableHead>
+                    <TableHead>Last profile</TableHead>
+                    <TableHead>Interval</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-24 text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredTables.map((table) => (
+                    <TableRow key={table.id} className="cursor-pointer" onClick={() => nav(`/tables/${table.id}`)}>
+                      <TableCell className="font-mono text-xs">{table.schema_name}.{table.table_name}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{sourceMap[table.source_id]?.name ?? '—'}</TableCell>
+                      <TableCell className="tabular-nums text-muted-foreground">{formatNumber(table.latest_profile?.row_count)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatDateTime(table.last_profiled_at)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{table.check_interval_minutes}m</TableCell>
+                      <TableCell>
+                        <HealthBadge status={table.latest_profile?.error ? 'error' : table.is_active ? 'healthy' : 'paused'} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" variant="outline" size="sm" onClick={(e) => handleRun(e, table.id)} disabled={!!running[table.id]}>
+                          <Play data-icon="inline-start" />
+                          {running[table.id] ? 'Queued' : 'Run'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {filteredTables.length === 0 && (
+                <div className="border-t px-4 py-8 text-center text-sm text-muted-foreground">No tables match the current filters.</div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

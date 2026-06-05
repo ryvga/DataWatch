@@ -1,20 +1,35 @@
-export default function HealthBadge({ status, size = 'sm' }) {
-  const map = {
-    healthy: 'bg-green-500/10 text-green-400 border-green-500/20',
-    warning: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-    error:   'bg-red-500/10 text-red-400 border-red-500/20',
-    paused:  'bg-gray-500/10 text-gray-400 border-gray-500/20',
-    pending: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    connected: 'bg-green-500/10 text-green-400 border-green-500/20',
-    open:    'bg-red-500/10 text-red-400 border-red-500/20',
-    acknowledged: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-    resolved: 'bg-green-500/10 text-green-400 border-green-500/20',
-  }
-  const cls = map[status?.toLowerCase()] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-  const sz = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-3 py-1'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+
+const STATUS_STYLES = {
+  healthy: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
+  connected: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
+  resolved: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
+  warning: 'border-amber-600/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+  acknowledged: 'border-amber-600/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+  pending: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
+  paused: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
+  error: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
+  failed: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
+  open: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
+}
+
+export default function HealthBadge({ status, size = 'sm', className }) {
+  const value = status || 'unknown'
+  const key = String(value).toLowerCase()
+  const label = key.replace(/_/g, ' ')
+
   return (
-    <span className={`inline-flex items-center rounded-full border font-medium ${cls} ${sz}`}>
-      {status}
-    </span>
+    <Badge
+      variant="outline"
+      className={cn(
+        'capitalize',
+        size === 'lg' && 'h-6 px-2.5 text-sm',
+        STATUS_STYLES[key] || 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
+        className
+      )}
+    >
+      {label}
+    </Badge>
   )
 }
