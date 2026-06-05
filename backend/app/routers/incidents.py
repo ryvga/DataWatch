@@ -145,6 +145,82 @@ async def resolve_incident(
     return _incident_response(incident)
 
 
+class MuteRequest(BaseModel):
+    hours: int = 24
+
+@router.patch("/{incident_id}/mute", response_model=IncidentResponse)
+async def mute_incident(
+    incident_id: str,
+    body: MuteRequest = MuteRequest(),
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mute an incident for N hours (default 24). Prevents re-creation during mute window."""
+    from datetime import timezone, timedelta
+    incident = await _get_incident_or_404(incident_id, org, db)
+    if incident.status == "resolved":
+        raise HTTPException(status_code=409, detail="Incident already resolved")
+    incident.status = "muted"
+    # Store mute expiry in llm_narration.muted_until (no schema change needed)
+    narration = dict(incident.llm_narration or {})
+    muted_until = (datetime.now(timezone.utc) + timedelta(hours=body.hours)).isoformat()
+    narration["muted_until"] = muted_until
+    narration["muted_hours"] = body.hours
+    incident.llm_narration = narration
+    await db.commit()
+    return _incident_response(incident)
+
+
+@router.patch("/{incident_id}/false-positive", response_model=IncidentResponse)
+async def mark_false_positive(
+    incident_id: str,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark as false positive (ignored). Helps train future detection thresholds."""
+    incident = await _get_incident_or_404(incident_id, org, db)
+    if incident.status in ("resolved", "ignored"):
+        raise HTTPException(status_code=409, detail=f"Incident already {incident.status}")
+    incident.status = "ignored"
+    if not incident.title.startswith("[FP]"):
+        incident.title = f"[FP] {incident.title}"
+    await db.commit()
+    return _incident_response(incident)
+
+
+@router.get("/stats")
+async def get_incident_stats(
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Quick stats for dashboard — open/ack/investigating/resolved counts."""
+    from sqlalchemy import func
+    from datetime import timezone, timedelta
+    from app.models.incident import Incident
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    rows = (await db.execute(
+        select(Incident.status, func.count().label("n"))
+        .where(Incident.org_id == org.id)
+        .group_by(Incident.status)
+    )).all()
+    counts = {r.status: r.n for r in rows}
+    p1_open = await db.scalar(
+        select(func.count()).where(Incident.org_id == org.id, Incident.status == "open", Incident.severity == "P1")
+    ) or 0
+    resolved_7d = await db.scalar(
+        select(func.count()).where(Incident.org_id == org.id, Incident.status == "resolved", Incident.resolved_at >= week_ago)
+    ) or 0
+    return {
+        "open": counts.get("open", 0),
+        "acknowledged": counts.get("acknowledged", 0),
+        "investigating": counts.get("investigating", 0),
+        "muted": counts.get("muted", 0),
+        "resolved_7d": resolved_7d,
+        "p1_open": p1_open,
+        "total_open": counts.get("open", 0) + counts.get("acknowledged", 0) + counts.get("investigating", 0),
+    }
+
+
 @router.post("/{incident_id}/narration/retry", response_model=IncidentResponse)
 async def retry_narration(
     incident_id: str,
