@@ -334,10 +334,10 @@ def seed_acme(conn, org_id):
         "username": "readonly_user",
         "password": "readonly_pass",
     })
-    # Also add a second fake source for UI variety
+    # Second source — the shared analytics-db Docker container
     sid2 = seed_source(conn, org_id, "Analytics Warehouse", "postgres", {
-        "host": "analytics.acme.io", "port": 5432, "database": "analytics",
-        "username": "readonly", "password": "readonly",
+        "host": "analytics-db", "port": 5432, "database": "analyticsdb",
+        "username": "analytics_ro", "password": "readonly_pass",
     })
 
     orders_tid = seed_table(conn, sid, "public", "orders", "created_at", 30)
