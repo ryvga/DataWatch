@@ -66,6 +66,7 @@ def _incident_response(i: Incident) -> IncidentResponse:
 @router.get("", response_model=list[IncidentResponse])
 async def list_incidents(
     status: str | None = None,
+    statuses: str | None = None,
     severity: str | None = None,
     table_id: str | None = None,
     limit: int = 50,
@@ -74,7 +75,12 @@ async def list_incidents(
 ):
     q = select(Incident).where(Incident.org_id == org.id)
 
-    if status:
+    # Support ?statuses=open,acknowledged,investigating (comma-separated multi-status)
+    if statuses:
+        status_list = [s.strip() for s in statuses.split(",") if s.strip()]
+        if status_list:
+            q = q.where(Incident.status.in_(status_list))
+    elif status:
         q = q.where(Incident.status == status)
     if severity:
         q = q.where(Incident.severity == severity.upper())
@@ -84,6 +90,38 @@ async def list_incidents(
     q = q.order_by(desc(Incident.created_at)).limit(min(limit, 250))
     incidents = (await db.scalars(q)).all()
     return [_incident_response(i) for i in incidents]
+
+
+@router.get("/stats")
+async def get_incident_stats(
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Quick stats for dashboard — open/ack/investigating/resolved counts."""
+    from sqlalchemy import func
+    from datetime import timezone, timedelta
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    rows = (await db.execute(
+        select(Incident.status, func.count().label("n"))
+        .where(Incident.org_id == org.id)
+        .group_by(Incident.status)
+    )).all()
+    counts = {r.status: r.n for r in rows}
+    p1_open = await db.scalar(
+        select(func.count()).where(Incident.org_id == org.id, Incident.status == "open", Incident.severity == "P1")
+    ) or 0
+    resolved_7d = await db.scalar(
+        select(func.count()).where(Incident.org_id == org.id, Incident.status == "resolved", Incident.resolved_at >= week_ago)
+    ) or 0
+    return {
+        "open": counts.get("open", 0),
+        "acknowledged": counts.get("acknowledged", 0),
+        "investigating": counts.get("investigating", 0),
+        "muted": counts.get("muted", 0),
+        "resolved_7d": resolved_7d,
+        "p1_open": p1_open,
+        "total_open": counts.get("open", 0) + counts.get("acknowledged", 0) + counts.get("investigating", 0),
+    }
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)
@@ -186,39 +224,6 @@ async def mark_false_positive(
         incident.title = f"[FP] {incident.title}"
     await db.commit()
     return _incident_response(incident)
-
-
-@router.get("/stats")
-async def get_incident_stats(
-    org: Organization = Depends(get_current_org_from_jwt),
-    db: AsyncSession = Depends(get_db),
-):
-    """Quick stats for dashboard — open/ack/investigating/resolved counts."""
-    from sqlalchemy import func
-    from datetime import timezone, timedelta
-    from app.models.incident import Incident
-    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
-    rows = (await db.execute(
-        select(Incident.status, func.count().label("n"))
-        .where(Incident.org_id == org.id)
-        .group_by(Incident.status)
-    )).all()
-    counts = {r.status: r.n for r in rows}
-    p1_open = await db.scalar(
-        select(func.count()).where(Incident.org_id == org.id, Incident.status == "open", Incident.severity == "P1")
-    ) or 0
-    resolved_7d = await db.scalar(
-        select(func.count()).where(Incident.org_id == org.id, Incident.status == "resolved", Incident.resolved_at >= week_ago)
-    ) or 0
-    return {
-        "open": counts.get("open", 0),
-        "acknowledged": counts.get("acknowledged", 0),
-        "investigating": counts.get("investigating", 0),
-        "muted": counts.get("muted", 0),
-        "resolved_7d": resolved_7d,
-        "p1_open": p1_open,
-        "total_open": counts.get("open", 0) + counts.get("acknowledged", 0) + counts.get("investigating", 0),
-    }
 
 
 @router.post("/{incident_id}/narration/retry", response_model=IncidentResponse)
