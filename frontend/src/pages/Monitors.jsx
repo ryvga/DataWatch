@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, AlertTriangle, CheckCircle2, Loader2, Play, Plus, Trash2 } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, Loader2, Play, Plus, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSources, getTables, getCustomMonitors, createCustomMonitor, runCustomMonitorNow, deleteCustomMonitor, runCustomCheck } from '../api/endpoints'
 import { EmptyState, LoadingState, PageHeader, formatDateTime } from '../components/app-ui'
@@ -55,7 +55,14 @@ function CheckTypeBadges({ checks }) {
 }
 
 function getErrorMessage(err) {
-  return err.response?.data?.detail || err.message || 'Failed to load monitors'
+  const detail = err.response?.data?.detail
+  if (detail?.error === 'plan_limit_exceeded') {
+    return `Your ${detail.plan || 'current'} plan has reached its table or source limit. Upgrade to add more monitored assets.`
+  }
+  if (detail?.error === 'feature_not_in_plan') {
+    return `${detail.feature || 'This feature'} requires the ${detail.required_plan || 'higher'} plan. Current plan: ${detail.current_plan || 'unknown'}.`
+  }
+  return (typeof detail === 'string' ? detail : null) || err.message || 'Failed to load monitors'
 }
 
 const SEVERITY_BADGE_CLASSES = {
@@ -374,6 +381,45 @@ function CustomMonitorsTable({ tables, refreshKey }) {
   )
 }
 
+function AutopilotOverview({ rows }) {
+  const counts = rows.reduce((acc, row) => {
+    const status = row.autopilot?.status || 'not_started'
+    acc[status] = (acc[status] || 0) + 1
+    const staged = row.autopilot?.steps?.recommendations?.staged_count || 0
+    acc.staged += staged
+    return acc
+  }, { ready: 0, queued: 0, profiling_complete: 0, not_started: 0, staged: 0 })
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="size-4 text-primary" />
+          Monitor Autopilot
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid gap-3 sm:grid-cols-4">
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="text-xs text-muted-foreground">Ready</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{counts.ready}</div>
+        </div>
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="text-xs text-muted-foreground">Running</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{counts.queued + counts.profiling_complete}</div>
+        </div>
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="text-xs text-muted-foreground">Staged AI monitors</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{counts.staged}</div>
+        </div>
+        <div className="rounded-md border bg-muted/20 p-3">
+          <div className="text-xs text-muted-foreground">Need setup</div>
+          <div className="mt-1 text-2xl font-semibold tabular-nums">{counts.not_started}</div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function Monitors() {
   const nav = useNavigate()
   const [tables, setTables] = useState([])
@@ -476,6 +522,8 @@ export default function Monitors() {
         </Card>
       </div>
 
+      <AutopilotOverview rows={monitorRows} />
+
       <Card>
         <CardContent className="pt-6">
           {monitorRows.length === 0 && !error ? (
@@ -498,6 +546,7 @@ export default function Monitors() {
                     <TableHead>Table</TableHead>
                     <TableHead>Source</TableHead>
                     <TableHead>Check types</TableHead>
+                    <TableHead>Autopilot</TableHead>
                     <TableHead className="w-24">Checks</TableHead>
                     <TableHead>Last run</TableHead>
                     <TableHead>Status</TableHead>
@@ -512,6 +561,17 @@ export default function Monitors() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{row.sourceName}</TableCell>
                       <TableCell><CheckTypeBadges checks={row.checks} /></TableCell>
+                      <TableCell>
+                        <div className="flex max-w-xs flex-col gap-1">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium">
+                            <ShieldCheck className="size-3.5 text-primary" />
+                            {String(row.autopilot?.status || 'not started').replaceAll('_', ' ')}
+                          </span>
+                          {row.autopilot?.recommended_next_action && (
+                            <span className="line-clamp-2 text-xs text-muted-foreground">{row.autopilot.recommended_next_action}</span>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="tabular-nums text-muted-foreground">{row.checks.length}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatDateTime(row.last_profiled_at || row.latest_profile?.collected_at)}</TableCell>
                       <TableCell><StatusBadge status={row.status} /></TableCell>

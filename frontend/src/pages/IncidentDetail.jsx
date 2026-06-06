@@ -187,7 +187,7 @@ function normalizeCheck(check, index) {
 function getTimelineSteps(incident) {
   const isResolved = incident?.status === 'resolved' || !!incident?.resolved_at
   const isAcknowledged = isResolved || incident?.status === 'acknowledged' || !!incident?.acknowledged_at
-  const isInvestigating = incident?.status === 'acknowledged'
+  const isInvestigating = incident?.status === 'investigating'
 
   return [
     { key: 'detected', label: 'Detected', timestamp: incident?.created_at, complete: true, current: incident?.status === 'open' },
@@ -195,6 +195,56 @@ function getTimelineSteps(incident) {
     { key: 'investigating', label: 'Investigating', timestamp: null, complete: isResolved, current: isInvestigating },
     { key: 'resolved', label: 'Resolved', timestamp: incident?.resolved_at, complete: isResolved, current: isResolved },
   ]
+}
+
+function IncidentCopilotCard({ narration, incident }) {
+  const suggestedMonitors = asArray(narration?.suggested_monitors)
+  const ownershipHint = narration?.ownership_hint
+  const mutedUntil = incident?.llm_narration?.muted_until
+  const falsePositiveUntil = incident?.llm_narration?.false_positive_until
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="size-4 text-muted-foreground" />
+          Incident copilot
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4 text-sm">
+        {ownershipHint ? (
+          <div className="rounded-md border bg-muted/20 p-3">
+            <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Suggested owner</p>
+            <p className="mt-1 text-foreground">{ownershipHint}</p>
+          </div>
+        ) : (
+          <div className="rounded-md border bg-muted/20 p-3 text-muted-foreground">
+            No ownership hint was generated. Use alert routing to assign table-level owners.
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-medium uppercase tracking-normal text-muted-foreground">Follow-up monitors</p>
+          {suggestedMonitors.length ? (
+            <ul className="flex flex-col gap-2">
+              {suggestedMonitors.map((item, index) => (
+                <li key={`${item}-${index}`} className="rounded-md border bg-muted/20 px-3 py-2 text-sm leading-6">{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground">No extra monitors were suggested for this incident.</p>
+          )}
+        </div>
+
+        {(mutedUntil || falsePositiveUntil) && (
+          <div className="rounded-md border bg-amber-500/10 p-3 text-amber-800 dark:text-amber-200">
+            {mutedUntil && <p>Muted until {formatDateTime(mutedUntil)}. Identical checks are suppressed during this window.</p>}
+            {falsePositiveUntil && <p>False-positive suppression active until {formatDateTime(falsePositiveUntil)} for identical checks.</p>}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 function SectionTitle({ children }) {
@@ -708,6 +758,7 @@ export default function IncidentDetail() {
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="flex min-w-0 flex-col gap-5">
             <AnalysisCard narration={narration} llmIsEmpty={llmIsEmpty} llmHasError={llmHasError} />
+            <IncidentCopilotCard narration={narration} incident={incident} />
             <RecommendedActionsCard actions={narration?.recommended_actions} />
             <DebugQueriesCard queries={debugQueries} onCopy={copyText} />
             <ClientSummaryCard summary={clientSummary} onCopy={copyText} />
@@ -748,6 +799,18 @@ export default function IncidentDetail() {
                   <span className="text-muted-foreground">Resolved</span>
                   <span className="text-right text-xs text-muted-foreground">{incident.resolved_at ? formatDateTime(incident.resolved_at) : '-'}</span>
                 </div>
+                {incident.llm_narration?.muted_until && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Muted until</span>
+                    <span className="text-right text-xs text-muted-foreground">{formatDateTime(incident.llm_narration.muted_until)}</span>
+                  </div>
+                )}
+                {incident.llm_narration?.false_positive_until && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Suppressed until</span>
+                    <span className="text-right text-xs text-muted-foreground">{formatDateTime(incident.llm_narration.false_positive_until)}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </aside>

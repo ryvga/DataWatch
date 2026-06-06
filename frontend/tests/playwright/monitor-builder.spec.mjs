@@ -138,6 +138,12 @@ async function run() {
     assert(await createButton.isDisabled(), 'Global create monitor should be disabled before SQL test')
     await page.getByRole('button', { name: /Test SQL/i }).click()
     await page.waitForFunction(() => /0 violations|\d+ violations? found/i.test(document.body.innerText), null, { timeout: 120000 })
+    await createButton.waitFor({ state: 'visible', timeout: 10000 })
+    await page.waitForFunction(() => {
+      const buttons = [...document.querySelectorAll('button')]
+      const create = buttons.find((button) => /Create monitor/i.test(button.textContent || ''))
+      return create && !create.disabled
+    }, null, { timeout: 10000 })
     assert(!(await createButton.isDisabled()), 'Global create monitor should be enabled after SQL test')
 
     console.log(JSON.stringify({

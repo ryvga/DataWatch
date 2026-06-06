@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, CheckCircle2, Code2, Edit3, Loader2, Play, PlusCircle, Sparkles, Trash2, Wand2, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, CheckCircle2, Code2, Edit3, Loader2, Play, PlusCircle, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
 import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck } from '../api/endpoints'
 import { toast } from 'sonner'
 import HealthBadge from '../components/HealthBadge'
@@ -82,7 +82,123 @@ function recommendationSql(rec, tableName) {
     if (clauses.length === 0) return ''
     return `SELECT COUNT(*) AS violations FROM ${table} WHERE ${clauses.join(' OR ')}`
   }
+  if (rec.monitor_type === 'custom_sql') {
+    return String(config.sql || config.sql_query || rec.sql_query || '').trim()
+  }
   return ''
+}
+
+function AutopilotPanel({ table, onMonitorSaved }) {
+  const [applying, setApplying] = useState({})
+  const state = table?.autopilot
+  if (!state) return null
+
+  const steps = state.steps || {}
+  const safeMonitors = state.safe_monitors || []
+  const recommendations = state.recommendations || []
+  const stepEntries = [
+    ['profile', 'First profile'],
+    ['safe_baseline', 'Safe baseline'],
+    ['recommendations', 'AI recommendations'],
+    ['alerts', 'Alert routing'],
+  ].map(([key, fallback]) => [key, steps[key] || { label: fallback, status: 'pending' }])
+
+  const applyRecommendation = async (rec, index) => {
+    setApplying((prev) => ({ ...prev, [rec.id || index]: true }))
+    try {
+      const sql = recommendationSql(rec, `${table.schema_name}.${table.table_name}`)
+      if (!sql) {
+        notify.err('This recommendation needs review before it can become a SQL monitor.')
+        return
+      }
+      await createCustomMonitor(table.id, {
+        name: rec.name || 'AI recommended monitor',
+        description: rec.rationale || 'Staged by table autopilot',
+        sql_query: sql,
+        severity: rec.severity || 'P3',
+        run_on_profile: true,
+      })
+      notify.ok('Monitor added', rec.name)
+      onMonitorSaved?.()
+    } catch (e) {
+      notify.err(e?.response?.data?.detail || 'Failed to add monitor')
+    } finally {
+      setApplying((prev) => {
+        const next = { ...prev }
+        delete next[rec.id || index]
+        return next
+      })
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <ShieldCheck className="size-4 text-primary" />
+          Table Autopilot
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          {stepEntries.map(([key, step]) => (
+            <div key={key} className="rounded-md border bg-muted/20 px-3 py-2">
+              <div className="flex items-center gap-2">
+                {['complete', 'enabled', 'ready'].includes(step.status) ? (
+                  <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                ) : step.status === 'queued' || step.status === 'pending' ? (
+                  <Loader2 className="size-4 text-muted-foreground" />
+                ) : (
+                  <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+                )}
+                <span className="text-sm font-medium">{step.label}</span>
+              </div>
+              <p className="mt-1 text-xs capitalize text-muted-foreground">{String(step.status || 'pending').replaceAll('_', ' ')}</p>
+            </div>
+          ))}
+        </div>
+
+        {state.recommended_next_action && (
+          <p className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">{state.recommended_next_action}</p>
+        )}
+
+        {safeMonitors.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Auto-enabled baseline</p>
+            <div className="flex flex-wrap gap-2">
+              {safeMonitors.map((monitor, index) => (
+                <Badge key={`${monitor.name}-${index}`} variant="outline" className="font-normal">
+                  {monitor.severity || 'P3'} · {monitor.name || monitor.monitor_type}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recommendations.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Staged for review</p>
+            {recommendations.map((rec, index) => {
+              const key = rec.id || index
+              return (
+                <div key={key} className="rounded-md border bg-muted/10 px-3 py-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={SEVERITY_BADGE_CLASSES[rec.severity] || ''}>{rec.severity || 'P3'}</Badge>
+                    <span className="text-sm font-medium">{rec.name}</span>
+                    <Badge variant="secondary" className="font-mono text-xs">{rec.monitor_type}</Badge>
+                    <Button size="sm" variant="outline" className="ml-auto" disabled={applying[key]} onClick={() => applyRecommendation(rec, index)}>
+                      {applying[key] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
+                    </Button>
+                  </div>
+                  {rec.rationale && <p className="mt-1 text-xs text-muted-foreground">{rec.rationale}</p>}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
 }
 
 function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMonitorSaved }) {
@@ -1042,6 +1158,11 @@ export default function TableDetail() {
           )}
         </CardContent>
       </Card>
+
+      <AutopilotPanel
+        table={table}
+        onMonitorSaved={() => setCustomMonitorsRefreshKey((key) => key + 1)}
+      />
 
       {/* ── AI: Monitor Recommender ── */}
       <AIMonitorRecommender
