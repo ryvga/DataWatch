@@ -60,7 +60,7 @@ def _checkout_urls(org: Organization, return_url: str | None, cancel_url: str | 
 
 
 def _paypal_description(plan: str, billing_period: str) -> str:
-    return f"DataWatch {plan} {billing_period} plan"
+    return f"Panopta {plan} {billing_period} plan"
 
 
 def _paypal_error(exc: Exception) -> HTTPException:

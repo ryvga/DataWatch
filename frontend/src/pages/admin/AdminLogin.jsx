@@ -47,13 +47,13 @@ export default function AdminLogin() {
               <ShieldCheck className="size-6 text-primary" />
             </div>
             <CardTitle>Staff Access</CardTitle>
-            <CardDescription>DataWatch admin portal</CardDescription>
+            <CardDescription>Panopta admin portal</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={submit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={form.email} onChange={set('email')} placeholder="admin@datawatch.io" required />
+                <Input id="email" type="email" value={form.email} onChange={set('email')} placeholder="admin@panopta.app" required />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="password">Password</Label>

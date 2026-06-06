@@ -84,7 +84,7 @@ class PayPalClient:
             "/v1/catalogs/products",
             {
                 "name": name,
-                "description": "DataWatch recurring billing product",
+                "description": "Panopta recurring billing product",
                 "type": "SERVICE",
                 "category": "SOFTWARE",
             },

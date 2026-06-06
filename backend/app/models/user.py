@@ -45,7 +45,7 @@ class ApiKey(Base):
 
 
 class StaffUser(Base):
-    """DataWatch staff — can access admin portal."""
+    """Panopta staff — can access admin portal."""
     __tablename__ = "staff_users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

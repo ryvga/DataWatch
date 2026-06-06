@@ -5,15 +5,15 @@
  *       acme.localhost:5173      → workspace "acme"
  *       {ADMIN_SUB}.localhost    → admin portal (subdomain value kept in env, not hardcoded)
  *
- * Prod: datawatch.io             → landing
- *       acme.datawatch.io        → workspace "acme"
- *       {ADMIN_SUB}.datawatch.io → admin portal
+ * Prod: panopta.app             → landing
+ *       acme.panopta.app        → workspace "acme"
+ *       {ADMIN_SUB}.panopta.app → admin portal
  *
  * The admin subdomain is ONLY known from the env var — never exposed in code
  * so it cannot be guessed by scanning the JS bundle.
  */
 
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'datawatch.io'
+const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || 'panopta.app'
 const ADMIN_SUBDOMAIN = import.meta.env.VITE_ADMIN_SUBDOMAIN  // undefined by default — must be set explicitly
 
 export const DEV_MODE = import.meta.env.DEV === true

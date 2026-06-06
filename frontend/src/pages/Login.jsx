@@ -166,7 +166,7 @@ export default function Login() {
                   Monitor warehouse quality before incidents reach users.
                 </h1>
                 <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-                  DataWatch tracks table profiles, detects anomalies with statistical methods, and turns high-priority incidents into AI-generated operator reports.
+                  Panopta tracks table profiles, detects anomalies with statistical methods, and turns high-priority incidents into AI-generated operator reports.
                 </p>
               </div>
               <div className="relative grid max-w-md grid-cols-3 gap-2">
@@ -209,7 +209,7 @@ export default function Login() {
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="workspace">Workspace</Label>
                     <div className="flex items-center rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                      <span className="text-muted-foreground select-none">app.datawatch.io/</span>
+                      <span className="text-muted-foreground select-none">app.panopta.app/</span>
                       <input
                         id="workspace"
                         className="flex-1 bg-transparent outline-none font-mono ml-1"

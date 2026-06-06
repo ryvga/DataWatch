@@ -10,21 +10,17 @@ export function BrandMark({ className, iconOnly = false }) {
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
       <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+        {/* Eye icon — 100 eyes on your data, inspired by Panoptes */}
         <svg viewBox="0 0 32 32" aria-hidden="true" className="size-5">
-          <path
-            d="M6 19h4l3-10 4 16 3-10h6"
-            fill="none"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2.5"
-          />
+          <ellipse cx="16" cy="16" rx="10" ry="7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          <circle cx="16" cy="16" r="3.5" fill="currentColor" />
+          <circle cx="16" cy="16" r="1.4" fill="none" stroke="white" strokeWidth="1" />
         </svg>
       </div>
       {!iconOnly && (
         <div className="min-w-0 leading-none">
-          <div className="text-sm font-bold tracking-tight text-foreground">DataWatch</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">Quality ops</div>
+          <div className="text-sm font-bold tracking-tight text-foreground">Panopta</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">100 eyes on your data</div>
         </div>
       )}
     </div>

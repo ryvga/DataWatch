@@ -8,7 +8,7 @@ from app.services.plans import UPGRADE_URL
 
 
 PLAN_ORDER = {"free": 0, "starter": 1, "growth": 2, "agency": 3, "enterprise": 4}
-ACTIVE_STATUSES = {"active", "trialing"}
+ACTIVE_STATUSES = {"active", "trialing", "approval_pending", "ACTIVE", "TRIALING", "APPROVAL_PENDING"}
 SEVERITIES = {"P1", "P2", "P3"}
 
 CHANNELS = {
@@ -46,7 +46,7 @@ CHANNELS = {
     "pagerduty": {
         "label": "PagerDuty",
         "required_plan": "growth",
-        "description": "Trigger PagerDuty Events API incidents for urgent DataWatch incidents.",
+        "description": "Trigger PagerDuty Events API incidents for urgent Panopta incidents.",
         "scope": "Best for P1/P2 table-specific routes",
         "fields": [
             {"name": "routing_key", "label": "Routing key", "type": "password", "required": True, "secret": True},

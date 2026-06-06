@@ -134,6 +134,9 @@ const SOURCE_CONFIG_TEMPLATES = {
   sqlite: '{\n  "path": "/data/mydb.sqlite"\n}',
 }
 
+// Full channel list — availability is determined at runtime from /api/v1/alerts/channels
+// This fallback is used only when the API call fails.
+// All plans: email=free, slack/webhook=starter, pagerduty/teams/discord/opsgenie=growth
 const FALLBACK_ALERT_CHANNELS = [
   {
     id: 'email',
@@ -149,12 +152,67 @@ const FALLBACK_ALERT_CHANNELS = [
   {
     id: 'slack',
     label: 'Slack',
-    available: false,
+    available: true,
     required_plan: 'starter',
-    locked_reason: 'Slack requires Starter or higher.',
-    description: 'Post incident cards into Slack.',
+    description: 'Post incident cards into a Slack channel via incoming webhook.',
     fields: [
       { name: 'webhook_url', label: 'Webhook URL', type: 'url', required: true, secret: true },
+      { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
+    ],
+  },
+  {
+    id: 'webhook',
+    label: 'Generic webhook',
+    available: true,
+    required_plan: 'starter',
+    description: 'POST a signed JSON payload to your incident automation endpoint.',
+    fields: [
+      { name: 'url', label: 'Endpoint URL', type: 'url', required: true },
+      { name: 'secret', label: 'Signing secret', type: 'text', required: false, secret: true },
+      { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
+    ],
+  },
+  {
+    id: 'pagerduty',
+    label: 'PagerDuty',
+    available: true,
+    required_plan: 'growth',
+    description: 'Trigger PagerDuty Events API incidents for urgent Panopta incidents.',
+    fields: [
+      { name: 'routing_key', label: 'Routing key', type: 'password', required: true, secret: true },
+      { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
+    ],
+  },
+  {
+    id: 'teams',
+    label: 'Microsoft Teams',
+    available: true,
+    required_plan: 'growth',
+    description: 'Post incident cards to a Teams incoming webhook.',
+    fields: [
+      { name: 'webhook_url', label: 'Webhook URL', type: 'url', required: true, secret: true },
+      { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
+    ],
+  },
+  {
+    id: 'discord',
+    label: 'Discord',
+    available: true,
+    required_plan: 'growth',
+    description: 'Post incident embeds to a Discord webhook.',
+    fields: [
+      { name: 'webhook_url', label: 'Webhook URL', type: 'url', required: true, secret: true },
+      { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
+    ],
+  },
+  {
+    id: 'opsgenie',
+    label: 'OpsGenie',
+    available: true,
+    required_plan: 'growth',
+    description: 'Create OpsGenie alerts for incident response teams.',
+    fields: [
+      { name: 'api_key', label: 'API key', type: 'password', required: true, secret: true },
       { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
     ],
   },
@@ -620,7 +678,7 @@ function ConfirmDelete({ label, onConfirm, children }) {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {label}?</AlertDialogTitle>
-          <AlertDialogDescription>This action updates DataWatch configuration and cannot be undone from this screen.</AlertDialogDescription>
+          <AlertDialogDescription>This action updates Panopta configuration and cannot be undone from this screen.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -1983,10 +2041,10 @@ function TeamTab() {
 }
 
 const PLANS = [
-  { id: 'free', name: 'Free', monthlyPrice: 0, limit: '1 source, 5 tables, 7-day history' },
-  { id: 'starter', name: 'Starter', monthlyPrice: 49, limit: '3 sources, 50 tables, 90-day history, Slack alerts' },
-  { id: 'growth', name: 'Growth', monthlyPrice: 149, limit: 'Unlimited sources and tables, 1-year history, AI reports' },
-  { id: 'agency', name: 'Agency', monthlyPrice: 299, limit: 'Multi-client workspaces, white-label reports, 15 members' },
+  { id: 'free', name: 'Free', monthlyPrice: 0, limit: '1 source · 5 tables · 7-day history · Email alerts only' },
+  { id: 'starter', name: 'Starter', monthlyPrice: 49, limit: '3 sources · 50 tables · 90-day history · Slack + webhook alerts' },
+  { id: 'growth', name: 'Growth', monthlyPrice: 149, limit: 'Unlimited sources & tables · 1-year history · All alert channels · AI reports' },
+  { id: 'agency', name: 'Agency', monthlyPrice: 299, limit: 'Everything in Growth · Multi-client workspaces · White-label reports · 15 members' },
 ]
 
 function planPrice(plan, billingCycle) {
@@ -2122,8 +2180,16 @@ function BillingTab() {
   const currentPlan = (status?.plan || storage.getItem('dw_plan') || 'free').toLowerCase()
   const subscriptionStatus = status?.subscription_status || status?.status || (currentPlan === 'free' ? 'free' : 'unknown')
   const isPaymentIssue = ['SUSPENDED', 'FAILED', 'suspended', 'failed'].includes(subscriptionStatus)
-  const isActive = subscriptionStatus === 'ACTIVE' || subscriptionStatus === 'active'
+  const isApprovalPending = ['APPROVAL_PENDING', 'approval_pending'].includes(subscriptionStatus)
+  const isActive = ['ACTIVE', 'active', 'TRIALING', 'trialing', 'APPROVAL_PENDING', 'approval_pending'].includes(subscriptionStatus)
   const nextBillingDate = status?.next_billing_time || status?.next_billing_date || status?.current_period_end
+
+  // Human-readable status label
+  const statusLabel = isApprovalPending
+    ? 'Pending activation'
+    : subscriptionStatus === 'free' || currentPlan === 'free'
+      ? 'Free tier'
+      : subscriptionStatus.toLowerCase().replace('_', ' ')
 
   const upgradeWithPayPal = async (plan) => {
     setUpgrading(plan.id)
@@ -2189,6 +2255,18 @@ function BillingTab() {
         </div>
       </div>
 
+      {/* Approval pending banner */}
+      {isApprovalPending && !capturing && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          <Info className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <span className="font-medium">Subscription pending activation.</span>{' '}
+            Your <span className="font-semibold capitalize">{currentPlan}</span> plan is set up and all features are unlocked. PayPal may take a moment to confirm — your subscription will activate automatically.{' '}
+            If this persists, try re-subscribing or contact support.
+          </div>
+        </div>
+      )}
+
       {/* Payment issue banner */}
       {isPaymentIssue && (
         <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -2216,7 +2294,7 @@ function BillingTab() {
                 variant={isActive ? 'default' : isPaymentIssue ? 'destructive' : 'secondary'}
                 className="capitalize"
               >
-                {capturing ? 'activating…' : subscriptionStatus}
+                {capturing ? 'activating…' : statusLabel}
               </Badge>
             </div>
           </div>
@@ -2238,6 +2316,54 @@ function BillingTab() {
           )}
         </CardContent>
       </Card>
+
+      {/* Plan entitlements summary */}
+      {!loading && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 pt-6">
+            <h3 className="text-sm font-medium">What's included in your plan</h3>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {[
+                {
+                  label: 'Data sources',
+                  value: currentPlan === 'growth' || currentPlan === 'enterprise' || currentPlan === 'agency' ? 'Unlimited' : currentPlan === 'starter' ? '3 sources' : '1 source',
+                  highlight: currentPlan !== 'free',
+                },
+                {
+                  label: 'Monitored tables',
+                  value: currentPlan === 'growth' || currentPlan === 'enterprise' || currentPlan === 'agency' ? 'Unlimited' : currentPlan === 'starter' ? 'Up to 50' : 'Up to 5',
+                  highlight: currentPlan !== 'free',
+                },
+                {
+                  label: 'Profile history',
+                  value: currentPlan === 'enterprise' ? 'Forever' : currentPlan === 'growth' || currentPlan === 'agency' ? '1 year' : currentPlan === 'starter' ? '90 days' : '7 days',
+                  highlight: currentPlan !== 'free',
+                },
+                {
+                  label: 'Alert channels',
+                  value: currentPlan === 'growth' || currentPlan === 'enterprise' || currentPlan === 'agency' ? 'All channels (Slack, PagerDuty, Teams…)' : currentPlan === 'starter' ? 'Email, Slack, webhook' : 'Email only',
+                  highlight: currentPlan !== 'free',
+                },
+                {
+                  label: 'AI incident reports',
+                  value: currentPlan === 'free' ? 'Not included' : 'Included',
+                  highlight: currentPlan !== 'free',
+                },
+                {
+                  label: 'Team members',
+                  value: currentPlan === 'growth' || currentPlan === 'enterprise' ? 'Unlimited' : currentPlan === 'agency' ? '15 members' : currentPlan === 'starter' ? '10 members' : '3 members',
+                  highlight: currentPlan !== 'free',
+                },
+              ].map((item) => (
+                <div key={item.label} className="rounded-md border bg-muted/20 px-3 py-2.5">
+                  <div className="text-xs text-muted-foreground">{item.label}</div>
+                  <div className={`mt-0.5 text-sm font-medium ${item.highlight ? 'text-foreground' : 'text-muted-foreground'}`}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Plans grid */}
       <Card>

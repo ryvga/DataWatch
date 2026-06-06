@@ -22,7 +22,7 @@ PLAN_LIMITS: dict[str, dict] = {
     "enterprise": {"sources": -1, "tables": -1,  "members": -1,  "retention_days": -1,  "profile_runs_day": -1,   "llm_calls_day": -1},
 }
 
-UPGRADE_URL = "https://datawatch.io/pricing"
+UPGRADE_URL = "https://panopta.app/pricing"
 
 
 def get_limits(plan: str) -> dict:

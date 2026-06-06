@@ -111,7 +111,7 @@ export default function AdminStaff() {
             <form onSubmit={create} className="grid gap-4">
               <div className="grid gap-1.5">
                 <Label>Email</Label>
-                <Input type="email" value={form.email} onChange={set('email')} placeholder="name@datawatch.io" required />
+                <Input type="email" value={form.email} onChange={set('email')} placeholder="name@panopta.app" required />
               </div>
               <div className="grid gap-1.5">
                 <Label>Full name</Label>

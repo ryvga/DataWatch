@@ -95,7 +95,7 @@ def send_email_alert(to_addresses: list[str], incident, narration: dict | None) 
             <p><strong>Detected at:</strong> {incident.created_at.strftime('%Y-%m-%d %H:%M UTC')}</p>
         """
         return all(
-            _send_email(addr, f"[DataWatch] {severity} incident - {incident.title[:80]}", _layout("DataWatch incident alert", body))
+            _send_email(addr, f"[Panopta] {severity} incident - {incident.title[:80]}", _layout("Panopta incident alert", body))
             for addr in to_addresses
         )
 
@@ -108,7 +108,7 @@ def send_email_alert(to_addresses: list[str], incident, narration: dict | None) 
     <html><body style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: {'#dc2626' if severity == 'P1' else '#f97316' if severity == 'P2' else '#eab308'};
                   color: white; padding: 16px; border-radius: 8px 8px 0 0;">
-        <h2 style="margin:0">🚨 [{severity}] DataWatch Incident</h2>
+        <h2 style="margin:0">🚨 [{severity}] Panopta Incident</h2>
       </div>
       <div style="padding: 24px; border: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
         <h3 style="margin-top:0">{incident.title}</h3>
@@ -121,8 +121,8 @@ def send_email_alert(to_addresses: list[str], incident, narration: dict | None) 
 
     payload = {
         "personalizations": [{"to": [{"email": addr} for addr in to_addresses]}],
-        "from": {"email": settings.FROM_EMAIL, "name": "DataWatch"},
-        "subject": f"[DataWatch] {severity} incident — {incident.title[:80]}",
+        "from": {"email": settings.FROM_EMAIL, "name": "Panopta"},
+        "subject": f"[Panopta] {severity} incident — {incident.title[:80]}",
         "content": [{"type": "text/html", "value": html_content}],
     }
 
@@ -147,11 +147,11 @@ def send_pagerduty_alert(routing_key: str, incident, event_action: str = "trigge
     payload = {
         "routing_key": routing_key,
         "event_action": event_action,
-        "dedup_key": f"datawatch-{incident.id}",
+        "dedup_key": f"panopta-{incident.id}",
         "payload": {
             "summary": incident.title,
             "severity": "critical" if incident.severity == "P1" else "warning",
-            "source": "DataWatch",
+            "source": "Panopta",
             "custom_details": {
                 "severity": incident.severity,
                 "fired_checks": incident.fired_checks,
@@ -196,7 +196,7 @@ def send_webhook_alert(url: str, incident, narration: dict | None, secret: str |
     if secret:
         body = __import__("json").dumps(payload).encode()
         sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-        headers["X-DataWatch-Signature"] = f"sha256={sig}"
+        headers["X-Panopta-Signature"] = f"sha256={sig}"
     try:
         with httpx.Client(timeout=10) as client:
             r = client.post(url, json=payload, headers=headers)
@@ -222,7 +222,7 @@ def send_teams_alert(webhook_url: str, incident, narration: dict | None) -> bool
         "themeColor": color,
         "summary": f"[{severity}] {incident.title}",
         "sections": [{
-            "activityTitle": f"🚨 [{severity}] DataWatch Incident",
+            "activityTitle": f"🚨 [{severity}] Panopta Incident",
             "activitySubtitle": incident.title,
             "facts": [
                 {"name": "Severity", "value": severity},
@@ -297,8 +297,8 @@ def send_opsgenie_alert(
         "message": incident.title,
         "description": summary,
         "priority": OPSGENIE_PRIORITIES.get(severity, "P3"),
-        "tags": ["datawatch"],
-        "source": "DataWatch",
+        "tags": ["panopta"],
+        "source": "Panopta",
     }
     headers = {"Authorization": f"GenieKey {api_key}"}
 

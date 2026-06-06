@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Activity, BarChart3, Bell, ChevronRight, Database, FileText, Shield, Users, Zap, Check, ArrowRight, GitBranch } from 'lucide-react'
+import { Activity, BarChart3, Bell, ChevronRight, Database, FileText, Shield, Users, Zap, Check, ArrowRight, GitBranch, Eye } from 'lucide-react'
 import { BrandMark, ThemeToggle } from '../components/app-ui'
 import { workspaceUrl } from '@/lib/subdomain'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ const FEATURES = [
   {
     icon: Activity,
     title: 'AI explains every incident',
-    desc: 'Not just "null spike detected." DataWatch tells you what happened, why it likely happened, the business impact, and the exact debug query to run.',
+    desc: 'Not just "null spike detected." Panopta tells you what happened, why it likely happened, the business impact, and the exact debug query to run.',
   },
   {
     icon: BarChart3,
@@ -24,8 +24,8 @@ const FEATURES = [
   },
   {
     icon: Zap,
-    title: '6-method anomaly detection',
-    desc: 'Z-Score, Isolation Forest, STL seasonal decomposition, cardinality drop, row growth rate, and rule-based checks — nothing slips through.',
+    title: '7-method anomaly detection',
+    desc: 'Z-Score, Isolation Forest, STL seasonal decomposition, cardinality drop, row growth rate, enum drift, and rule-based checks — nothing slips through.',
   },
   {
     icon: FileText,
@@ -35,7 +35,7 @@ const FEATURES = [
   {
     icon: Shield,
     title: 'Safe by design',
-    desc: 'Read-only credentials. HKDF per-tenant encryption. DataWatch cannot modify your data. Query timeouts protect production databases.',
+    desc: 'Read-only credentials. HKDF per-tenant encryption. Panopta cannot modify your data. Query timeouts protect production databases.',
   },
 ]
 
@@ -88,8 +88,8 @@ const CONNECTORS = [
 ]
 
 const HOW_IT_WORKS = [
-  { n: '01', title: 'Connect your database', desc: 'Paste read-only credentials. DataWatch scans your schema in seconds.' },
-  { n: '02', title: 'AI recommends monitors', desc: 'DataWatch reads your tables and proposes monitors: freshness, nulls, duplicates, schema drift, business rules.' },
+  { n: '01', title: 'Connect your database', desc: 'Paste read-only credentials. Panopta scans your schema in seconds.' },
+  { n: '02', title: 'AI recommends monitors', desc: 'Panopta reads your tables and proposes monitors: freshness, nulls, duplicates, schema drift, business rules.' },
   { n: '03', title: 'Incidents with AI context', desc: 'When something breaks, get an AI-written report — what happened, why, the business impact, debug queries.' },
   { n: '04', title: 'Reports sent automatically', desc: 'Weekly reliability reports go to your team. Client-safe summaries go to your clients. You stay ahead.' },
 ]
@@ -98,7 +98,23 @@ const COMPARISON = [
   { name: 'Monte Carlo', price: '$1,000–5,000+/mo', note: 'Enterprise only, 3-6 month setup' },
   { name: 'Soda', price: '$400–1,000/mo', note: 'Warehouse-first, no app databases' },
   { name: 'Elementary', price: '$200+/mo', note: 'dbt-only, no MongoDB, no app DBs' },
-  { name: 'DataWatch', price: 'From $49/mo', note: 'Operational + warehouse, AI-first, 10-min setup', highlight: true },
+  { name: 'Panopta', price: 'From $49/mo', note: 'Operational + warehouse, AI-first, 10-min setup', highlight: true },
+]
+
+// Panoptes quotes — inspired by the 100-eyed giant of Greek mythology
+const PANOPTES_QUOTES = [
+  {
+    quote: "Nothing escapes the gaze of a hundred eyes.",
+    context: "Panoptes, the all-seeing giant of Greek mythology, never slept — at least one eye was always open. Your data deserves the same vigilance.",
+  },
+  {
+    quote: "While some eyes rest, others watch.",
+    context: "Panoptes never missed a thing. Panopta runs every check, on every table, on every schedule — so nothing silently breaks while you sleep.",
+  },
+  {
+    quote: "All-seeing. Always-on. Instantly explainable.",
+    context: "Named for the giant who watched Io for Zeus, Panopta watches your data with the same tireless attention — then tells you exactly what it saw.",
+  },
 ]
 
 export default function Landing() {
@@ -141,16 +157,22 @@ export default function Landing() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.08),transparent_60%)]" />
         <div className="relative mx-auto max-w-6xl px-4 py-24 text-center">
           <Badge variant="secondary" className="mb-6 gap-1.5">
-            <Activity className="size-3" />
+            <Eye className="size-3" />
             Open Beta — Free to start
           </Badge>
           <h1 className="mx-auto max-w-4xl text-4xl font-extrabold tracking-tight sm:text-6xl leading-tight">
-            DataWatch monitors your databases like a data engineer,<br className="hidden lg:block" />
-            <span className="text-primary"> explains incidents like a senior analyst.</span>
+            Panopta watches your data with a hundred eyes,<br className="hidden lg:block" />
+            <span className="text-primary"> and explains every incident like a senior analyst.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground leading-relaxed">
-            Connect PostgreSQL, MySQL, MongoDB, and 9+ more databases. DataWatch detects silent data problems — freshness failures, null spikes, schema drift, duplicate records — then explains every incident with AI and sends reports your clients actually understand.
+            Connect PostgreSQL, MySQL, MongoDB, and 9+ more databases. Panopta detects silent data problems — freshness failures, null spikes, schema drift, duplicate records — then explains every incident with AI and sends reports your clients actually understand.
           </p>
+
+          {/* Panoptes tagline */}
+          <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground italic">
+            "Nothing escapes the gaze of a hundred eyes." — Named for Panoptes, the all-seeing giant of Greek mythology.
+          </p>
+
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
             <Button size="lg" className="gap-2 font-semibold px-8" onClick={scrollToWorkspace}>
               Start for free
@@ -164,7 +186,7 @@ export default function Landing() {
           {/* Workspace jump */}
           <div id="workspace-input" className="mt-12 flex items-center justify-center mx-auto max-w-sm overflow-hidden rounded-xl border bg-card shadow-sm">
             <div className="flex items-center pl-4 text-sm text-muted-foreground select-none whitespace-nowrap">
-              <span>datawatch.io /</span>
+              <span>panopta.app /</span>
             </div>
             <input
               className="flex-1 bg-transparent px-2 py-3 text-sm outline-none font-mono"
@@ -199,6 +221,31 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Panoptes mythology callout */}
+      <section className="border-b py-16 bg-primary/5">
+        <div className="mx-auto max-w-4xl px-4">
+          <div className="text-center mb-10">
+            <div className="inline-flex size-14 items-center justify-center rounded-full bg-primary/10 mb-4">
+              <Eye className="size-7 text-primary" />
+            </div>
+            <h2 className="text-2xl font-bold tracking-tight">The myth behind the name</h2>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-3">
+            {PANOPTES_QUOTES.map((q, i) => (
+              <div key={i} className="rounded-xl border bg-card p-5 flex flex-col gap-3">
+                <blockquote className="text-base font-semibold text-foreground leading-snug">
+                  "{q.quote}"
+                </blockquote>
+                <p className="text-sm text-muted-foreground leading-relaxed">{q.context}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-8 text-center text-sm text-muted-foreground max-w-2xl mx-auto">
+            In Greek mythology, <strong>Panoptes</strong> (Πανόπτης, "all-seeing") was a giant with a hundred eyes who never slept — some eyes always remained open to watch. We named our platform <strong>Panopta</strong> to embody that same relentless, tireless vigilance over your data.
+          </p>
+        </div>
+      </section>
+
       {/* How it works */}
       <section id="how-it-works" className="border-b py-24">
         <div className="mx-auto max-w-6xl px-4">
@@ -223,7 +270,7 @@ export default function Landing() {
         <div className="mx-auto max-w-4xl px-4">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-bold tracking-tight">Not "null spike detected." This.</h2>
-            <p className="mt-4 text-muted-foreground">DataWatch tells your team exactly what to do, not just that something broke.</p>
+            <p className="mt-4 text-muted-foreground">Panopta tells your team exactly what to do, not just that something broke.</p>
           </div>
           <div className="rounded-xl border bg-card p-6 font-mono text-sm leading-relaxed space-y-3">
             <div className="flex items-center gap-2 pb-2 border-b">
@@ -301,10 +348,10 @@ export default function Landing() {
       <section className="border-b py-24">
         <div className="mx-auto max-w-4xl px-4 grid gap-8 lg:grid-cols-2 items-center">
           <div>
-            <Badge variant="outline" className="mb-4">For agencies & consultants</Badge>
+            <Badge variant="outline" className="mb-4">For agencies &amp; consultants</Badge>
             <h2 className="text-3xl font-bold tracking-tight">Give every client a professional database health report</h2>
             <p className="mt-4 text-muted-foreground leading-relaxed">
-              Stop writing database health emails manually. DataWatch generates client-safe reports automatically — no internal table names, no sensitive data — and delivers them on your schedule.
+              Stop writing database health emails manually. Panopta generates client-safe reports automatically — no internal table names, no sensitive data — and delivers them on your schedule.
             </p>
             <ul className="mt-6 space-y-2">
               {[
@@ -354,7 +401,7 @@ export default function Landing() {
             <p className="mt-4 text-muted-foreground">Start free. No credit card. Upgrade when your stack grows.</p>
           </div>
           <p className="text-center text-sm text-muted-foreground mb-10">
-            Monte Carlo starts at <span className="line-through">$1,000+/month</span>. DataWatch starts at <span className="text-primary font-semibold">$0</span>.
+            Monte Carlo starts at <span className="line-through">$1,000+/month</span>. Panopta starts at <span className="text-primary font-semibold">$0</span>.
           </p>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {PLANS.map((plan) => (
@@ -399,8 +446,12 @@ export default function Landing() {
       {/* CTA */}
       <section className="py-24">
         <div className="mx-auto max-w-2xl px-4 text-center">
+          <div className="inline-flex size-12 items-center justify-center rounded-full bg-primary/10 mb-6">
+            <Eye className="size-6 text-primary" />
+          </div>
           <h2 className="text-3xl font-bold tracking-tight">Your data is breaking silently right now.</h2>
-          <p className="mt-4 text-muted-foreground text-lg">DataWatch catches it — and explains it — before your clients or dashboards do.</p>
+          <p className="mt-4 text-muted-foreground text-lg">Panopta catches it — and explains it — before your clients or dashboards do.</p>
+          <p className="mt-2 text-sm text-muted-foreground italic">"While some eyes rest, others watch."</p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
             <Button size="lg" className="gap-2 px-10 font-semibold" onClick={scrollToWorkspace}>
               Start for free <ArrowRight className="size-4" />
@@ -417,7 +468,7 @@ export default function Landing() {
       <footer className="border-t py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 sm:flex-row sm:justify-between">
           <BrandMark />
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} DataWatch. Database observability for every team.</p>
+          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Panopta. All-seeing data quality monitoring.</p>
           <div className="flex gap-4 text-xs text-muted-foreground">
             <a href="#pricing" className="hover:text-foreground">Pricing</a>
             <a href="#workspace-input" className="hover:text-foreground">Sign in</a>

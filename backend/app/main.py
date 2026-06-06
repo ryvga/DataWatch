@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DataWatch API",
+    title="Panopta API",
     version="0.2.0",
     description="Data quality monitoring SaaS platform",
     lifespan=lifespan,
@@ -64,7 +64,7 @@ if settings.is_production:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_origin_regex=r"https://[a-z0-9-]+\.datawatch\.io" if settings.is_production else None,
+    allow_origin_regex=r"https://[a-z0-9-]+\.panopta\.app" if settings.is_production else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

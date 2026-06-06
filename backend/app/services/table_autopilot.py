@@ -182,7 +182,7 @@ async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: D
             {
                 "monitor_type": "row_count",
                 "name": f"{table.table_name} row count baseline",
-                "rationale": "DataWatch always checks for empty tables and anomalous row-count shifts after profiling.",
+                "rationale": "Panopta always checks for empty tables and anomalous row-count shifts after profiling.",
                 "severity": "P1",
                 "status": "enabled",
                 "requires_review": False,

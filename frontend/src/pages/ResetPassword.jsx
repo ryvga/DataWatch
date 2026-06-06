@@ -64,7 +64,7 @@ export default function ResetPassword() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle>Reset password</CardTitle>
-              <CardDescription>Choose a new password for your DataWatch account.</CardDescription>
+              <CardDescription>Choose a new password for your Panopta account.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={submit} className="flex flex-col gap-4">

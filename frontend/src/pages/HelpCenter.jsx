@@ -83,7 +83,7 @@ The anomaly score for a point is based on the average path length across all tre
 
 where E[h(x)] is the average path length and c(n) is the expected path length for a dataset of size n. Scores close to 1 indicate strong anomalies; scores near 0.5 are normal.
 
-DataWatch evaluates five metrics jointly: row count, null rate, distinct ratio, mean value, and standard deviation. This multivariate approach catches anomalies that would look normal on any single metric in isolation.`,
+Panopta evaluates five metrics jointly: row count, null rate, distinct ratio, mean value, and standard deviation. This multivariate approach catches anomalies that would look normal on any single metric in isolation.`,
     why: `Unlike Z-Score, Isolation Forest does not assume a particular distribution and captures complex, multidimensional anomalies. It excels when multiple metrics simultaneously deviate in correlated ways.`,
     limits: `Requires at least 21 historical snapshots for the model to be stable. The trained model is cached and reused (refreshed every 7 days) to avoid the computational cost of retraining on every snapshot.`,
     example: `Suppose row count stays normal but null rate suddenly climbs while distinct ratio drops — each individually might fall within Z-Score tolerance, but Isolation Forest recognizes the joint pattern as anomalous.`,
@@ -147,7 +147,7 @@ The Kendall correlation coefficient τ is defined as:
 
 Values of τ close to +1 indicate a strong upward trend; close to −1, a strong downward trend; near 0, no consistent trend.
 
-A p-value is computed from the distribution of τ under the null hypothesis of no trend. DataWatch flags the check as anomalous when:
+A p-value is computed from the distribution of τ under the null hypothesis of no trend. Panopta flags the check as anomalous when:
 
   |τ| > 0.6  AND  p-value < 0.05
 
@@ -255,7 +255,7 @@ If the current fingerprint differs from the previous one, the system identifies 
 Schema changes produce P2 (High) severity incidents.`,
     why: `Unexpected schema changes are among the most disruptive data quality events. A dropped column can silently break downstream reports, dashboards, and machine learning pipelines without any row count change to signal the problem.`,
     limits: `Does not detect column renames (which appear as a drop + add). Does not track column ordering changes.`,
-    example: `A "revenue" column is renamed to "revenue_usd" in a schema migration. DataWatch sees "revenue" as dropped and "revenue_usd" as added — P2 incident fires, allowing downstream teams to update their queries before the discrepancy causes silent failures.`,
+    example: `A "revenue" column is renamed to "revenue_usd" in a schema migration. Panopta sees "revenue" as dropped and "revenue_usd" as added — P2 incident fires, allowing downstream teams to update their queries before the discrepancy causes silent failures.`,
   },
   {
     id: 'freshness',
@@ -310,7 +310,7 @@ A ratio below 1.0 means duplicates exist. The check flags columns where:
 
 meaning more than 0.1% of rows are duplicates. This threshold prevents false alerts from floating-point precision issues while catching real data duplication events.`,
     why: `Duplicate primary keys or transaction IDs are catastrophic data quality failures. They cause double-counting in analytics, incorrect aggregations, and can violate referential integrity constraints. Early detection allows pipeline teams to identify and revert the bad load.`,
-    limits: `DataWatch does not know which columns are intended to be unique — it evaluates all high-cardinality columns. False positives may occur for columns that are naturally non-unique. Users can suppress specific column checks in table settings.`,
+    limits: `Panopta does not know which columns are intended to be unique — it evaluates all high-cardinality columns. False positives may occur for columns that are naturally non-unique. Users can suppress specific column checks in table settings.`,
     example: `A transaction ID column normally has a distinct ratio of 1.000. After a pipeline bug causes an idempotent write to be executed twice, the ratio drops to 0.500 (every transaction duplicated). Uniqueness check fires immediately.`,
   },
   {
@@ -418,7 +418,7 @@ export default function HelpCenter() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Help Center</h1>
         <p className="mt-2 text-muted-foreground max-w-xl">
-          How DataWatch monitors your data — every detection method explained in mathematical terms, without the engineering jargon.
+          How Panopta monitors your data — every detection method explained in mathematical terms, without the engineering jargon.
         </p>
       </div>
 

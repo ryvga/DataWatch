@@ -1,5 +1,5 @@
 """
-Celery tasks for DataWatch.
+Celery tasks for Panopta.
 Tasks are synchronous entry points; async logic is wrapped with asyncio.run().
 """
 import asyncio

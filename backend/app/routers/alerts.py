@@ -152,7 +152,7 @@ async def test_alert_config(
     class _FakeIncident:
         id = "test-00000000"
         severity = "P3"
-        title = "DataWatch test alert — configuration verified"
+        title = "Panopta test alert — configuration verified"
         fired_checks = []
         from datetime import datetime, timezone
         created_at = datetime.now(timezone.utc)
@@ -162,7 +162,7 @@ async def test_alert_config(
     if not channel_available(org.plan, org.subscription_status, cfg.channel):
         raise HTTPException(status_code=402, detail=channel_upgrade_detail(org.plan, org.subscription_status, cfg.channel))
 
-    ok = dispatch_alert(cfg, _FakeIncident(), {"summary": "This is a DataWatch test alert. No incident was created."})
+    ok = dispatch_alert(cfg, _FakeIncident(), {"summary": "This is a Panopta test alert. No incident was created."})
 
     if not ok:
         label = CHANNELS.get(cfg.channel, {}).get("label", cfg.channel)

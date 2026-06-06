@@ -1,5 +1,5 @@
 /**
- * DataWatch notification system — wraps Sonner with domain-specific variants.
+ * Panopta notification system — wraps Sonner with domain-specific variants.
  *
  * Usage:
  *   notify.ok('Source connected')

@@ -65,7 +65,7 @@ export default function AcceptInvite() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle>Accept invite</CardTitle>
-              <CardDescription>Create your DataWatch account for this workspace.</CardDescription>
+              <CardDescription>Create your Panopta account for this workspace.</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={submit} className="flex flex-col gap-4">

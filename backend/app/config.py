@@ -11,8 +11,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # Multi-tenancy
-    BASE_DOMAIN: str = "datawatch.io"
-    ADMIN_SUBDOMAIN: str = "admin"  # admin.datawatch.io
+    BASE_DOMAIN: str = "panopta.app"
+    ADMIN_SUBDOMAIN: str = "admin"  # admin.panopta.app
 
     # Database
     DATABASE_URL: str
@@ -26,9 +26,9 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "nvidia/nemotron-3-super-120b-a12b:free"
 
     # Staff seed — first staff account bootstrapped on startup
-    STAFF_EMAIL: str = "admin@datawatch.io"
+    STAFF_EMAIL: str = "admin@panopta.app"
     STAFF_PASSWORD: str = ""  # must be set in .env for seeding to run
-    STAFF_FULL_NAME: str = "DataWatch Admin"
+    STAFF_FULL_NAME: str = "Panopta Admin"
 
     # Email
     APP_BASE_URL: str = "http://localhost:5173"
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = False
     SMTP_TIMEOUT: int = 10
     SENDGRID_API_KEY: str = ""
-    FROM_EMAIL: str = "alerts@datawatch.io"
+    FROM_EMAIL: str = "alerts@panopta.app"
 
     # PayPal billing
     PAYPAL_CLIENT_ID: str = ""
