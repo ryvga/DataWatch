@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:e2e": "node tests/playwright/monitor-builder.spec.mjs"
+    "test:e2e": "node tests/playwright/monitor-builder.spec.mjs && node tests/playwright/alerts.spec.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

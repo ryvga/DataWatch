@@ -9,6 +9,7 @@ import {
   Database,
   Info,
   KeyRound,
+  Lock,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -35,6 +36,7 @@ import {
   deleteTable,
   discoverSource,
   getAlerts,
+  getAlertChannels,
   getBillingStatus,
   getConnectorTypes,
   getInvites,
@@ -132,19 +134,65 @@ const SOURCE_CONFIG_TEMPLATES = {
   sqlite: '{\n  "path": "/data/mydb.sqlite"\n}',
 }
 
-const ALERT_EXAMPLES = {
-  slack: '{\n  "webhook_url": "https://hooks.slack.com/...",\n  "min_severity": "P2"\n}',
-  email: '{\n  "to": ["you@company.com"],\n  "min_severity": "P3"\n}',
-  pagerduty: '{\n  "routing_key": "YOUR_KEY",\n  "min_severity": "P1"\n}',
-  webhook: '{\n  "url": "https://example.com/webhook",\n  "secret": ""\n}',
-  teams: '{\n  "webhook_url": "https://outlook.office.com/webhook/..."\n}',
-  discord: '{\n  "webhook_url": "https://discord.com/api/webhooks/...",\n  "min_severity": "P2"\n}',
-  opsgenie: '{\n  "api_key": "YOUR_OPSGENIE_KEY",\n  "min_severity": "P1"\n}',
+const FALLBACK_ALERT_CHANNELS = [
+  {
+    id: 'email',
+    label: 'Email',
+    available: true,
+    required_plan: 'free',
+    description: 'Send incidents to one or more email recipients.',
+    fields: [
+      { name: 'to', label: 'Recipients', type: 'email_list', required: true },
+      { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
+    ],
+  },
+  {
+    id: 'slack',
+    label: 'Slack',
+    available: false,
+    required_plan: 'starter',
+    locked_reason: 'Slack requires Starter or higher.',
+    description: 'Post incident cards into Slack.',
+    fields: [
+      { name: 'webhook_url', label: 'Webhook URL', type: 'url', required: true, secret: true },
+      { name: 'min_severity', label: 'Minimum severity', type: 'severity', required: false },
+    ],
+  },
+]
+
+function defaultAlertFields(channel) {
+  const fields = { min_severity: 'P3' }
+  for (const field of channel?.fields || []) {
+    if (field.name === 'min_severity') fields.min_severity = 'P3'
+    else if (field.type === 'email_list') fields[field.name] = storage.getItem('dw_user_email') || ''
+    else fields[field.name] = ''
+  }
+  return fields
 }
 
-const ALERT_FIELD_DEFAULTS = {
-  webhook: { url: '', secret: '' },
-  teams: { webhook_url: '' },
+function alertPayloadFields(fields, channel) {
+  const payload = {}
+  for (const field of channel?.fields || []) {
+    const value = fields[field.name]
+    if (field.type === 'email_list') {
+      payload[field.name] = String(value || '').split(',').map((item) => item.trim()).filter(Boolean)
+    } else if (field.name === 'min_severity') {
+      payload[field.name] = value || 'P3'
+    } else if (value || field.required) {
+      payload[field.name] = value
+    }
+  }
+  return payload
+}
+
+function alertDestination(alert) {
+  const config = alert.config || {}
+  if (alert.channel === 'email') return Array.isArray(config.to) ? config.to.join(', ') : 'Email recipients'
+  if (alert.channel === 'webhook') return config.url || 'Webhook endpoint'
+  if (['slack', 'teams', 'discord'].includes(alert.channel)) return config.webhook_url || 'Webhook URL saved'
+  if (alert.channel === 'pagerduty') return 'Routing key saved'
+  if (alert.channel === 'opsgenie') return 'API key saved'
+  return 'Configured'
 }
 
 const SETTINGS_SECTIONS = [
@@ -422,33 +470,44 @@ function TableForm({ open, onOpenChange, sources, onCreated }) {
   )
 }
 
-function AlertForm({ open, onOpenChange, onCreated }) {
-  const [form, setForm] = useState({ channel: 'slack', config: ALERT_EXAMPLES.slack, fields: {} })
+function AlertForm({ open, onOpenChange, onCreated, channels = FALLBACK_ALERT_CHANNELS, tables = [] }) {
+  const firstAvailable = channels.find((channel) => channel.available) || channels[0] || FALLBACK_ALERT_CHANNELS[0]
+  const [form, setForm] = useState({ channel: firstAvailable.id, table_id: 'workspace', fields: defaultAlertFields(firstAvailable) })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    if (!open) return
+    const available = channels.find((channel) => channel.available) || channels[0] || FALLBACK_ALERT_CHANNELS[0]
+    setForm({ channel: available.id, table_id: 'workspace', fields: defaultAlertFields(available) })
+    setError('')
+  }, [open, channels])
+
+  const selectedChannel = channels.find((channel) => channel.id === form.channel) || firstAvailable
+
   const submit = async (event) => {
     event.preventDefault()
-    let config = form.fields
-
-    if (!ALERT_FIELD_DEFAULTS[form.channel]) {
-      const [parsedConfig, parseError] = parseJson(form.config, 'Alert config')
-      if (parseError) {
-        setError(parseError)
-        return
-      }
-      config = parsedConfig
+    if (!selectedChannel.available) {
+      const message = selectedChannel.locked_reason || `${selectedChannel.label} is not available on your current plan.`
+      setError(message)
+      notify.warn('Alert channel locked', message)
+      return
     }
 
     setSaving(true)
     setError('')
     try {
-      const response = await createAlert({ channel: form.channel, config })
+      const config = alertPayloadFields(form.fields, selectedChannel)
+      const response = await createAlert({
+        channel: form.channel,
+        table_id: form.table_id === 'workspace' ? null : form.table_id,
+        config,
+      })
       onCreated(response.data)
       onOpenChange(false)
-      notify.alert.created(form.channel)
+      notify.alert.created(selectedChannel.label || form.channel)
     } catch (err) {
-      const message = err.response?.data?.detail || 'Failed to create alert'
+      const message = getApiError(err, 'Failed to create alert')
       setError(message)
       notify.err(message)
     } finally {
@@ -461,76 +520,91 @@ function AlertForm({ open, onOpenChange, onCreated }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add alert route</DialogTitle>
-          <DialogDescription>Configure where incident notifications are sent.</DialogDescription>
+          <DialogDescription>Configure where incident notifications are sent and which incidents should trigger this route.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label>Channel</Label>
             <Select
               value={form.channel}
-              onValueChange={(channel) => setForm({ channel, config: ALERT_EXAMPLES[channel], fields: ALERT_FIELD_DEFAULTS[channel] || {} })}
+              onValueChange={(channelId) => {
+                const nextChannel = channels.find((channel) => channel.id === channelId) || channels[0]
+                setForm({ channel: channelId, table_id: 'workspace', fields: defaultAlertFields(nextChannel) })
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectGroup>
-                  <SelectItem value="slack">Slack</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="discord">Discord</SelectItem>
-                  <SelectItem value="pagerduty">PagerDuty</SelectItem>
-                  <SelectItem value="opsgenie">OpsGenie</SelectItem>
-                  <SelectItem value="webhook">Webhook (Generic)</SelectItem>
-                  <SelectItem value="teams">Microsoft Teams</SelectItem>
+                  {channels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id} disabled={!channel.available}>
+                      {channel.label}{!channel.available ? ` - ${channel.required_plan?.toUpperCase()}+` : ''}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">{selectedChannel.description}</p>
           </div>
-          {form.channel === 'webhook' ? (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="webhook-url">Webhook URL</Label>
-                <Input
-                  id="webhook-url"
-                  type="text"
-                  value={form.fields.url || ''}
-                  onChange={(e) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, url: e.target.value } }))}
-                  required
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="webhook-secret">Signing secret (optional)</Label>
-                <Input
-                  id="webhook-secret"
-                  type="text"
-                  value={form.fields.secret || ''}
-                  onChange={(e) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, secret: e.target.value } }))}
-                />
-                <p className="text-xs text-muted-foreground">Used for HMAC-SHA256 signature verification</p>
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </div>
-          ) : form.channel === 'teams' ? (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="teams-webhook-url">Teams Incoming Webhook URL</Label>
-              <Input
-                id="teams-webhook-url"
-                type="text"
-                value={form.fields.webhook_url || ''}
-                onChange={(e) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, webhook_url: e.target.value } }))}
-                required
-              />
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="alert-config">Config</Label>
-              <Textarea id="alert-config" className="min-h-36 font-mono text-xs" value={form.config} onChange={(e) => setForm((prev) => ({ ...prev, config: e.target.value }))} />
-              {error && <p className="text-sm text-destructive">{error}</p>}
-            </div>
+
+          {!selectedChannel.available && (
+            <Alert>
+              <Lock className="size-4" />
+              <AlertDescription>{selectedChannel.locked_reason}</AlertDescription>
+            </Alert>
           )}
+
+          <div className="flex flex-col gap-2">
+            <Label>Route scope</Label>
+            <Select value={form.table_id} onValueChange={(table_id) => setForm((prev) => ({ ...prev, table_id }))}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="workspace">All workspace incidents</SelectItem>
+                {tables.map((table) => (
+                  <SelectItem key={table.id} value={table.id}>
+                    {table.schema_name}.{table.table_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Workspace routes catch every incident. Table routes only fire for that table.</p>
+          </div>
+
+          {(selectedChannel.fields || []).map((field) => (
+            <div key={field.name} className="flex flex-col gap-2">
+              <Label htmlFor={`alert-${field.name}`}>{field.label}</Label>
+              {field.type === 'severity' ? (
+                <Select value={form.fields[field.name] || 'P3'} onValueChange={(value) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, [field.name]: value } }))}>
+                  <SelectTrigger id={`alert-${field.name}`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="P1">P1 only</SelectItem>
+                    <SelectItem value="P2">P1 and P2</SelectItem>
+                    <SelectItem value="P3">P1, P2, and P3</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  id={`alert-${field.name}`}
+                  type={field.type === 'password' ? 'password' : field.type === 'email_list' ? 'text' : field.type === 'url' ? 'url' : 'text'}
+                  value={form.fields[field.name] || ''}
+                  onChange={(e) => setForm((prev) => ({ ...prev, fields: { ...prev.fields, [field.name]: e.target.value } }))}
+                  placeholder={field.type === 'email_list' ? 'ops@company.com, data@company.com' : ''}
+                  required={field.required}
+                />
+              )}
+              {field.type === 'email_list' && <p className="text-xs text-muted-foreground">Separate multiple recipients with commas.</p>}
+              {field.name === 'secret' && <p className="text-xs text-muted-foreground">Used for HMAC-SHA256 signature verification.</p>}
+            </div>
+          ))}
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
-            <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create alert'}</Button>
+            <Button type="submit" disabled={saving || !selectedChannel.available}>{saving ? 'Creating...' : 'Create alert'}</Button>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           </DialogFooter>
         </form>
@@ -1350,23 +1424,32 @@ function TablesTab() {
 
 function AlertsTab() {
   const [alerts, setAlerts] = useState([])
+  const [channels, setChannels] = useState(FALLBACK_ALERT_CHANNELS)
+  const [tables, setTables] = useState([])
   const [open, setOpen] = useState(false)
   const [testing, setTesting] = useState({})
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    getAlerts().then((response) => setAlerts(response.data))
+    Promise.all([getAlerts(), getAlertChannels(), getTables()])
+      .then(([alertsResponse, channelsResponse, tablesResponse]) => {
+        setAlerts(alertsResponse.data)
+        setChannels(channelsResponse.data?.channels?.length ? channelsResponse.data.channels : FALLBACK_ALERT_CHANNELS)
+        setTables(tablesResponse.data || [])
+      })
+      .catch((err) => setLoadError(getApiError(err, 'Could not load alert settings')))
   }, [])
 
   const test = async (id) => {
     const alert = alerts.find((item) => item.id === id)
     setTesting((prev) => ({ ...prev, [id]: 'testing' }))
     try {
-      await testAlert(id)
+      const response = await testAlert(id)
       setTesting((prev) => ({ ...prev, [id]: 'ok' }))
-      notify.alert.testSent(alert?.channel || 'alert')
-    } catch (_) {
+      notify.alert.testSent(response.data?.message || alert?.channel || 'alert')
+    } catch (err) {
       setTesting((prev) => ({ ...prev, [id]: 'fail' }))
-      notify.alert.testFailed(alert?.channel || 'alert')
+      notify.err('Alert test failed', getApiError(err, `Could not send ${alert?.channel || 'alert'} test`))
     }
     setTimeout(() => setTesting((prev) => { const next = { ...prev }; delete next[id]; return next }), 3000)
   }
@@ -1388,12 +1471,29 @@ function AlertsTab() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-medium">Alert routes</h2>
-            <p className="text-sm text-muted-foreground">Slack, email, PagerDuty, webhook, and Teams delivery rules for incidents.</p>
+            <p className="text-sm text-muted-foreground">Workspace and table-specific delivery rules for incident notifications.</p>
           </div>
           <Button type="button" onClick={() => setOpen(true)}>
             <Plus data-icon="inline-start" />
             Add alert
           </Button>
+        </div>
+        {loadError && (
+          <Alert variant="destructive">
+            <AlertCircle className="size-4" />
+            <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        )}
+        <div className="grid gap-2 md:grid-cols-3">
+          {channels.map((channel) => (
+            <div key={channel.id} className={cn('rounded-md border p-3', channel.available ? 'bg-card' : 'bg-muted/40 text-muted-foreground')}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">{channel.label}</div>
+                {channel.available ? <Badge variant="outline">Available</Badge> : <Badge variant="secondary"><Lock className="mr-1 size-3" />{channel.required_plan?.toUpperCase()}+</Badge>}
+              </div>
+              <p className="mt-1 text-xs leading-5">{channel.available ? channel.description : channel.locked_reason}</p>
+            </div>
+          ))}
         </div>
         {alerts.length === 0 ? (
           <EmptyState icon={Bell} title="No alert routes" description="Create a route before relying on incident notifications." />
@@ -1403,6 +1503,8 @@ function AlertsTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Channel</TableHead>
+                  <TableHead>Destination</TableHead>
+                  <TableHead>Scope</TableHead>
                   <TableHead>Minimum severity</TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
@@ -1410,8 +1512,16 @@ function AlertsTab() {
               <TableBody>
                 {alerts.map((alert) => (
                   <TableRow key={alert.id}>
-                    <TableCell className="capitalize">{alert.channel}</TableCell>
-                    <TableCell className="text-muted-foreground">{alert.config?.min_severity ?? 'P3'}</TableCell>
+                    <TableCell className="capitalize">{channels.find((channel) => channel.id === alert.channel)?.label || alert.channel}</TableCell>
+                    <TableCell className="max-w-xs truncate text-muted-foreground">{alertDestination(alert)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {alert.table_id
+                        ? tables.find((table) => table.id === alert.table_id)
+                          ? `${tables.find((table) => table.id === alert.table_id).schema_name}.${tables.find((table) => table.id === alert.table_id).table_name}`
+                          : 'Table-specific'
+                        : 'All workspace incidents'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{alert.min_severity || alert.config?.min_severity || 'P3'}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1441,7 +1551,7 @@ function AlertsTab() {
             </Table>
           </div>
         )}
-        <AlertForm open={open} onOpenChange={setOpen} onCreated={(alert) => setAlerts((prev) => [...prev, alert])} />
+        <AlertForm open={open} onOpenChange={setOpen} onCreated={(alert) => setAlerts((prev) => [...prev, alert])} channels={channels} tables={tables} />
       </CardContent>
     </Card>
   )

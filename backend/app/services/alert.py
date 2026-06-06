@@ -78,12 +78,26 @@ def send_slack_alert(webhook_url: str, incident, narration: dict | None) -> bool
 # ── Email (SendGrid) ──────────────────────────────────────────────────────────
 
 def send_email_alert(to_addresses: list[str], incident, narration: dict | None) -> bool:
-    if not settings.SENDGRID_API_KEY:
-        logger.warning("SENDGRID_API_KEY not set, skipping email alert")
-        return False
-
     severity = incident.severity.upper()
     summary = narration.get("summary", "Anomaly detected.") if narration and "error" not in narration else "Anomaly detected."
+
+    if not to_addresses:
+        logger.warning("Email alert skipped for incident %s: no recipients", incident.id)
+        return False
+
+    if not settings.SENDGRID_API_KEY:
+        from app.services.email import _layout, _send_email
+
+        body = f"""
+            <p><strong>{incident.title}</strong></p>
+            <p><strong>Severity:</strong> {severity}</p>
+            <p><strong>Summary:</strong> {summary}</p>
+            <p><strong>Detected at:</strong> {incident.created_at.strftime('%Y-%m-%d %H:%M UTC')}</p>
+        """
+        return all(
+            _send_email(addr, f"[DataWatch] {severity} incident - {incident.title[:80]}", _layout("DataWatch incident alert", body))
+            for addr in to_addresses
+        )
 
     actions_html = ""
     if narration and "recommended_actions" in narration:

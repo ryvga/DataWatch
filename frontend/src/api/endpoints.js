@@ -62,6 +62,7 @@ export const retryNarration = (id) => api.post(`/api/v1/incidents/${id}/narratio
 
 // Alerts
 export const getAlerts = () => api.get('/api/v1/alerts')
+export const getAlertChannels = () => api.get('/api/v1/alerts/channels')
 export const createAlert = (data) => api.post('/api/v1/alerts', data)
 export const deleteAlert = (id) => api.delete(`/api/v1/alerts/${id}`)
 export const testAlert = (id) => api.post(`/api/v1/alerts/${id}/test`)
