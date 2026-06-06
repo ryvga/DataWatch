@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { notify } from '@/lib/notify'
 import {
+  AlertCircle,
   Bell,
   CheckCircle2,
   CreditCard,
   Database,
+  Info,
   KeyRound,
   Loader2,
   MoreHorizontal,
@@ -38,6 +41,8 @@ import {
   getMe,
   getOrgMembers,
   getSources,
+  getSourceTableSchema,
+  getTableProfiles,
   getTables,
   revokeInvite,
   runTable,
@@ -87,7 +92,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { storage } from '@/lib/storage'
-import { FALLBACK_CONNECTORS, castFieldValue, defaultConfigFor, normalizeConnector } from '@/lib/connectorConfig'
+import { FALLBACK_CONNECTORS, castFieldValue, defaultConfigFor, extractColumnsFromDDL, freshnessCandidates, normalizeConnector } from '@/lib/connectorConfig'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -1001,6 +1006,10 @@ function EditTableDialog({ table, open, onOpenChange, onUpdated }) {
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [freshnessMode, setFreshnessMode] = useState('select') // 'select' | 'manual'
+  const [freshnessSelect, setFreshnessSelect] = useState('none')
+  const [candidateColumns, setCandidateColumns] = useState([])
+  const [loadingColumns, setLoadingColumns] = useState(false)
 
   useEffect(() => {
     if (open && table) {
@@ -1011,8 +1020,46 @@ function EditTableDialog({ table, open, onOpenChange, onUpdated }) {
         is_active: table.is_active !== false,
       })
       setError('')
+      setCandidateColumns([])
+      setFreshnessMode('select')
+
+      // Fetch schema to get timestamp columns
+      if (table.source_id && table.schema_name && table.table_name) {
+        setLoadingColumns(true)
+        getSourceTableSchema(table.source_id, {
+          schema_name: table.schema_name,
+          table_name: table.table_name,
+        })
+          .then((response) => {
+            const ddl = response.data?.ddl || ''
+            const cols = freshnessCandidates(extractColumnsFromDDL(ddl))
+            setCandidateColumns(cols)
+            const existingCol = table.freshness_column || ''
+            if (!existingCol) {
+              setFreshnessSelect('none')
+            } else if (cols.some((c) => c.name === existingCol)) {
+              setFreshnessSelect(existingCol)
+            } else {
+              // Current column not in candidates — fall back to manual input
+              setFreshnessMode('manual')
+              setFreshnessSelect('none')
+            }
+          })
+          .catch(() => {
+            // If schema fetch fails, fall back to manual input
+            setFreshnessMode('manual')
+            if (table.freshness_column) {
+              setFreshnessSelect('none')
+            }
+          })
+          .finally(() => setLoadingColumns(false))
+      }
     }
   }, [open, table])
+
+  const effectiveFreshnessColumn = freshnessMode === 'select'
+    ? (freshnessSelect === 'none' ? '' : freshnessSelect)
+    : form.freshness_column
 
   const submit = async (event) => {
     event.preventDefault()
@@ -1022,7 +1069,7 @@ function EditTableDialog({ table, open, onOpenChange, onUpdated }) {
       const response = await updateTable(table.id, {
         check_interval_minutes: Number(form.interval_minutes),
         sensitivity: Number(form.sensitivity),
-        freshness_column: form.freshness_column.trim() || null,
+        freshness_column: effectiveFreshnessColumn.trim() || null,
         is_active: form.is_active,
       })
       onUpdated(response.data)
@@ -1084,14 +1131,51 @@ function EditTableDialog({ table, open, onOpenChange, onUpdated }) {
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="edit-freshness-column">Freshness column (optional)</Label>
-            <Input
-              id="edit-freshness-column"
-              value={form.freshness_column}
-              onChange={(e) => setForm((prev) => ({ ...prev, freshness_column: e.target.value }))}
-              placeholder="e.g. created_at, updated_at"
-            />
-            <p className="text-xs text-muted-foreground">Leave blank to disable freshness monitoring for this table.</p>
+            <div className="flex items-center justify-between">
+              <Label>Freshness column (optional)</Label>
+              {loadingColumns && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+            </div>
+            {freshnessMode === 'select' ? (
+              <>
+                <Select
+                  value={freshnessSelect}
+                  onValueChange={(v) => {
+                    if (v === '__manual__') { setFreshnessMode('manual') } else { setFreshnessSelect(v) }
+                  }}
+                  disabled={loadingColumns}
+                >
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="none">None (disable freshness)</SelectItem>
+                      {candidateColumns.map((col) => (
+                        <SelectItem key={col.name} value={col.name}>{col.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__manual__">Other (type manually)</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Select "None" to disable freshness monitoring for this table.</p>
+              </>
+            ) : (
+              <>
+                <div className="flex gap-2">
+                  <Input
+                    id="edit-freshness-column"
+                    value={form.freshness_column}
+                    onChange={(e) => setForm((prev) => ({ ...prev, freshness_column: e.target.value }))}
+                    placeholder="e.g. created_at, updated_at"
+                    className="flex-1"
+                  />
+                  {candidateColumns.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => { setFreshnessMode('select'); setFreshnessSelect('none') }}>
+                      Use list
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">Leave blank to disable freshness monitoring for this table.</p>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-3 rounded-md border px-3 py-2.5">
@@ -1147,14 +1231,33 @@ function TablesTab() {
   }
 
   const handleRun = async (id) => {
+    const clickedAt = new Date()
     setRunning((prev) => ({ ...prev, [id]: true }))
     try {
       await runTable(id)
-      notify.ok('Profile queued', 'Results available in ~30 seconds.')
+      // Poll for completion every 2s
+      const poll = setInterval(async () => {
+        try {
+          const res = await getTableProfiles(id, { limit: 1 })
+          const latest = res.data?.[0]
+          if (latest && new Date(latest.collected_at) > clickedAt) {
+            clearInterval(poll)
+            setRunning((prev) => { const next = { ...prev }; delete next[id]; return next })
+            const [sourcesResponse, tablesResponse] = await Promise.all([getSources(), getTables()])
+            setSources(sourcesResponse.data)
+            setTables(tablesResponse.data)
+            notify.ok('Profile complete — data updated')
+          }
+        } catch (_) { /* ignore poll errors */ }
+      }, 2000)
+      // Safety timeout after 90s
+      setTimeout(() => {
+        clearInterval(poll)
+        setRunning((prev) => { const next = { ...prev }; delete next[id]; return next })
+      }, 90000)
     } catch (err) {
       notify.err(err.response?.data?.detail || 'Failed to trigger profile')
-    } finally {
-      setTimeout(() => setRunning((prev) => { const next = { ...prev }; delete next[id]; return next }), 3000)
+      setRunning((prev) => { const next = { ...prev }; delete next[id]; return next })
     }
   }
 

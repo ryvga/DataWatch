@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock, Search } from 'lucide-react'
 import { getIncidents, getIncidentStats } from '../api/endpoints'
 import IncidentCard from '../components/IncidentCard'
 import { EmptyState, LoadingState, PageHeader } from '../components/app-ui'
+import RefreshBar from '../components/RefreshBar'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -23,20 +25,28 @@ export default function Incidents() {
   const [severity, setSeverity] = useState('all')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [interval, setInterval_] = useState(30000)
+  const activeTabRef = useRef(activeTab)
+  const severityRef = useRef(severity)
+  activeTabRef.current = activeTab
+  severityRef.current = severity
 
-  const load = (tab = activeTab, sev = severity) => {
+  const load = (tab, sev) => {
+    const resolvedTab = tab ?? activeTabRef.current
+    const resolvedSev = sev ?? severityRef.current
     const params = { limit: 200 }
-    const tabObj = STATUS_TABS.find(t => t.value === tab)
-    if (tab !== 'all') {
+    const tabObj = STATUS_TABS.find(t => t.value === resolvedTab)
+    if (resolvedTab !== 'all') {
       if (tabObj?.statuses) params.statuses = tabObj.statuses.join(',')
-      else params.status = tab
+      else params.status = resolvedTab
     }
-    if (sev !== 'all') params.severity = sev
-    getIncidents(params).then(r => setIncidents(r.data)).finally(() => setLoading(false))
+    if (resolvedSev !== 'all') params.severity = resolvedSev
+    return getIncidents(params).then(r => setIncidents(r.data)).finally(() => setLoading(false))
   }
 
+  const { isRefreshing, lastRefreshed, refresh } = useAutoRefresh(load, interval, { enabled: interval > 0 })
+
   useEffect(() => {
-    load()
     getIncidentStats().then(r => setStats(r.data)).catch(() => {})
   }, [])
 
@@ -60,6 +70,15 @@ export default function Incidents() {
       <PageHeader
         title="Incidents"
         description={`${sorted.length} incident${sorted.length !== 1 ? 's' : ''} in current view`}
+        actions={
+          <RefreshBar
+            isRefreshing={isRefreshing}
+            lastRefreshed={lastRefreshed}
+            onRefresh={refresh}
+            interval={interval}
+            onIntervalChange={setInterval_}
+          />
+        }
       />
 
       {/* ── Stats strip ── */}
@@ -86,7 +105,7 @@ export default function Incidents() {
         <div className="flex rounded-lg border bg-card p-0.5 gap-0.5">
           {STATUS_TABS.map(tab => (
             <button key={tab.value} type="button"
-              onClick={() => { setActiveTab(tab.value); load(tab.value, severity) }}
+              onClick={() => { setActiveTab(tab.value); load(tab.value, severityRef.current) }}
               className={cn(
                 'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 activeTab === tab.value
@@ -99,7 +118,7 @@ export default function Incidents() {
         </div>
 
         {/* Severity */}
-        <Select value={severity} onValueChange={v => { setSeverity(v); load(activeTab, v) }}>
+        <Select value={severity} onValueChange={v => { setSeverity(v); load(activeTabRef.current, v) }}>
           <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectGroup>

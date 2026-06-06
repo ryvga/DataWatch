@@ -565,55 +565,79 @@ export default function IncidentDetail() {
     }
   }
 
+  const optimisticUpdate = (patch) => {
+    const prev = incident
+    setIncident((curr) => ({ ...curr, ...patch }))
+    return prev
+  }
+
   const doAck = async () => {
+    const prev = optimisticUpdate({ status: 'acknowledged', acknowledged_at: new Date().toISOString() })
     setUpdating(true)
     try {
       const response = await acknowledgeIncident(id)
       setIncident(response.data)
       notify.incident.acknowledged(incident.title)
+    } catch (err) {
+      setIncident(prev)
+      notify.err(err.response?.data?.detail || 'Failed to acknowledge incident')
     } finally {
       setUpdating(false)
     }
   }
 
   const doInvestigate = async () => {
+    const prev = optimisticUpdate({ status: 'investigating' })
     setUpdating(true)
     try {
       const response = await investigateIncident(id)
       setIncident(response.data)
+    } catch (err) {
+      setIncident(prev)
+      notify.err(err.response?.data?.detail || 'Failed to mark investigating')
     } finally {
       setUpdating(false)
     }
   }
 
   const doResolve = async () => {
+    const prev = optimisticUpdate({ status: 'resolved', resolved_at: new Date().toISOString() })
     setUpdating(true)
     try {
       const response = await resolveIncident(id)
       setIncident(response.data)
       notify.incident.resolved(incident.title)
+    } catch (err) {
+      setIncident(prev)
+      notify.err(err.response?.data?.detail || 'Failed to resolve incident')
     } finally {
       setUpdating(false)
     }
   }
 
   const doMute = async () => {
+    const prev = optimisticUpdate({ status: 'muted' })
     setUpdating(true)
     try {
       const response = await muteIncident(id, { hours: 24 })
       setIncident(response.data)
-    } catch { /* endpoint may not be deployed yet */ }
-    finally { setUpdating(false) }
+    } catch (err) {
+      setIncident(prev)
+      /* endpoint may not be deployed yet */
+    } finally { setUpdating(false) }
   }
 
   const doFalsePositive = async () => {
     if (!confirm('Mark as false positive? This will close the incident and prevent future re-creation.')) return
+    const prev = optimisticUpdate({ status: 'ignored' })
     setUpdating(true)
     try {
       const response = await markFalsePositive(id)
       setIncident(response.data)
-    } catch { /* endpoint may not be deployed yet */ }
-    finally { setUpdating(false) }
+    } catch (err) {
+      setIncident(prev)
+      /* endpoint may not be deployed yet */
+    } finally { setUpdating(false) }
   }
 
   if (loading) return <LoadingState label="Loading incident" />

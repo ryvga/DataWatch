@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, CheckCircle2, Clock, Database, Loader2, Play, Plus, RefreshCw, Search, Table2, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Database, Loader2, Play, Plus, Search, Table2, Trash2 } from 'lucide-react'
 import { deleteTable, getIncidents, getSources, getTables, runTable } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import TableSetupDialog from '../components/TableSetupDialog'
+import RefreshBar from '../components/RefreshBar'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatDateTime } from '../components/app-ui'
 import { notify } from '@/lib/notify'
 import {
@@ -102,12 +104,11 @@ export default function Tables() {
   const [sourceFilter, setSourceFilter] = useState('all')
   const [sortBy, setSortBy] = useState('name')
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [interval, setInterval_] = useState(30000)
 
-  const load = async (isRefresh = false) => {
+  const load = async () => {
     setError('')
-    if (isRefresh) setRefreshing(true)
     try {
       const [tablesResponse, sourcesResponse, incidentsResponse] = await Promise.all([
         getTables(),
@@ -121,13 +122,10 @@ export default function Tables() {
       setError(err.response?.data?.detail || 'Failed to load tables')
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }
 
-  useEffect(() => {
-    load()
-  }, [])
+  const { isRefreshing, lastRefreshed, refresh } = useAutoRefresh(load, interval, { enabled: interval > 0 })
 
   const sourceMap = useMemo(() => Object.fromEntries(sources.map((source) => [source.id, source])), [sources])
 
@@ -239,10 +237,13 @@ export default function Tables() {
         description={`${filteredTables.length} of ${tables.length} monitored tables`}
         actions={
           <>
-            <Button type="button" variant="outline" onClick={() => load(true)} disabled={refreshing}>
-              <RefreshCw data-icon="inline-start" className={refreshing ? 'animate-spin' : ''} />
-              Refresh
-            </Button>
+            <RefreshBar
+              isRefreshing={isRefreshing}
+              lastRefreshed={lastRefreshed}
+              onRefresh={refresh}
+              interval={interval}
+              onIntervalChange={setInterval_}
+            />
             <Button type="button" onClick={() => setDialogOpen(true)} disabled={sources.length === 0}>
               <Plus data-icon="inline-start" />
               Add table

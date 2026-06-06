@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Play, Sparkles, Wand2 } from 'lucide-react'
-import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable } from '../api/endpoints'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, Loader2, Play, Sparkles, Wand2, X } from 'lucide-react'
+import { createTable, getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import MetricChart from '../components/MetricChart'
+import RefreshBar from '../components/RefreshBar'
 import SeverityBadge from '../components/SeverityBadge'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { EmptyState, LoadingState, PageHeader, formatDateTime, formatNumber } from '../components/app-ui'
+import { notify } from '@/lib/notify'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,43 +16,127 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 
 // ── AI Monitor Recommender ────────────────────────────────────────────────────
 
-function AIMonitorRecommender({ tableId, sourceId, tableName }) {
+function friendlyRecommendError(err) {
+  const detail = err?.response?.data?.detail || err?.message || ''
+  const lower = detail.toLowerCase()
+  if (lower.includes('failed to resolve host') || lower.includes('unreachable') || lower.includes('connection refused') || lower.includes('timed out')) {
+    return 'Cannot reach the data source. Check your connection settings.'
+  }
+  return 'Recommendations temporarily unavailable. You can set up monitoring manually.'
+}
+
+const SEVERITY_COLORS = { P1: 'text-red-600 dark:text-red-400', P2: 'text-orange-600 dark:text-orange-400', P3: 'text-yellow-600 dark:text-yellow-400' }
+
+function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors }) {
   const [recs, setRecs] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [dismissed, setDismissed] = useState(false)
+  const [applying, setApplying] = useState({})
+  const [applied, setApplied] = useState({})
+  const dismissKey = `dw_rec_dismissed_${tableId}`
+
+  // Auto-trigger when no monitors exist and not previously dismissed this session
+  useEffect(() => {
+    if (hasMonitors) return
+    if (sessionStorage.getItem(dismissKey)) return
+    run()
+  }, [tableId, hasMonitors])
 
   const run = async () => {
     setLoading(true); setError(''); setRecs(null)
     try {
-      const r = await recommendMonitors(sourceId, { source_id: sourceId, table_name: tableName.split('.')[1] || tableName, schema_name: tableName.split('.')[0] || 'public' })
+      const r = await recommendMonitors(sourceId, {
+        source_id: sourceId,
+        table_name: tableName.split('.')[1] || tableName,
+        schema_name: tableName.split('.')[0] || 'public',
+      })
       setRecs(r.data.recommendations || [])
     } catch (e) {
-      setError(e.response?.data?.detail || 'AI recommendation failed — LLM key may not be configured.')
+      setError(friendlyRecommendError(e))
     } finally { setLoading(false) }
   }
 
-  const SEVERITY_COLORS = { P1: 'text-red-600 dark:text-red-400', P2: 'text-orange-600 dark:text-orange-400', P3: 'text-yellow-600 dark:text-yellow-400' }
+  const dismiss = () => {
+    setDismissed(true)
+    sessionStorage.setItem(dismissKey, '1')
+  }
+
+  const applyRec = async (rec, index) => {
+    setApplying((prev) => ({ ...prev, [index]: true }))
+    try {
+      await createTable({
+        source_id: sourceId,
+        schema_name: tableName.split('.')[0] || 'public',
+        table_name: tableName.split('.')[1] || tableName,
+        freshness_column: rec.column_name || null,
+        check_interval_minutes: 60,
+        sensitivity: 3.0,
+      })
+      setApplied((prev) => ({ ...prev, [index]: true }))
+      notify.ok('Monitor added', rec.name)
+    } catch (e) {
+      const msg = e?.response?.data?.detail || 'Failed to add monitor'
+      notify.err(msg)
+    } finally {
+      setApplying((prev) => { const next = { ...prev }; delete next[index]; return next })
+    }
+  }
+
+  if (dismissed && !recs && !loading) return null
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base flex items-center gap-2"><Sparkles className="size-4 text-primary" />AI Monitor Recommendations</CardTitle>
-        <Button size="sm" variant="outline" onClick={run} disabled={loading} className="gap-1.5">
-          {loading ? <span className="animate-pulse">Generating…</span> : 'Generate for this table'}
-        </Button>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Sparkles className="size-4 text-primary" />
+          AI Monitor Recommendations
+        </CardTitle>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={run} disabled={loading}>
+            {loading ? <Loader2 className="size-3.5 animate-spin" /> : (recs ? 'Regenerate' : 'Generate')}
+          </Button>
+          <Button size="icon" variant="ghost" onClick={dismiss} aria-label="Dismiss recommendations">
+            <X className="size-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        {!recs && !error && <p className="text-sm text-muted-foreground">Click to let AI analyze your table schema and suggest monitors.</p>}
-        {recs?.length === 0 && <p className="text-sm text-muted-foreground">No recommendations generated.</p>}
-        {recs && recs.length > 0 && (
+        {loading && (
+          <div className="flex flex-col gap-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-lg border bg-muted/40" />
+            ))}
+          </div>
+        )}
+        {!loading && error && (
+          <p className="text-sm text-muted-foreground">{error}</p>
+        )}
+        {!loading && !recs && !error && (
+          <p className="text-sm text-muted-foreground">Click "Generate" to let AI analyze your table schema and suggest monitors.</p>
+        )}
+        {!loading && recs?.length === 0 && (
+          <p className="text-sm text-muted-foreground">No recommendations generated for this table.</p>
+        )}
+        {!loading && recs && recs.length > 0 && (
           <div className="flex flex-col gap-2">
             {recs.map((r, i) => (
-              <div key={i} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1">
+              <div key={i} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1.5">
                 <div className="flex items-center gap-2">
                   <span className={`text-xs font-bold ${SEVERITY_COLORS[r.severity] || ''}`}>{r.severity}</span>
                   <span className="text-sm font-medium">{r.name}</span>
-                  <span className="ml-auto rounded-full border px-2 py-0.5 text-xs font-mono">{r.monitor_type}</span>
+                  <span className="rounded-full border px-2 py-0.5 text-xs font-mono">{r.monitor_type}</span>
+                  <div className="ml-auto">
+                    {applied[i] ? (
+                      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Added
+                      </span>
+                    ) : (
+                      <Button size="sm" variant="outline" disabled={applying[i]} onClick={() => applyRec(r, i)}>
+                        {applying[i] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {r.rationale && <p className="text-xs text-muted-foreground">{r.rationale}</p>}
                 {r.column_name && <p className="text-xs text-muted-foreground">Column: <code className="text-primary">{r.column_name}</code></p>}
@@ -206,31 +293,48 @@ export default function TableDetail() {
   const [incidents, setIncidents] = useState([])
   const [running, setRunning] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [interval, setInterval_] = useState(15000)
 
-  useEffect(() => {
-    setLoading(true)
-    Promise.all([
+  const loadData = async () => {
+    const [tableResponse, sourcesResponse, profilesResponse, checksResponse, incidentsResponse] = await Promise.all([
       getTable(id),
       getSources(),
       getTableProfiles(id, { limit: 30 }),
       getTableCheckResults(id, { limit: 100 }),
       getIncidents({ table_id: id, limit: 100 }),
-    ]).then(([tableResponse, sourcesResponse, profilesResponse, checksResponse, incidentsResponse]) => {
-      setTable(tableResponse.data)
-      setSources(sourcesResponse.data)
-      setProfiles(profilesResponse.data)
-      setChecks(checksResponse.data)
-      setIncidents(incidentsResponse.data)
-    }).finally(() => setLoading(false))
-  }, [id])
+    ])
+    setTable(tableResponse.data)
+    setSources(sourcesResponse.data)
+    setProfiles(profilesResponse.data)
+    setChecks(checksResponse.data)
+    setIncidents(incidentsResponse.data)
+    setLoading(false)
+  }
+
+  const { isRefreshing, lastRefreshed, refresh } = useAutoRefresh(loadData, interval, { enabled: interval > 0 })
 
   const handleRun = async () => {
+    const clickedAt = new Date()
     setRunning(true)
     try {
       await runTable(id)
+      // Poll for completion every 2s
+      const poll = setInterval(async () => {
+        try {
+          const res = await getTableProfiles(id, { limit: 1 })
+          const latest = res.data?.[0]
+          if (latest && new Date(latest.collected_at) > clickedAt) {
+            clearInterval(poll)
+            setRunning(false)
+            await loadData()
+            notify.ok('Profile complete — data updated')
+          }
+        } catch (_) { /* ignore poll errors */ }
+      }, 2000)
+      // Safety timeout after 90s
+      setTimeout(() => { clearInterval(poll); setRunning(false) }, 90000)
     } catch (_) {
-    } finally {
-      setTimeout(() => setRunning(false), 2000)
+      setRunning(false)
     }
   }
 
@@ -286,10 +390,17 @@ export default function TableDetail() {
         description={`${sourceName} - Every ${table.check_interval_minutes}m${latestProfile ? ` - Last profiled ${formatDateTime(table.last_profiled_at || latestProfile.collected_at)}` : ''}`}
         actions={
           <>
+            <RefreshBar
+              isRefreshing={isRefreshing}
+              lastRefreshed={lastRefreshed}
+              onRefresh={refresh}
+              interval={interval}
+              onIntervalChange={setInterval_}
+            />
             <HealthBadge status={table.is_active ? 'healthy' : 'paused'} size="lg" />
             <Button type="button" onClick={handleRun} disabled={running}>
               <Play data-icon="inline-start" />
-              {running ? 'Queued' : 'Run now'}
+              {running ? 'Profiling…' : 'Run now'}
             </Button>
           </>
         }
@@ -398,7 +509,7 @@ export default function TableDetail() {
       </Card>
 
       {/* ── AI: Monitor Recommender ── */}
-      <AIMonitorRecommender tableId={id} sourceId={table.source_id} tableName={`${table.schema_name}.${table.table_name}`} />
+      <AIMonitorRecommender tableId={id} sourceId={table.source_id} tableName={`${table.schema_name}.${table.table_name}`} hasMonitors={checks.length > 0} />
 
       {/* ── NL Rule Builder ── */}
       <NLRuleBuilder tableId={id} tableName={`${table.schema_name}.${table.table_name}`} />

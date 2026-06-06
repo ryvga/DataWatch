@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle2, RefreshCw, Server, Table2 } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, Server, Table2 } from 'lucide-react'
 import { getIncidents, getOrgHealth, getSources, getTables } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import IncidentCard from '../components/IncidentCard'
 import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatDateTime, formatNumber } from '../components/app-ui'
+import RefreshBar from '../components/RefreshBar'
+import { useAutoRefresh } from '../hooks/useAutoRefresh'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -62,12 +64,11 @@ export default function Overview() {
   const [incidents, setIncidents] = useState([])
   const [orgHealth, setOrgHealth] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [interval, setInterval_] = useState(30000)
 
-  const load = async (isRefresh = false) => {
+  const load = async () => {
     setError('')
-    if (isRefresh) setRefreshing(true)
     try {
       const [s, t, i, h] = await Promise.all([
         getSources(),
@@ -83,15 +84,10 @@ export default function Overview() {
       setError(err.response?.data?.detail || err.message || 'Failed to load overview data')
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }
 
-  useEffect(() => {
-    load()
-    const timer = setInterval(() => load(true), 60000)
-    return () => clearInterval(timer)
-  }, [])
+  const { isRefreshing, lastRefreshed, refresh } = useAutoRefresh(load, interval, { enabled: interval > 0 })
 
   if (loading) return <LoadingState label="Loading overview" />
 
@@ -106,17 +102,20 @@ export default function Overview() {
         title="Overview"
         description={`${tables.length} monitored tables · ${incidents.length} open incident${incidents.length !== 1 ? 's' : ''}`}
         actions={
-          <Button type="button" variant="outline" onClick={() => load(true)} disabled={refreshing}>
-            <RefreshCw data-icon="inline-start" className={refreshing ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
+          <RefreshBar
+            isRefreshing={isRefreshing}
+            lastRefreshed={lastRefreshed}
+            onRefresh={refresh}
+            interval={interval}
+            onIntervalChange={setInterval_}
+          />
         }
       />
 
       <ErrorNotice message={error} onDismiss={() => setError('')} />
 
       {/* ── Health + Stats row ─── */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {orgHealth ? (
           <Card className="sm:col-span-2 lg:col-span-1">
             <CardContent className="pt-5">
@@ -130,7 +129,7 @@ export default function Overview() {
           { label: 'Sources connected', value: sources.filter(s => s.status === 'connected').length, icon: Server, color: 'text-emerald-500' },
         ].map(stat => (
           <Card key={stat.label}>
-            <CardContent className="pt-5 flex items-start justify-between">
+            <CardContent className="flex min-h-[88px] items-start justify-between pt-5">
               <div>
                 <p className="text-xs text-muted-foreground">{stat.label}</p>
                 <p className="mt-1 text-3xl font-black tabular-nums">{stat.value}</p>
@@ -141,10 +140,10 @@ export default function Overview() {
         ))}
         {!orgHealth && (
           <Card>
-            <CardContent className="pt-5 flex items-start justify-between">
+            <CardContent className="flex min-h-[88px] items-start justify-between pt-5">
               <div>
                 <p className="text-xs text-muted-foreground">Checks passed (24h)</p>
-                <p className="mt-1 text-3xl font-black tabular-nums">{orgHealth?.passed_checks ?? '—'}</p>
+                <p className="mt-1 text-3xl font-black tabular-nums">—</p>
               </div>
               <CheckCircle2 className="size-5 mt-1 text-emerald-500" />
             </CardContent>
