@@ -8,6 +8,7 @@ import {
   KeyRound,
   Loader2,
   MoreHorizontal,
+  Pencil,
   Plus,
   Send,
   Table2,
@@ -542,9 +543,105 @@ function ConfirmDelete({ label, onConfirm, children }) {
   )
 }
 
+function SourceStatusDot({ status }) {
+  if (status === 'connected') return <span className="inline-block size-2 rounded-full bg-emerald-500" title="Connected" />
+  if (status === 'error') return <span className="inline-block size-2 rounded-full bg-destructive" title="Connection error" />
+  return <span className="inline-block size-2 rounded-full bg-muted-foreground/40" title="Unknown" />
+}
+
+function EditSourceDialog({ source, open, onOpenChange, onUpdated }) {
+  const [name, setName] = useState(source?.name || '')
+  const [configText, setConfigText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  // Reset form when source changes or dialog opens
+  useEffect(() => {
+    if (open && source) {
+      setName(source.name)
+      setConfigText('')
+      setError('')
+    }
+  }, [open, source])
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setError('')
+    const payload = {}
+    if (name.trim() && name.trim() !== source?.name) payload.name = name.trim()
+
+    if (configText.trim()) {
+      const [config, parseError] = parseJson(configText, 'Connection config')
+      if (parseError) { setError(parseError); return }
+      payload.connection_config = config
+    }
+
+    if (Object.keys(payload).length === 0) {
+      onOpenChange(false)
+      return
+    }
+
+    setSaving(true)
+    try {
+      const response = await updateSource(source.id, payload)
+      onUpdated(response.data)
+      notify.ok('Source updated', `${response.data.name} saved successfully.`)
+      onOpenChange(false)
+    } catch (err) {
+      const message = getApiError(err, 'Failed to update source')
+      setError(message)
+      notify.err(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit source</DialogTitle>
+          <DialogDescription>Update the name or connection credentials for this data source. Leave config blank to keep existing credentials.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-source-name">Name</Label>
+            <Input
+              id="edit-source-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-source-config">New connection config (optional)</Label>
+            <Textarea
+              id="edit-source-config"
+              className="min-h-36 font-mono text-xs"
+              placeholder={SOURCE_CONFIG_TEMPLATES[source?.type] || '{\n  "host": "..."\n}'}
+              value={configText}
+              onChange={(e) => setConfigText(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Leave blank to keep the existing encrypted credentials. If provided, a connection test will run before saving.</p>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={saving}>
+              {saving && <Loader2 data-icon="inline-start" className="animate-spin" />}
+              {saving ? 'Testing & saving...' : 'Test & Save'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function SourcesTab() {
   const [sources, setSources] = useState([])
   const [open, setOpen] = useState(false)
+  const [editSource, setEditSource] = useState(null)
   const [testing, setTesting] = useState({})
 
   useEffect(() => {
@@ -557,6 +654,8 @@ function SourcesTab() {
     try {
       const response = await testSource(id)
       setTesting((prev) => ({ ...prev, [id]: response.data.connected ? 'ok' : 'fail' }))
+      // Update status in list after test
+      setSources((prev) => prev.map((s) => s.id === id ? { ...s, status: response.data.connected ? 'connected' : 'error' } : s))
       if (response.data.connected) notify.ok('Connection succeeded', `${source?.name || 'Source'} responded in ${response.data.latency_ms}ms.`)
       else notify.source.failed(source?.name || 'Source', response.data.error)
     } catch (_) {
@@ -575,6 +674,10 @@ function SourcesTab() {
     } catch (err) {
       notify.err(err.response?.data?.detail || 'Failed to delete source')
     }
+  }
+
+  const handleUpdated = (updated) => {
+    setSources((prev) => prev.map((s) => s.id === updated.id ? updated : s))
   }
 
   return (
@@ -606,7 +709,12 @@ function SourcesTab() {
               <TableBody>
                 {sources.map((source) => (
                   <TableRow key={source.id}>
-                    <TableCell className="font-medium">{source.name}</TableCell>
+                    <TableCell>
+                      <span className="flex items-center gap-2 font-medium">
+                        <SourceStatusDot status={source.status} />
+                        {source.name}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{source.type}</TableCell>
                     <TableCell><HealthBadge status={source.status} /></TableCell>
                     <TableCell>
@@ -618,6 +726,10 @@ function SourcesTab() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuGroup>
+                            <DropdownMenuItem onClick={() => setEditSource(source)}>
+                              <Pencil data-icon="inline-start" />
+                              Edit
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => test(source.id)}>
                               {testing[source.id] === 'ok' ? <CheckCircle2 data-icon="inline-start" /> : testing[source.id] === 'fail' ? <XCircle data-icon="inline-start" /> : <Send data-icon="inline-start" />}
                               {testing[source.id] === 'testing' ? 'Testing...' : 'Test connection'}
@@ -639,6 +751,14 @@ function SourcesTab() {
           </div>
         )}
         <SourceConnectionDialog open={open} onOpenChange={setOpen} onCreated={(source) => setSources((prev) => [...prev, source])} />
+        {editSource && (
+          <EditSourceDialog
+            source={editSource}
+            open={Boolean(editSource)}
+            onOpenChange={(isOpen) => { if (!isOpen) setEditSource(null) }}
+            onUpdated={handleUpdated}
+          />
+        )}
       </CardContent>
     </Card>
   )
