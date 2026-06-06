@@ -191,7 +191,8 @@ def generate_narration(context: str, org_api_key: str | None = None, org_model: 
     effective_key = org_api_key or settings.OPENROUTER_API_KEY
     effective_model = org_model or settings.LLM_MODEL
     if not effective_key:
-        return {"error": "narration_failed", "reason": "No LLM API key configured"}
+        logger.warning("LLM narration skipped: no API key configured")
+        return {}  # empty dict = no narration, no error shown to client
 
     user_msg = f"Here is the incident context:\n\n{context}\n\nGenerate the incident report JSON."
 
@@ -207,7 +208,7 @@ def generate_narration(context: str, org_api_key: str | None = None, org_model: 
         raw1 = raw or "(no response)"
     except Exception as e:
         logger.error("LLM API error on attempt 1: %s", e)
-        return {"error": "narration_failed", "reason": str(e)}
+        return {"error": "narration_failed", "reason": "AI analysis temporarily unavailable"}
 
     # Attempt 2 — append retry hint
     try:
@@ -219,7 +220,7 @@ def generate_narration(context: str, org_api_key: str | None = None, org_model: 
         logger.warning("LLM attempt 2 also failed: %s", e)
     except Exception as e:
         logger.error("LLM API error on attempt 2: %s", e)
-        return {"error": "narration_failed", "reason": str(e)}
+        return {"error": "narration_failed", "reason": "AI analysis temporarily unavailable"}
 
     # Attempt 3 — minimal prompt to maximise chance of clean JSON
     MINIMAL_PROMPT = (
@@ -236,10 +237,10 @@ def generate_narration(context: str, org_api_key: str | None = None, org_model: 
         return result.model_dump()
     except (json.JSONDecodeError, ValidationError) as e:
         logger.error("LLM all 3 attempts failed: %s", e)
-        return {"error": "validation_failed", "reason": str(e)}
+        return {"error": "narration_failed", "reason": "AI analysis temporarily unavailable"}
     except Exception as e:
         logger.error("LLM API error on attempt 3: %s", e)
-        return {"error": "narration_failed", "reason": str(e)}
+        return {"error": "narration_failed", "reason": "AI analysis temporarily unavailable"}
 
 
 # ── Redis cache ────────────────────────────────────────────────────────────────

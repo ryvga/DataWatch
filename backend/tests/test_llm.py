@@ -98,12 +98,14 @@ def test_generate_narration_both_attempts_fail():
         mock_settings.OPENROUTER_API_KEY = "test-key"
         result = generate_narration("test context")
 
-    assert result.get("error") == "validation_failed"
+    assert result.get("error") == "narration_failed"
+    assert result.get("reason") == "AI analysis temporarily unavailable"
 
 
 def test_generate_narration_no_api_key():
     from app.services.llm import generate_narration
-    with patch("app.config.settings") as mock_settings:
+    with patch("app.services.llm.settings") as mock_settings:
         mock_settings.OPENROUTER_API_KEY = ""
         result = generate_narration("test context")
-    assert result.get("error") == "narration_failed"
+    # No key configured → empty dict (silently skip, no error exposed to client)
+    assert result == {}

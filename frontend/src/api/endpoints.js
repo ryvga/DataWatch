@@ -40,6 +40,7 @@ export const createTable = (data) => api.post('/api/v1/tables', data)
 export const updateTable = (id, data) => api.patch(`/api/v1/tables/${id}`, data)
 export const deleteTable = (id) => api.delete(`/api/v1/tables/${id}`)
 export const runTable = (id) => api.post(`/api/v1/tables/${id}/run`)
+export const triggerProfile = (id) => api.post(`/api/v1/tables/${id}/profile`)
 export const getProfiles = (id, params) => api.get(`/api/v1/tables/${id}/profiles`, { params })
 export const getTableProfiles = getProfiles
 export const getProfile = (tableId, profileId) => api.get(`/api/v1/tables/${tableId}/profiles/${profileId}`)

@@ -365,6 +365,18 @@ async def trigger_run(
     return RunResponse(task_id=task.id, queued_at=datetime.now(timezone.utc))
 
 
+@router.post("/{table_id}/profile", status_code=202)
+async def trigger_profile(
+    table_id: str,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    table = await _get_table_or_404(table_id, org, db)
+    from app.tasks import profile_table
+    task = profile_table.delay(str(table.id))
+    return {"status": "queued", "task_id": str(task.id)}
+
+
 @router.post("/{table_id}/custom-check", response_model=CustomCheckResponse)
 async def run_custom_check(
     table_id: str,
