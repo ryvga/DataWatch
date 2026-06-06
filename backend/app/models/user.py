@@ -20,6 +20,7 @@ class User(Base):
     # role: owner (org creator), admin, member
     role: Mapped[str] = mapped_column(String(50), nullable=False, default="owner")
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

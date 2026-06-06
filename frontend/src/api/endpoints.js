@@ -11,6 +11,7 @@ export const getInvites = () => api.get('/auth/invites')
 export const createInvite = (data) => api.post('/auth/invites', data)
 export const revokeInvite = (id) => api.delete(`/auth/invites/${id}`)
 export const acceptInvite = (token, data) => api.post(`/auth/invites/${token}/accept`, data)
+export const requestPasswordReset = (data) => api.post('/auth/reset-password/request', data)
 export const confirmPasswordReset = (data) => api.post('/auth/reset-password/confirm', data)
 
 // Billing

@@ -139,7 +139,7 @@ export default function AdminStaff() {
         </Card>
       )}
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden p-0">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>

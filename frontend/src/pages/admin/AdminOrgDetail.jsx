@@ -94,9 +94,9 @@ export default function AdminOrgDetail() {
       toast.error(orgResult.reason?.response?.data?.detail || 'Failed to load organization')
     }
 
-    if (usersResult.status === 'fulfilled') setUsers(unwrapList(usersResult.value.data).items)
+    if (usersResult.status === 'fulfilled') setUsers(unwrapList(usersResult.value.data))
     if (usageResult.status === 'fulfilled') setUsage(usageResult.value.data || {})
-    if (sourcesResult.status === 'fulfilled') setSources(unwrapList(sourcesResult.value.data).items)
+    if (sourcesResult.status === 'fulfilled') setSources(unwrapList(sourcesResult.value.data))
     setLoading(false)
   }
 
@@ -310,7 +310,7 @@ export default function AdminOrgDetail() {
         <UsageTile label="Check results" value={usageCounts.checks30d} detail="Last 30 days" />
       </div>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden p-0">
         <CardHeader>
           <CardTitle className="text-base">Members ({users.length})</CardTitle>
           <CardDescription>Email, role, login recency, and account actions.</CardDescription>
@@ -365,7 +365,7 @@ export default function AdminOrgDetail() {
         </div>
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden p-0">
         <CardHeader>
           <CardTitle className="text-base">Data sources</CardTitle>
           <CardDescription>Connection inventory and source health state.</CardDescription>

@@ -15,7 +15,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Test/demo database — monitored by DataWatch ───────────────────────────
+  # ── Test/demo database 1 — acme-corp e-commerce (shopDemo) ───────────────
   demo-db:
     image: postgres:16-alpine
     environment:
@@ -29,6 +29,24 @@ services:
       - "5434:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U readonly_user -d shopDemo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Test/demo database 2 — startup-io SaaS analytics ─────────────────────
+  analytics-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: analyticsdb
+      POSTGRES_USER: analytics_ro
+      POSTGRES_PASSWORD: readonly_pass
+    volumes:
+      - analytics_db_data:/var/lib/postgresql/data
+      - ./scripts/analytics_db_init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics_ro -d analyticsdb"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -98,3 +116,4 @@ services:
 volumes:
   postgres_data:
   demo_db_data:
+  analytics_db_data:

@@ -1,18 +1,83 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AlertCircle, Activity, Loader2 } from 'lucide-react'
-import { login, register } from '../api/endpoints'
+import { login, register, requestPasswordReset } from '../api/endpoints'
 import { BrandMark, ThemeToggle } from '../components/app-ui'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { setWorkspaceSession, isSessionValid, storage } from '@/lib/storage'
 import { getWorkspaceFromHost } from '@/lib/subdomain'
+import { notify } from '@/lib/notify'
+
+function ForgotPasswordDialog({ open, onOpenChange, defaultWorkspace }) {
+  const [form, setForm] = useState({ email: '', org_slug: defaultWorkspace || '' })
+  const [loading, setLoading] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  useEffect(() => {
+    if (open) { setForm((f) => ({ ...f, org_slug: defaultWorkspace || '' })); setSent(false) }
+  }, [open, defaultWorkspace])
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await requestPasswordReset({ email: form.email, org_slug: form.org_slug.trim().toLowerCase() })
+      setSent(true)
+    } catch {
+      // Always show success to avoid email enumeration
+      setSent(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reset password</DialogTitle>
+          <DialogDescription>Enter your workspace and email. If an account exists, a reset link will be sent.</DialogDescription>
+        </DialogHeader>
+        {sent ? (
+          <div className="rounded-md bg-muted/40 p-4 text-sm text-muted-foreground">
+            If an account with that email exists, a password reset link has been sent. Check your inbox (and MailHog at <code>localhost:8025</code> in dev).
+          </div>
+        ) : (
+          <form onSubmit={submit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="reset-workspace">Workspace</Label>
+              <Input id="reset-workspace" placeholder="acme-corp" value={form.org_slug} onChange={(e) => setForm((f) => ({ ...f, org_slug: e.target.value }))} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="reset-email">Email</Label>
+              <Input id="reset-email" type="email" placeholder="you@company.com" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} required />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit" disabled={loading}>
+                {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
+                Send reset link
+              </Button>
+            </DialogFooter>
+          </form>
+        )}
+        {sent && (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export default function Login() {
   const nav = useNavigate()
@@ -21,6 +86,7 @@ export default function Login() {
   const [remember, setRemember] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [forgotOpen, setForgotOpen] = useState(false)
 
   useEffect(() => {
     if (isSessionValid()) { nav('/'); return }
@@ -178,7 +244,18 @@ export default function Login() {
                     <Input id="email" type="email" value={form.email} onChange={set('email')} placeholder="you@company.com" required />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="password">Password</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">Password</Label>
+                      {mode === 'login' && (
+                        <button
+                          type="button"
+                          className="text-xs text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+                          onClick={() => setForgotOpen(true)}
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
                     <Input id="password" type="password" value={form.password} onChange={set('password')} placeholder="Enter password" required />
                   </div>
 
@@ -222,6 +299,7 @@ export default function Login() {
           </div>
         </main>
       </div>
+      <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} defaultWorkspace={form.org_slug} />
     </div>
   )
 }

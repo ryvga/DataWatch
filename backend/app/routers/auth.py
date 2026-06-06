@@ -450,6 +450,20 @@ async def confirm_password_reset(
 
 # ── Profile settings ──────────────────────────────────────────────────────────
 
+@router.get("/me", response_model=ProfileResponse)
+async def get_me(
+    current: tuple[User, Organization] = Depends(_current_user_org),
+):
+    user, org = current
+    return ProfileResponse(
+        id=str(user.id),
+        org_id=str(org.id),
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+    )
+
+
 @router.patch("/profile", response_model=ProfileResponse)
 async def update_profile(
     body: ProfileUpdateRequest,
