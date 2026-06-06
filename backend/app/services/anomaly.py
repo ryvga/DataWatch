@@ -655,6 +655,180 @@ def run_schema_change_check(current_profile, history) -> list[AnomalyResult]:
     return results
 
 
+# ── 12. CUSUM (Cumulative Sum Control Chart) ──────────────────────────────────
+
+CUSUM_MIN_POINTS = 10
+
+
+def run_cusum_check(
+    current_profile,
+    history: list,
+    k: float = 0.5,
+    h: float = 5.0,
+) -> list[AnomalyResult]:
+    """
+    CUSUM (Cumulative Sum Control Chart) — detects gradual shifts in row count.
+    k = allowance parameter (half the shift we want to detect, in stddev units)
+    h = decision threshold (alert when cumulative sum exceeds h stddevs)
+    """
+    row_counts = [p.row_count for p in history if p.row_count is not None]
+    if len(row_counts) < CUSUM_MIN_POINTS or current_profile.row_count is None:
+        return []
+
+    try:
+        arr = np.array(row_counts, dtype=float)
+        mean = float(np.mean(arr))
+        std = float(np.std(arr))
+        if std == 0:
+            return []
+
+        # Compute normalized deviations for history (to warm up CUSUM)
+        c_plus = 0.0
+        c_minus = 0.0
+        for x in row_counts:
+            d_i = (x - mean) / std
+            c_plus = max(0.0, c_plus + d_i - k)
+            c_minus = max(0.0, c_minus - d_i - k)
+
+        # Apply current point
+        d_curr = (float(current_profile.row_count) - mean) / std
+        c_plus = max(0.0, c_plus + d_curr - k)
+        c_minus = max(0.0, c_minus - d_curr - k)
+
+        max_cusum = max(c_plus, c_minus)
+        failed = c_plus > h or c_minus > h
+        direction = "upward" if c_plus > c_minus else "downward"
+
+        return [AnomalyResult(
+            check_type="cusum",
+            check_name="cusum_row_count",
+            column_name=None,
+            status="failed" if failed else "passed",
+            observed_value=round(max_cusum, 4),
+            expected_range={"low": 0.0, "high": h},
+            deviation_score=round(max_cusum, 4),
+            details={"c_plus": round(c_plus, 4), "c_minus": round(c_minus, 4), "direction": direction},
+        )]
+    except Exception as e:
+        logger.warning("CUSUM check failed: %s", e)
+        return []
+
+
+# ── 13. Mann-Kendall Trend Test ───────────────────────────────────────────────
+
+MANN_KENDALL_MIN_POINTS = 8
+MANN_KENDALL_TAU_THRESHOLD = 0.6
+MANN_KENDALL_PVALUE_THRESHOLD = 0.05
+
+
+def run_mann_kendall_check(
+    current_profile,
+    history: list,
+) -> list[AnomalyResult]:
+    """
+    Mann-Kendall non-parametric trend test for monotonic trends in row count.
+    Uses scipy.stats.kendalltau for the test statistic.
+    """
+    row_counts = [p.row_count for p in history if p.row_count is not None]
+    if len(row_counts) < MANN_KENDALL_MIN_POINTS or current_profile.row_count is None:
+        return []
+
+    try:
+        from scipy import stats
+
+        series = row_counts + [current_profile.row_count]
+        n = len(series)
+        tau, p_value = stats.kendalltau(np.arange(n), series)
+
+        if abs(tau) > MANN_KENDALL_TAU_THRESHOLD and p_value < MANN_KENDALL_PVALUE_THRESHOLD:
+            direction = "upward" if tau > 0 else "downward"
+            failed = True
+        else:
+            direction = "none"
+            failed = False
+
+        return [AnomalyResult(
+            check_type="statistical",
+            check_name="mann_kendall_trend",
+            column_name=None,
+            status="failed" if failed else "passed",
+            observed_value=round(float(tau), 4),
+            expected_range={"low": -MANN_KENDALL_TAU_THRESHOLD, "high": MANN_KENDALL_TAU_THRESHOLD},
+            deviation_score=round(float(tau), 4),
+            details={"p_value": round(float(p_value), 6), "direction": direction, "n": n},
+        )]
+    except Exception as e:
+        logger.warning("Mann-Kendall check failed: %s", e)
+        return []
+
+
+# ── 14. Percentile Drift Check ────────────────────────────────────────────────
+
+PERCENTILE_DRIFT_THRESHOLD = 0.30  # 30% relative change triggers a flag
+PERCENTILE_DRIFT_MIN_HISTORY = 5
+
+
+def run_percentile_drift_check(
+    current_profile,
+    history: list,
+) -> list[AnomalyResult]:
+    """
+    Detect when numeric column percentiles (p50, p95) drift significantly
+    from their historical rolling averages.
+    """
+    results: list[AnomalyResult] = []
+    if len(history) < PERCENTILE_DRIFT_MIN_HISTORY:
+        return results
+
+    curr_metrics = getattr(current_profile, "column_metrics", None) or {}
+    if not isinstance(curr_metrics, dict):
+        return results
+
+    for col_name, col_data in curr_metrics.items():
+        if not isinstance(col_data, dict):
+            continue
+
+        for percentile_key in ("p50", "p95"):
+            curr_val = _safe_float(col_data.get(percentile_key))
+            if curr_val is None:
+                continue
+
+            # Collect historical values (last 14 profiles)
+            hist_vals: list[float] = []
+            for p in history[-14:]:
+                p_metrics = getattr(p, "column_metrics", None) or {}
+                if not isinstance(p_metrics, dict):
+                    continue
+                hist_col = p_metrics.get(col_name, {})
+                if not isinstance(hist_col, dict):
+                    continue
+                v = _safe_float(hist_col.get(percentile_key))
+                if v is not None:
+                    hist_vals.append(v)
+
+            if len(hist_vals) < PERCENTILE_DRIFT_MIN_HISTORY:
+                continue
+
+            hist_avg = float(np.mean(hist_vals))
+            relative_change = abs(curr_val - hist_avg) / max(abs(hist_avg), 1.0)
+            failed = relative_change > PERCENTILE_DRIFT_THRESHOLD
+
+            results.append(AnomalyResult(
+                check_type="statistical",
+                check_name=f"percentile_drift_{percentile_key}",
+                column_name=col_name,
+                status="failed" if failed else "passed",
+                observed_value=round(curr_val, 4),
+                expected_range={
+                    "low": round(hist_avg * (1 - PERCENTILE_DRIFT_THRESHOLD), 4),
+                    "high": round(hist_avg * (1 + PERCENTILE_DRIFT_THRESHOLD), 4),
+                },
+                deviation_score=round(relative_change, 4),
+            ))
+
+    return results
+
+
 # ── 8. Uniqueness / Duplicate Rate Check ──────────────────────────────────────
 
 UNIQUENESS_DROP_THRESHOLD = 0.05  # flag if uniqueness drops >5% relative

@@ -210,6 +210,44 @@ async def get_source(
     )
 
 
+class SourceUpdateRequest(BaseModel):
+    name: str | None = None
+    connection_config: dict | None = None  # if provided, re-test and re-encrypt
+
+
+@router.patch("/{source_id}", response_model=DataSourceResponse)
+async def update_source(
+    source_id: str,
+    body: SourceUpdateRequest,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    src = await _get_source_or_404(source_id, org, db)
+
+    if body.name is not None:
+        src.name = body.name
+
+    if body.connection_config is not None:
+        test_result = await _test_connection_config(src.type, body.connection_config)
+        if not test_result.connected:
+            raise HTTPException(
+                status_code=400,
+                detail=test_result.error or "Connection test failed for the new config",
+            )
+        encrypted = encrypt_config(body.connection_config, str(org.id))
+        src.connection_config = {"encrypted": encrypted}
+        src.status = "connected"
+        src.last_connected_at = datetime.now(timezone.utc)
+
+    return DataSourceResponse(
+        id=str(src.id),
+        name=src.name,
+        type=src.type,
+        status=src.status,
+        last_connected_at=src.last_connected_at,
+    )
+
+
 @router.delete("/{source_id}", status_code=204)
 async def pause_source(
     source_id: str,

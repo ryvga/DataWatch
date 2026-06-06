@@ -44,7 +44,7 @@ async def get_incident_report(
 # ── AI Monitor Recommender ────────────────────────────────────────────────────
 
 class RecommendMonitorsRequest(BaseModel):
-    source_id: str
+    source_id: str = ""  # ignored — comes from URL path
     table_name: str
     schema_name: str = "public"
 
@@ -81,7 +81,7 @@ async def recommend_monitors(
             pass
 
     try:
-        config = decrypt_config(source.connection_config, str(org.id))
+        config = decrypt_config(source.connection_config["encrypted"], str(org.id))
         connector = ConnectorFactory.create(source.type, config)
         profiler = ProfilerService()
         columns = await profiler._get_columns_raw(connector, body.schema_name, body.table_name)

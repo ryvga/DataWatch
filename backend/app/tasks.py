@@ -158,11 +158,14 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
     from app.models.table_profile import TableProfile
     from app.services.anomaly import (
         run_cardinality_checks,
+        run_cusum_check,
         run_distribution_drift_check,
         run_enum_drift_check,
         run_freshness_check,
         run_isolation_forest,
+        run_mann_kendall_check,
         run_null_rate_trend_check,
+        run_percentile_drift_check,
         run_row_growth_check,
         run_rule_checks,
         run_schema_change_check,
@@ -218,6 +221,9 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         all_checks += run_freshness_check(profile, table)
         all_checks += run_schema_change_check(profile, list(history))
         all_checks += run_uniqueness_check(profile, list(history))
+        all_checks += run_cusum_check(profile, list(history))
+        all_checks += run_mann_kendall_check(profile, list(history))
+        all_checks += run_percentile_drift_check(profile, list(history))
 
         if r_client:
             r_client.close()

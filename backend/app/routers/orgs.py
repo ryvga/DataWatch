@@ -11,6 +11,7 @@ from app.models.incident import Incident
 from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
 from app.models.data_source import DataSource
+from app.models.user import User
 from app.routers.auth import get_current_org_from_jwt
 from app.services.health_score import compute_health_score, HealthBreakdown
 
@@ -23,6 +24,16 @@ class OrgResponse(BaseModel):
     slug: str
     plan: str
     subscription_status: str
+
+
+class OrgMemberResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str | None
+    role: str
+    created_at: datetime
+    last_login_at: datetime | None
+    is_active: bool
 
 
 class OrgHealthResponse(BaseModel):
@@ -47,6 +58,29 @@ async def get_my_org(org: Organization = Depends(get_current_org_from_jwt)):
         plan=org.plan,
         subscription_status=org.subscription_status,
     )
+
+
+@router.get("/me/members", response_model=list[OrgMemberResponse])
+async def get_org_members(
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all users in the current org."""
+    users = (await db.scalars(
+        select(User).where(User.org_id == org.id).order_by(User.created_at)
+    )).all()
+    return [
+        OrgMemberResponse(
+            id=str(u.id),
+            email=u.email,
+            full_name=u.full_name,
+            role=u.role,
+            created_at=u.created_at,
+            last_login_at=u.last_login_at,
+            is_active=u.is_active,
+        )
+        for u in users
+    ]
 
 
 @router.get("/me/health", response_model=OrgHealthResponse)
