@@ -8,6 +8,7 @@ from app.models.incident import Incident
 from app.models.alert_config import AlertConfig
 from app.models.invite import Invite
 from app.models.team import Team, TeamMember
+from app.models.custom_monitor import CustomMonitor
 
 __all__ = [
     "Organization",
@@ -23,4 +24,5 @@ __all__ = [
     "Invite",
     "Team",
     "TeamMember",
+    "CustomMonitor",
 ]

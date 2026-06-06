@@ -9,7 +9,7 @@ from sqlalchemy import select, text
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.routers import alerts, auth, billing, incidents, orgs, sources, tables
-from app.routers import admin, reports
+from app.routers import admin, reports, custom_monitors
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -79,6 +79,7 @@ app.include_router(tables.router)
 app.include_router(incidents.router)
 app.include_router(alerts.router)
 app.include_router(reports.router)
+app.include_router(custom_monitors.router)
 
 
 @app.get("/health", tags=["infra"])

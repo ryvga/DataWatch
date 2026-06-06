@@ -34,3 +34,4 @@ class MonitoredTable(Base):
     check_results: Mapped[list["CheckResult"]] = relationship("CheckResult", back_populates="table")
     incidents: Mapped[list["Incident"]] = relationship("Incident", back_populates="table")
     alert_configs: Mapped[list["AlertConfig"]] = relationship("AlertConfig", back_populates="table")
+    custom_monitors: Mapped[list["CustomMonitor"]] = relationship("CustomMonitor", back_populates="table")

@@ -4,6 +4,7 @@ Tasks are synchronous entry points; async logic is wrapped with asyncio.run().
 """
 import asyncio
 import logging
+import uuid
 from datetime import UTC, datetime
 
 from app.worker import celery_app
@@ -124,6 +125,10 @@ async def _profile_table_async(table_id: str) -> dict:
         # Enqueue anomaly checks (Day 4)
         from app.tasks import run_anomaly_checks
         run_anomaly_checks.delay(table_id, str(profile.id))
+
+        # Enqueue custom monitors run
+        from app.tasks import run_custom_monitors
+        run_custom_monitors.delay(table_id, str(profile.id))
 
         log_payload = {
             "table_id": table_id,
@@ -332,6 +337,119 @@ async def _generate_llm_narration_async(incident_id: str) -> dict:
         "status": "ok" if "error" not in narration else "error",
         "incident_id": incident_id,
     }
+
+
+@celery_app.task(name="tasks.run_custom_monitors")
+def run_custom_monitors(table_id: str, profile_id: str | None = None):
+    """Run all active custom SQL monitors for a table after profiling."""
+    try:
+        return _run(_run_custom_monitors_async(table_id, profile_id))
+    except Exception as exc:
+        logger.error("run_custom_monitors failed for table=%s: %s", table_id, exc)
+
+
+async def _run_custom_monitors_async(table_id: str, profile_id: str | None = None) -> dict:
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.check_result import CheckResult
+    from app.models.custom_monitor import CustomMonitor
+    from app.models.data_source import DataSource
+    from app.models.monitored_table import MonitoredTable
+    from app.connectors.factory import ConnectorFactory
+    from app.routers.tables import _violation_count_from_result
+    from app.services.anomaly import AnomalyResult
+    from app.services.crypto import decrypt_config
+    from app.services.incident import IncidentService
+
+    async with AsyncSessionLocal() as db:
+        table = await db.get(MonitoredTable, table_id)
+        if not table:
+            return {"status": "error", "error": "table not found"}
+
+        monitors = (await db.scalars(
+            select(CustomMonitor).where(
+                CustomMonitor.table_id == table_id,
+                CustomMonitor.is_active == True,
+                CustomMonitor.run_on_profile == True,
+            )
+        )).all()
+
+        if not monitors:
+            return {"status": "ok", "run": 0}
+
+        source = await db.get(DataSource, table.source_id)
+        if not source:
+            return {"status": "error", "error": "source not found"}
+
+        try:
+            config = decrypt_config(source.connection_config["encrypted"], str(source.org_id))
+            connector = ConnectorFactory.create(source.type, config)
+        except Exception as exc:
+            logger.error("Custom monitors: connector failed for table %s: %s", table_id, exc)
+            return {"status": "error", "error": str(exc)}
+
+        ran, failed = 0, 0
+        now = datetime.now(UTC)
+        check_results: list[AnomalyResult] = []
+        profile_uuid = uuid.UUID(profile_id) if profile_id else None
+        try:
+            for m in monitors:
+                try:
+                    result = await connector.execute_profile_query(m.sql_query.strip())
+                    violation_count = _violation_count_from_result(result)
+                    passed = violation_count == 0
+                    m.last_run_at = now
+                    m.last_result = {
+                        "violation_count": violation_count,
+                        "passed": passed,
+                        "executed_at": now.isoformat(),
+                    }
+                    check = AnomalyResult(
+                        check_type="custom_sql",
+                        check_name=f"custom_monitor:{m.name}",
+                        column_name=None,
+                        status="passed" if passed else "failed",
+                        observed_value=float(violation_count),
+                        expected_range={"low": 0, "high": 0},
+                        deviation_score=float(violation_count),
+                        details={"monitor_id": str(m.id), "severity": m.severity},
+                    )
+                    check_results.append(check)
+                    db.add(CheckResult(
+                        table_id=table.id,
+                        profile_id=profile_uuid,
+                        check_type=check.check_type,
+                        check_name=check.check_name,
+                        column_name=check.column_name,
+                        status=check.status,
+                        observed_value=check.observed_value,
+                        expected_range=check.expected_range,
+                        deviation_score=check.deviation_score,
+                    ))
+                    ran += 1
+                    if not passed:
+                        failed += 1
+                except Exception as exc:
+                    logger.warning("Custom monitor %s failed: %s", m.id, exc)
+                    m.last_run_at = now
+                    m.last_result = {"error": str(exc), "executed_at": now.isoformat()}
+        finally:
+            await connector.close()
+
+        source = await db.get(DataSource, table.source_id)
+        svc = IncidentService()
+        failed_checks = [c for c in check_results if c.status == "failed"]
+        if failed_checks and source:
+            incident = await svc.create_or_update(db, source.org_id, table, failed_checks, profile_id)
+            if incident and incident.status == "open":
+                from app.tasks import generate_llm_narration
+                generate_llm_narration.delay(str(incident.id))
+        elif check_results:
+            await svc.auto_resolve(db, table, check_results)
+
+        await db.commit()
+        return {"status": "ok", "run": ran, "failed": failed}
 
 
 @celery_app.task(name="tasks.cleanup_old_profiles")

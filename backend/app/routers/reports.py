@@ -124,8 +124,24 @@ async def natural_language_rule(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
+    from sqlalchemy import select
+    from app.connectors.factory import ConnectorFactory
+    from app.models.data_source import DataSource
+    from app.models.monitored_table import MonitoredTable
+    from app.services.crypto import decrypt_config
     from app.services.monitor_recommender import nl_rule_to_sql
+    from app.services.profiler import ProfilerService
     from app.services.crypto import CryptoService
+
+    table = await db.scalar(select(MonitoredTable).where(MonitoredTable.id == table_id))
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    source = await db.scalar(
+        select(DataSource).where(DataSource.id == table.source_id, DataSource.org_id == org.id)
+    )
+    if not source:
+        raise HTTPException(status_code=404, detail="Table not found")
 
     org_llm_key = None
     org_model = None
@@ -136,10 +152,30 @@ async def natural_language_rule(
         except Exception:
             pass
 
+    columns = body.columns
+    if not columns:
+        try:
+            config = decrypt_config(source.connection_config["encrypted"], str(org.id))
+            connector = ConnectorFactory.create(source.type, config)
+            profiler = ProfilerService()
+            raw_columns = await profiler._get_columns_raw(connector, table.schema_name, table.table_name)
+            columns = [
+                {
+                    "name": c.name,
+                    "data_type": c.data_type,
+                    "category": c.category,
+                    "nullable": c.is_nullable,
+                }
+                for c in raw_columns
+            ]
+        finally:
+            if "connector" in locals():
+                await connector.close()
+
     result = await nl_rule_to_sql(
         natural_language_rule=body.rule,
-        table_name=body.table_name,
-        columns=body.columns,
+        table_name=f"{table.schema_name}.{table.table_name}",
+        columns=columns,
         org_llm_key=org_llm_key,
         org_model=org_model,
     )

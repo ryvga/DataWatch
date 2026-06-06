@@ -20,6 +20,16 @@ def classify_severity(failed_checks: list[AnomalyResult]) -> str:
     P3: 1-2 statistical failures
     """
     names = {c.check_name for c in failed_checks}
+    custom_severities = [
+        c.details.get("severity")
+        for c in failed_checks
+        if c.check_type == "custom_sql" and isinstance(c.details, dict)
+    ]
+
+    if "P1" in custom_severities:
+        return "P1"
+    if "P2" in custom_severities:
+        return "P2"
 
     if "row_count_zero" in names or "freshness_sla_breach" in names:
         return "P1"
@@ -31,6 +41,13 @@ def classify_severity(failed_checks: list[AnomalyResult]) -> str:
 def generate_title(table_name: str, failed_checks: list[AnomalyResult]) -> str:
     names = {c.check_name for c in failed_checks}
     severity = classify_severity(failed_checks)
+    custom_failures = [c for c in failed_checks if c.check_type == "custom_sql"]
+
+    if custom_failures:
+        monitor_name = custom_failures[0].check_name.replace("custom_monitor:", "", 1)
+        if len(custom_failures) == 1:
+            return f"[{severity}] {table_name} — custom monitor failed: {monitor_name}"
+        return f"[{severity}] {table_name} — {len(custom_failures)} custom monitors failed"
 
     if "row_count_zero" in names:
         return f"[{severity}] {table_name} — row count dropped to 0"
@@ -66,6 +83,7 @@ class IncidentService:
                 "column_name": c.column_name,
                 "observed_value": c.observed_value,
                 "deviation_score": c.deviation_score,
+                "details": c.details,
             }
             for c in failed_checks
         ]

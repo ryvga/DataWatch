@@ -47,7 +47,7 @@ export const getProfile = (tableId, profileId) => api.get(`/api/v1/tables/${tabl
 export const getChecks = (id, params) => api.get(`/api/v1/tables/${id}/checks`, { params })
 export const getTableCheckResults = getChecks
 export const getCheckHistory = (id, limit = 50) => api.get(`/api/v1/tables/${id}/check-history?limit=${limit}`)
-export const runCustomCheck = (id, data) => api.post(`/api/v1/tables/${id}/custom-check`, data)
+export const runCustomCheck = (id, data) => api.post(`/api/v1/tables/${id}/custom-check`, data, { timeout: 120000 })
 
 // Incidents
 export const getIncidents = (params) => api.get('/api/v1/incidents', { params })
@@ -76,8 +76,15 @@ export const getWeeklyReport = (days = 7) => api.get(`/api/v1/reports/weekly?win
 export const getIncidentReport = (id) => api.get(`/api/v1/reports/incident/${id}`)
 
 // AI features
-export const recommendMonitors = (sourceId, data) => api.post(`/api/v1/sources/${sourceId}/recommend-monitors`, data)
-export const nlRule = (tableId, data) => api.post(`/api/v1/tables/${tableId}/nl-rule`, data)
+export const recommendMonitors = (sourceId, data) => api.post(`/api/v1/sources/${sourceId}/recommend-monitors`, data, { timeout: 180000 })
+export const nlRule = (tableId, data) => api.post(`/api/v1/tables/${tableId}/nl-rule`, data, { timeout: 180000 })
+
+// Custom Monitors
+export const getCustomMonitors = (tableId) => api.get(`/api/v1/tables/${tableId}/custom-monitors`)
+export const createCustomMonitor = (tableId, data) => api.post(`/api/v1/tables/${tableId}/custom-monitors`, data)
+export const updateCustomMonitor = (tableId, monitorId, data) => api.patch(`/api/v1/tables/${tableId}/custom-monitors/${monitorId}`, data)
+export const deleteCustomMonitor = (tableId, monitorId) => api.delete(`/api/v1/tables/${tableId}/custom-monitors/${monitorId}`)
+export const runCustomMonitorNow = (tableId, monitorId) => api.post(`/api/v1/tables/${tableId}/custom-monitors/${monitorId}/run`, null, { timeout: 120000 })
 
 // ── Admin (staff only) ────────────────────────────────────────────────────────
 
