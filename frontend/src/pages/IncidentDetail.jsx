@@ -10,13 +10,15 @@ import {
   Copy,
   Database,
   ExternalLink,
+  Loader2,
+  RefreshCw,
   Search,
   ShieldCheck,
   Terminal,
 } from 'lucide-react'
 import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
-import { acknowledgeIncident, investigateIncident, getIncident, getTable, resolveIncident, muteIncident, markFalsePositive } from '../api/endpoints'
+import { acknowledgeIncident, investigateIncident, getIncident, getTable, resolveIncident, muteIncident, markFalsePositive, retryNarration } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import SeverityBadge from '../components/SeverityBadge'
 import { LoadingState, formatDateTime, formatNumber } from '../components/app-ui'
@@ -301,21 +303,26 @@ function TimelineStepper({ incident }) {
   )
 }
 
-function AnalysisCard({ narration, llmIsEmpty, llmHasError }) {
+function AnalysisCard({ narration, llmIsEmpty, llmHasError, onRetry, retrying, canRetry }) {
   if (!narration) {
-    const isPending = !llmIsEmpty && !llmHasError
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-start justify-between gap-3">
           <CardTitle className="text-base">AI incident analysis</CardTitle>
+          {canRetry && (
+            <Button type="button" size="sm" variant="outline" onClick={onRetry} disabled={retrying}>
+              {retrying ? <Loader2 className="size-3.5 animate-spin mr-1" /> : <RefreshCw className="size-3.5 mr-1" />}
+              {retrying ? 'Retrying…' : 'Retry analysis'}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
-          {isPending ? (
-            <p className="text-sm text-muted-foreground">AI analysis is pending. The incident can still be investigated from fired checks and debug queries.</p>
-          ) : (
-            <div className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
-              AI analysis is being generated. Check back in a moment.
+          {llmHasError ? (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              AI analysis failed. {canRetry ? 'Click "Retry analysis" to try again.' : 'Check that an LLM key is configured in admin settings.'}
             </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">AI analysis is pending. The incident can still be investigated from fired checks and debug queries.</p>
           )}
         </CardContent>
       </Card>
@@ -559,6 +566,7 @@ export default function IncidentDetail() {
   const [tableLoading, setTableLoading] = useState(false)
   const [tableError, setTableError] = useState('')
   const [updating, setUpdating] = useState(false)
+  const [retrying, setRetrying] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -690,11 +698,33 @@ export default function IncidentDetail() {
     } finally { setUpdating(false) }
   }
 
+  const doRetryNarration = async () => {
+    setRetrying(true)
+    try {
+      const response = await retryNarration(id)
+      setIncident(response.data)
+      notify.ok('AI analysis re-queued', 'Check back in a moment')
+    } catch (err) {
+      notify.err(err.response?.data?.detail || 'Retry failed')
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   if (loading) return <LoadingState label="Loading incident" />
   if (!incident) return <div className="dw-page text-destructive">Incident not found</div>
 
   const detectedAt = incident.created_at ? formatDateTime(incident.created_at) : 'Unknown'
   const timeAgo = incident.created_at ? formatDistanceToNow(new Date(incident.created_at), { addSuffix: true }) : 'unknown time'
+
+  const durationLabel = (() => {
+    const mins = incident.duration_minutes
+    if (mins == null) return null
+    if (mins < 60) return `${mins}m`
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return m > 0 ? `${h}h ${m}m` : `${h}h`
+  })()
   const canAcknowledge = incident.status === 'open'
   const canResolve = incident.status !== 'resolved'
 
@@ -757,7 +787,14 @@ export default function IncidentDetail() {
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="flex min-w-0 flex-col gap-5">
-            <AnalysisCard narration={narration} llmIsEmpty={llmIsEmpty} llmHasError={llmHasError} />
+            <AnalysisCard
+              narration={narration}
+              llmIsEmpty={llmIsEmpty}
+              llmHasError={llmHasError}
+              onRetry={doRetryNarration}
+              retrying={retrying}
+              canRetry={incident.status !== 'resolved'}
+            />
             <IncidentCopilotCard narration={narration} incident={incident} />
             <RecommendedActionsCard actions={narration?.recommended_actions} />
             <DebugQueriesCard queries={debugQueries} onCopy={copyText} />
@@ -791,6 +828,12 @@ export default function IncidentDetail() {
                   <span className="text-muted-foreground">Checks fired</span>
                   <span className="font-medium">{firedChecks.length}</span>
                 </div>
+                {durationLabel && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted-foreground">{incident.status === 'resolved' ? 'TTR' : 'Open for'}</span>
+                    <span className="font-medium tabular-nums">{durationLabel}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-muted-foreground">Acknowledged</span>
                   <span className="text-right text-xs text-muted-foreground">{incident.acknowledged_at ? formatDateTime(incident.acknowledged_at) : '-'}</span>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Activity, AlertTriangle, CheckCircle2, Loader2, Play, Plus, ShieldCheck, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { getSources, getTables, getCustomMonitors, createCustomMonitor, runCustomMonitorNow, deleteCustomMonitor, runCustomCheck } from '../api/endpoints'
+import { getSources, getTables, getAllCustomMonitors, createCustomMonitor, runCustomMonitorNow, deleteCustomMonitor, runCustomCheck } from '../api/endpoints'
 import { EmptyState, LoadingState, PageHeader, formatDateTime } from '../components/app-ui'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -255,18 +255,16 @@ function CustomMonitorsTable({ tables, refreshKey }) {
   const tableMap = useMemo(() => Object.fromEntries(tables.map((t) => [t.id, t])), [tables])
 
   const load = async () => {
-    if (tables.length === 0) { setLoading(false); return }
     setLoading(true)
     try {
-      const results = await Promise.all(tables.map((t) => getCustomMonitors(t.id).catch(() => ({ data: [] }))))
-      const flat = results.flatMap((r, i) => (r.data || []).map((m) => ({ ...m, _tableId: tables[i].id })))
-      setMonitors(flat)
+      const r = await getAllCustomMonitors()
+      setMonitors((r.data || []).map((m) => ({ ...m, _tableId: m.table_id })))
     } catch (e) {
       toast.error('Failed to load custom monitors')
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [tables.length, refreshKey])
+  useEffect(() => { load() }, [refreshKey])
 
   const handleRunNow = async (m) => {
     setRunningId(m.id)

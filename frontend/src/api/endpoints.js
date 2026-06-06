@@ -81,6 +81,7 @@ export const recommendMonitors = (sourceId, data) => api.post(`/api/v1/sources/$
 export const nlRule = (tableId, data) => api.post(`/api/v1/tables/${tableId}/nl-rule`, data, { timeout: 180000 })
 
 // Custom Monitors
+export const getAllCustomMonitors = () => api.get('/api/v1/custom-monitors')
 export const getCustomMonitors = (tableId) => api.get(`/api/v1/tables/${tableId}/custom-monitors`)
 export const createCustomMonitor = (tableId, data) => api.post(`/api/v1/tables/${tableId}/custom-monitors`, data)
 export const updateCustomMonitor = (tableId, monitorId, data) => api.patch(`/api/v1/tables/${tableId}/custom-monitors/${monitorId}`, data)

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, CheckCircle2, Code2, Edit3, Loader2, Play, PlusCircle, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, CheckCircle2, Code2, Edit3, Loader2, Play, PlusCircle, Search, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
 import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck } from '../api/endpoints'
 import { toast } from 'sonner'
 import HealthBadge from '../components/HealthBadge'
@@ -945,6 +945,7 @@ export default function TableDetail() {
   const [loading, setLoading] = useState(true)
   const [interval, setInterval_] = useState(15000)
   const [customMonitorsRefreshKey, setCustomMonitorsRefreshKey] = useState(0)
+  const [columnSearch, setColumnSearch] = useState('')
 
   const loadData = async () => {
     const [tableResponse, sourcesResponse, profilesResponse, checksResponse, incidentsResponse] = await Promise.all([
@@ -1084,8 +1085,19 @@ export default function TableDetail() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-base">Column metrics</CardTitle>
+          {columnRows.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2 size-3.5 text-muted-foreground" />
+              <input
+                className="h-8 rounded-md border bg-background pl-7 pr-3 text-xs outline-none focus:ring-1 focus:ring-primary w-44"
+                placeholder="Filter columns…"
+                value={columnSearch}
+                onChange={(e) => setColumnSearch(e.target.value)}
+              />
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {columnRows.length === 0 ? (
@@ -1103,21 +1115,28 @@ export default function TableDetail() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {columnRows.map(({ name, metric, nullRate }) => (
-                    <TableRow key={name}>
-                      <TableCell className="font-mono text-xs">{name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="capitalize">{inferTypeHint(metric)}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={NULL_RATE_STYLES[nullRateTone(nullRate)]}>
-                          {formatPercent(nullRate)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">{formatNumber(metric.distinct_count)}</TableCell>
-                      <TableCell className="max-w-[28rem] truncate text-muted-foreground">{formatTopValues(metric)}</TableCell>
+                  {columnRows
+                    .filter(({ name }) => !columnSearch || name.toLowerCase().includes(columnSearch.toLowerCase()))
+                    .map(({ name, metric, nullRate }) => (
+                      <TableRow key={name}>
+                        <TableCell className="font-mono text-xs">{name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">{inferTypeHint(metric)}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={NULL_RATE_STYLES[nullRateTone(nullRate)]}>
+                            {formatPercent(nullRate)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="tabular-nums text-muted-foreground">{formatNumber(metric.distinct_count)}</TableCell>
+                        <TableCell className="max-w-[28rem] truncate text-muted-foreground">{formatTopValues(metric)}</TableCell>
+                      </TableRow>
+                    ))}
+                  {columnRows.filter(({ name }) => !columnSearch || name.toLowerCase().includes(columnSearch.toLowerCase())).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="py-6 text-center text-sm text-muted-foreground">No columns match "{columnSearch}"</TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </div>

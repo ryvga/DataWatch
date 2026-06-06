@@ -22,6 +22,7 @@ from app.services.incident import IncidentService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/tables", tags=["custom_monitors"])
+org_router = APIRouter(prefix="/api/v1", tags=["custom_monitors"])
 
 # ── SQL safety ────────────────────────────────────────────────────────────────
 
@@ -316,3 +317,19 @@ async def run_custom_monitor(
     except Exception as e:
         logger.warning("Custom monitor run failed: %s", e)
         raise HTTPException(status_code=422, detail=f"Custom monitor run failed: {e}") from e
+
+
+# ── Org-wide endpoint ─────────────────────────────────────────────────────────
+
+@org_router.get("/custom-monitors", response_model=list[CustomMonitorResponse])
+async def list_all_custom_monitors(
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """All custom monitors across all tables for this org — single call."""
+    monitors = (await db.scalars(
+        select(CustomMonitor)
+        .where(CustomMonitor.org_id == org.id)
+        .order_by(desc(CustomMonitor.created_at))
+    )).all()
+    return [_to_response(m) for m in monitors]

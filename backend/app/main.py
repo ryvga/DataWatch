@@ -80,6 +80,7 @@ app.include_router(incidents.router)
 app.include_router(alerts.router)
 app.include_router(reports.router)
 app.include_router(custom_monitors.router)
+app.include_router(custom_monitors.org_router)
 
 
 @app.get("/health", tags=["infra"])

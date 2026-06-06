@@ -28,6 +28,7 @@ class IncidentResponse(BaseModel):
     created_at: datetime
     acknowledged_at: datetime | None
     resolved_at: datetime | None
+    duration_minutes: int | None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -46,6 +47,18 @@ async def _get_incident_or_404(
     return incident
 
 
+def _duration_minutes(i: Incident) -> int | None:
+    from datetime import timezone, timedelta
+    if not i.created_at:
+        return None
+    end = i.resolved_at or datetime.now(timezone.utc)
+    start = i.created_at if i.created_at.tzinfo else i.created_at.replace(tzinfo=timezone.utc)
+    if not end.tzinfo:
+        end = end.replace(tzinfo=timezone.utc)
+    delta = end - start
+    return max(0, int(delta.total_seconds() / 60))
+
+
 def _incident_response(i: Incident) -> IncidentResponse:
     return IncidentResponse(
         id=str(i.id),
@@ -58,6 +71,7 @@ def _incident_response(i: Incident) -> IncidentResponse:
         created_at=i.created_at,
         acknowledged_at=i.acknowledged_at,
         resolved_at=i.resolved_at,
+        duration_minutes=_duration_minutes(i),
     )
 
 

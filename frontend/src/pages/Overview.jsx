@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, AlertTriangle, CheckCircle2, Server, Table2 } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2, Clock, Server, Table2 } from 'lucide-react'
 import { getIncidents, getOrgHealth, getSources, getTables } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import IncidentCard from '../components/IncidentCard'
@@ -96,6 +96,15 @@ export default function Overview() {
     return (severity[a.severity] ?? 3) - (severity[b.severity] ?? 3)
   })
 
+  const now = Date.now()
+  const staleTables = tables.filter((t) => {
+    if (!t.is_active) return false
+    if (!t.last_profiled_at && !t.latest_profile?.collected_at) return false
+    const lastAt = new Date(t.last_profiled_at || t.latest_profile?.collected_at).getTime()
+    const intervalMs = (t.check_interval_minutes || 60) * 60 * 1000 * 2
+    return now - lastAt > intervalMs
+  })
+
   return (
     <div className="dw-page">
       <PageHeader
@@ -115,7 +124,7 @@ export default function Overview() {
       <ErrorNotice message={error} onDismiss={() => setError('')} />
 
       {/* ── Health + Stats row ─── */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {orgHealth ? (
           <Card className="sm:col-span-2 lg:col-span-1">
             <CardContent className="pt-5">
@@ -127,6 +136,7 @@ export default function Overview() {
           { label: 'Open incidents', value: incidents.filter(i => i.status === 'open').length, icon: AlertTriangle, color: incidents.some(i => i.severity === 'P1') ? 'text-red-500' : 'text-orange-500' },
           { label: 'Monitored tables', value: tables.length, icon: Table2, color: 'text-primary' },
           { label: 'Sources connected', value: sources.filter(s => s.status === 'connected').length, icon: Server, color: 'text-emerald-500' },
+          { label: 'Stale tables', value: staleTables.length, icon: Clock, color: staleTables.length > 0 ? 'text-amber-500' : 'text-muted-foreground' },
         ].map(stat => (
           <Card key={stat.label}>
             <CardContent className="flex min-h-[88px] items-start justify-between pt-5">
