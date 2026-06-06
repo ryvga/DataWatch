@@ -176,6 +176,8 @@ async def create_source(
 
     src.status = "connected"
     src.last_connected_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(src)
 
     return DataSourceResponse(
         id=str(src.id),
@@ -267,6 +269,7 @@ async def pause_source(
     for table in tables:
         table.is_active = False
         remove_table_job(str(table.id))
+    await db.commit()
 
 
 @router.post("/{source_id}/test", response_model=TestResult)

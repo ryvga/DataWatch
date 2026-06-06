@@ -1,0 +1,12 @@
+services:
+  test-mongo:
+    image: mongo:7
+    ports:
+      - "27018:27017"
+    volumes:
+      - ./scripts/test_dbs/mongo_seed.js:/docker-entrypoint-initdb.d/seed.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
