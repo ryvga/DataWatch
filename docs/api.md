@@ -13,7 +13,7 @@ Two methods, both work on all protected routes:
 ```
 x-api-key: dw_<32-byte-hex>
 ```
-Keys are created at registration and prefixed `dw_`. Shown **once**. Only bcrypt hash stored.
+Keys are staff/API-key managed and prefixed `dw_`. Only bcrypt hashes are stored.
 
 ### JWT Bearer (SPA session)
 ```
@@ -26,7 +26,7 @@ Obtain via `POST /auth/login`. Expires in 15 minutes.
 ## Auth Endpoints
 
 ### `POST /auth/register`
-Create org + admin user. Returns API key (shown once).
+Create org + owner user.
 
 ```json
 // Request
@@ -40,7 +40,8 @@ Create org + admin user. Returns API key (shown once).
 // Response 201
 {
   "org_id": "uuid",
-  "api_key": "dw_abc123..."   // save this — never shown again
+  "org_slug": "acme",
+  "message": "Workspace created. Sign in to continue."
 }
 ```
 
@@ -53,10 +54,10 @@ Exchange email + password for JWT.
 
 ```json
 // Request
-{ "email": "admin@acme.com", "password": "secret123" }
+{ "org_slug": "acme", "email": "admin@acme.com", "password": "secret123" }
 
 // Response 200
-{ "access_token": "<jwt>", "token_type": "bearer" }
+{ "access_token": "<jwt>", "token_type": "bearer", "org_slug": "acme", "org_name": "Acme Corp", "user_role": "owner" }
 ```
 
 Errors: `401` invalid credentials.
@@ -232,7 +233,7 @@ Query params: `schema_name`, `table_name`.
 ## Monitored Tables — `/api/v1/tables`
 
 ### `POST /api/v1/tables`
-Add a table to monitoring. Enqueues first profile run immediately, creates an APScheduler job, and stores a table schema snapshot when DDL is available.
+Add a table to monitoring. Enqueues first profile run immediately, starts Table Autopilot for safe baseline + AI recommendations, creates an APScheduler job, and stores a table schema snapshot when DDL is available.
 
 ```json
 // Request
@@ -257,9 +258,23 @@ Add a table to monitoring. Enqueues first profile run immediately, creates an AP
   "sensitivity": 3.0,
   "is_active": true,
   "last_profiled_at": null,
-  "latest_profile": null
+  "latest_profile": null,
+  "autopilot": {
+    "status": "queued",
+    "recommended_next_action": "Profiling and AI monitor recommendations are queued.",
+    "steps": {
+      "profile": { "status": "queued" },
+      "safe_baseline": { "status": "pending" },
+      "recommendations": { "status": "queued", "staged_count": 0 },
+      "alerts": { "status": "pending" }
+    },
+    "safe_monitors": [],
+    "recommendations": []
+  }
 }
 ```
+
+Existing tables created before Table Autopilot return `autopilot.status = "not_started"` so the UI can still show the workflow and next action.
 
 Errors: `402` plan table limit exceeded.
 

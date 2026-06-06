@@ -68,7 +68,7 @@ uvicorn app.main:app --reload --port 8000
 
 ### Ending a work session
 
-1. Run tests: `cd backend && pytest tests/test_anomaly.py tests/test_llm.py -v`
+1. Run tests: `cd backend && TEST_DATABASE_URL=postgresql+asyncpg://datawatch:datawatch@localhost:5433/datawatch_test ./venv/bin/pytest -q`
 2. Commit with correct format (see below)
 3. Move Linear ticket to **Done**
 4. Update Notion Build Log entry: Done / Decisions / Problems / Numbers
@@ -169,11 +169,30 @@ Run these before every commit.
 ### E2E tests (requires postgres test DB)
 
 ```bash
-# Create test DB first:
-psql -U postgres -c "CREATE DATABASE datawatch_test;"
+# Create test DB once when using the Docker dev Postgres:
+docker compose exec -T postgres createdb -U datawatch datawatch_test
 
-export TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost/datawatch_test
-cd backend && pytest tests/test_e2e.py -v
+export TEST_DATABASE_URL=postgresql+asyncpg://datawatch:datawatch@localhost:5433/datawatch_test
+cd backend && ./venv/bin/pytest tests/test_e2e.py -v
+```
+
+### Connector matrix suite
+
+Use this when validating SQL, NoSQL, and warehouse-style sources through the public API:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.test-dbs.yml up -d test-mongo
+python scripts/run_connector_matrix.py
+```
+
+The MongoDB container seeds itself from `scripts/test_dbs/mongo_seed.js` on first start. The matrix covers demo PostgreSQL, analytics warehouse PostgreSQL, MongoDB preview/create/discover/schema flows, and custom monitor create/run/delete on the demo analytics table.
+
+### Frontend browser tests
+
+```bash
+cd frontend
+npm run build
+npm run test:e2e
 ```
 
 ### LLM prompt testing
@@ -196,7 +215,7 @@ python scripts/test_llm_prompt.py --incident-id <uuid>
 - External HTTP calls (Slack, PagerDuty) must be mocked — `patch("app.services.alert.send_slack_alert")`
 - Use `tests/conftest.py` fixtures — don't create orgs/tables inline in test functions
 - Tests use `datawatch_test` DB, never `datawatch` (dev) DB
-- Each test gets a rolled-back transaction — no cleanup needed
+- DB-backed tests recreate metadata per test because API routes commit through the real dependency
 
 ---
 

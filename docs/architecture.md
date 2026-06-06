@@ -23,9 +23,10 @@ DataWatch is a multi-tenant data quality monitoring platform. It is structured a
 ┌─────────▼─────────────┐   ┌──────────▼──────────────┐
 │  Celery Worker         │   │  PostgreSQL 16           │
 │                        │   │                          │
-│  profile_table         │   │  9 tables                │
-│  run_anomaly_checks    │   │  JSONB for metrics,      │
-│  generate_llm_narration│   │  narration, config       │
+│  profile_table         │   │  14+ tables              │
+│  bootstrap_autopilot   │   │  JSONB for metrics,      │
+│  run_anomaly_checks    │   │  narration, config,      │
+│  generate_llm_narration│   │  autopilot state         │
 │  send_alerts           │   │  Composite indexes on    │
 │  cleanup_old_profiles  │   │  (table_id, collected_at)│
 └─────────┬─────────────┘   └─────────────────────────-┘
@@ -57,14 +58,16 @@ DataWatch is a multi-tenant data quality monitoring platform. It is structured a
       - `execute_profile_query(query)` → dict of metrics
       - `parse_results()` → `ProfileResult`
    f. Persist `TableProfile` to DB
-   g. Update `monitored_table.last_profiled_at`
-   h. Enqueue `run_anomaly_checks.delay(table_id, profile_id)`
+   g. Update `monitored_table.last_profiled_at` and `monitored_table.autopilot.steps.profile`
+   h. Enqueue `run_anomaly_checks.delay(table_id, profile_id)` and `run_custom_monitors.delay(table_id, profile_id)`
+
+`POST /api/v1/tables` also enqueues `bootstrap_table_autopilot.delay(table_id)`. This parses the schema snapshot, runs AI monitor recommendation, auto-enables safe built-in baseline checks in table autopilot state, infers a freshness column when safe, and stages risky/custom-SQL recommendations for review.
 
 4. `run_anomaly_checks` task:
    a. Load current profile + 30-day history
    b. Run all 4 detectors (z-score, rules, IsoForest, STL)
    c. Persist `CheckResult` rows
-   d. If failures: `IncidentService.create_or_update()` → create/append incident
+   d. If failures: `IncidentService.auto_resolve()` closes recovered core-rule incidents first, then `create_or_update()` creates/appends remaining failures
    e. If all pass: `IncidentService.auto_resolve()` → resolve if previously open
    f. If new incident: enqueue `generate_llm_narration.delay(incident_id)`
 
@@ -114,7 +117,7 @@ status (pending|connected|error|paused) | last_connected_at
 ```sql
 id UUID PK | source_id FK | schema_name | table_name
 freshness_column | check_interval_minutes INT | sensitivity FLOAT (z-score threshold)
-is_active BOOL | dbt_model_yaml TEXT | created_at | last_profiled_at
+is_active BOOL | dbt_model_yaml TEXT | autopilot JSONB | created_at | last_profiled_at
 ```
 
 ### table_profiles
@@ -139,11 +142,13 @@ INDEX (table_id, checked_at) | INDEX (status, checked_at)
 ### incidents
 ```sql
 id UUID PK | org_id FK | table_id FK
-severity (P1|P2|P3) | status (open|acknowledged|resolved)
+severity (P1|P2|P3) | status (open|acknowledged|investigating|resolved|muted|ignored)
 title VARCHAR(500) | fired_checks JSONB | llm_narration JSONB
 created_at | acknowledged_at | resolved_at
 INDEX (org_id, created_at) | INDEX (status, created_at)
 ```
+
+Muted and false-positive incidents store suppression windows in `llm_narration.muted_until` and `llm_narration.false_positive_until`. Identical checks are suppressed during those windows.
 
 ### alert_configs
 ```sql

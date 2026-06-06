@@ -76,8 +76,8 @@ DataWatch should become: **A cheaper, simpler, AI-first database observability t
 
 **Output:** Plain-English summary, business impact, likely causes, debug queries, client-safe explanation, technical explanation
 
-### AI Feature 2: Monitor Generator
-User clicks "Generate recommended monitors" → AI reads schema → proposes freshness/null/uniqueness/enum/range/business rule monitors → user approves
+### AI Feature 2: Monitor Generator / Table Autopilot
+When a table is added, DataWatch profiles immediately, activates safe built-in baseline checks, infers freshness where possible, generates AI monitor recommendations, and stages risky/custom SQL monitors for review. Users can still manually regenerate recommendations from table detail.
 
 ### AI Feature 3: Natural Language Rule Builder
 ```
@@ -88,8 +88,8 @@ AI: SELECT COUNT(*) FROM orders WHERE status = 'paid' AND payment_reference IS N
 ### AI Feature 4: Report Writer
 3 versions: Technical | Executive | Client-safe (no internal table names)
 
-### AI Feature 5: Debug Query Generator
-Per incident: "Run this query to inspect affected rows."
+### AI Feature 5: Incident Copilot / Debug Query Generator
+Per incident: AI generates likely causes, runnable debug queries, client-safe summaries, suggested follow-up monitors, and ownership hints.
 
 ---
 
@@ -186,7 +186,7 @@ weighted_score =
 2. Data Sources (CRUD, connection test, discovery)
 3. Tables / Collections (list with health status)
 4. Table Detail (row count trend, freshness, column list, monitors, incidents, AI monitor recommendations)
-5. Monitors (dedicated monitor management page - **currently missing**)
+5. Monitors (dedicated monitor management page with built-in status, custom SQL monitors, and autopilot overview)
 6. Incidents (list with filters)
 7. Incident Detail (full AI report + debug queries + history)
 8. Reports (health score, weekly report, incident reports)
@@ -194,7 +194,6 @@ weighted_score =
 10. Workspace / Client Settings
 
 **Currently missing from DataWatch UI:**
-- Monitors page (create/manage/view individual monitors)
 - Table description / owner fields
 - MongoDB collection-specific detail view
 - Client portal view
