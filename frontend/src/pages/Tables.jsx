@@ -254,7 +254,7 @@ export default function Tables() {
 
       <ErrorNotice message={error} />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryItem icon={Database} label="Total tables" value={formatCompactNumber(summary.total)} detail="Monitored objects" />
         <SummaryItem icon={CheckCircle2} label="Healthy" value={formatCompactNumber(summary.healthy)} detail="No active signal" />
         <SummaryItem icon={AlertTriangle} label="Incidents" value={formatCompactNumber(summary.incidents)} detail="Unresolved incidents" />
@@ -267,7 +267,7 @@ export default function Tables() {
       </div>
 
       <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
+        <CardContent className="flex flex-col gap-4 pt-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <div className="relative sm:w-80">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

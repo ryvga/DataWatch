@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Database, Loader2, RefreshCw, Search, Table2 } from 'lucide-react'
-import { createTable, discoverSource, getSchemas, getSourceTableSchema } from '@/api/endpoints'
+import { CheckCircle2, Database, Loader2, RefreshCw, Search, Sparkles, Table2 } from 'lucide-react'
+import { createTable, discoverSource, getSchemas, getSourceTableSchema, recommendMonitors } from '@/api/endpoints'
 import { notify } from '@/lib/notify'
 import { extractColumnsFromDDL, freshnessCandidates } from '@/lib/connectorConfig'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -52,9 +52,20 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
   const [loadingDdl, setLoadingDdl] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [step, setStep] = useState('setup') // 'setup' | 'recommendations'
+  const [recs, setRecs] = useState(null)
+  const [recsLoading, setRecsLoading] = useState(false)
+  const [applying, setApplying] = useState({})
+  const [applied, setApplied] = useState({})
+  const [createdTable, setCreatedTable] = useState(null)
 
   useEffect(() => {
     if (!open) return
+    setStep('setup')
+    setRecs(null)
+    setApplying({})
+    setApplied({})
+    setCreatedTable(null)
     const firstConnected = sources.find((source) => source.status === 'connected') || sources[0]
     if (firstConnected) {
       setSourceId(String(firstConnected.id))
@@ -139,8 +150,23 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
         dbt_model_yaml: ddl || null,
       })
       onCreated(response.data)
+      setCreatedTable({ ...table, id: response.data.id })
       notify.table.added(`${table.schema_name}.${table.table_name}`)
-      onOpenChange(false)
+      // Transition to recommendations step
+      setStep('recommendations')
+      setRecsLoading(true)
+      try {
+        const recResponse = await recommendMonitors(sourceId, {
+          source_id: sourceId,
+          table_name: table.table_name,
+          schema_name: table.schema_name,
+        })
+        setRecs(recResponse.data.recommendations || [])
+      } catch {
+        setRecs([])
+      } finally {
+        setRecsLoading(false)
+      }
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to add table'
       setError(message)
@@ -148,6 +174,87 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
     } finally {
       setSaving(false)
     }
+  }
+
+  const SEVERITY_COLORS = { P1: 'text-red-600 dark:text-red-400', P2: 'text-orange-600 dark:text-orange-400', P3: 'text-yellow-600 dark:text-yellow-400' }
+
+  async function applyRec(rec, index) {
+    setApplying((prev) => ({ ...prev, [index]: true }))
+    try {
+      await createTable({
+        source_id: sourceId,
+        schema_name: createdTable?.schema_name || '',
+        table_name: createdTable?.table_name || '',
+        freshness_column: rec.column_name || null,
+        check_interval_minutes: Number(interval),
+        sensitivity: Number(sensitivity),
+      })
+      setApplied((prev) => ({ ...prev, [index]: true }))
+      notify.ok('Monitor added', rec.name)
+    } catch (e) {
+      notify.err(e?.response?.data?.detail || 'Failed to add monitor')
+    } finally {
+      setApplying((prev) => { const next = { ...prev }; delete next[index]; return next })
+    }
+  }
+
+  if (step === 'recommendations') {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-2xl">
+          <div className="flex max-h-[92vh] flex-col">
+            <DialogHeader className="border-b px-5 py-4">
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="size-4 text-primary" />
+                Recommended monitors
+              </DialogTitle>
+              <DialogDescription>
+                Table <span className="font-mono text-foreground">{createdTable?.schema_name}.{createdTable?.table_name}</span> added. Apply suggested monitors with one click.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {recsLoading ? (
+                <div className="flex flex-col gap-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-16 animate-pulse rounded-lg border bg-muted/40" />
+                  ))}
+                </div>
+              ) : recs?.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No monitor recommendations generated for this table.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {recs?.map((r, i) => (
+                    <div key={i} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold ${SEVERITY_COLORS[r.severity] || ''}`}>{r.severity}</span>
+                        <span className="text-sm font-medium">{r.name}</span>
+                        <span className="rounded-full border px-2 py-0.5 text-xs font-mono">{r.monitor_type}</span>
+                        <div className="ml-auto">
+                          {applied[i] ? (
+                            <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="size-3.5" /> Added
+                            </span>
+                          ) : (
+                            <Button size="sm" variant="outline" disabled={applying[i]} onClick={() => applyRec(r, i)}>
+                              {applying[i] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      {r.rationale && <p className="text-xs text-muted-foreground">{r.rationale}</p>}
+                      {r.column_name && <p className="text-xs text-muted-foreground">Column: <code className="text-primary">{r.column_name}</code></p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DialogFooter className="border-t px-5 py-3">
+              <Button type="button" onClick={() => onOpenChange(false)}>Done</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (

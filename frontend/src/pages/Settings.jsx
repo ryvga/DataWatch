@@ -1885,6 +1885,69 @@ function planPrice(plan, billingCycle) {
   return `$${plan.monthlyPrice}/mo`
 }
 
+const PAYPAL_CLIENT_ID = import.meta.env.VITE_PAYPAL_CLIENT_ID || 'sb'
+
+// PayPal hosted card buttons — no PayPal account required
+function PayPalCardButtons({ plan, billingCycle, onSuccess }) {
+  const pendingPlanRef = useRef(plan)
+  const pendingPeriodRef = useRef(billingCycle)
+  pendingPlanRef.current = plan
+  pendingPeriodRef.current = billingCycle
+
+  return (
+    <PayPalScriptProvider
+      options={{
+        'client-id': PAYPAL_CLIENT_ID,
+        vault: true,
+        intent: 'subscription',
+        components: 'buttons',
+      }}
+    >
+      <PayPalButtons
+        fundingSource="card"
+        style={{ layout: 'vertical', label: 'subscribe', height: 40 }}
+        createSubscription={async (_data, actions) => {
+          try {
+            const response = await createBillingSubscription({
+              plan: pendingPlanRef.current.id,
+              billing_period: pendingPeriodRef.current,
+              return_url: `${window.location.origin}/settings?tab=billing&billing_return=paypal&plan=${pendingPlanRef.current.id}&billing_period=${pendingPeriodRef.current}`,
+              cancel_url: `${window.location.origin}/settings?tab=billing`,
+            })
+            if (response.data?.plan_id) {
+              return actions.subscription.create({ plan_id: response.data.plan_id })
+            }
+            // Fallback: redirect if backend doesn't return plan_id
+            const approvalUrl = response.data?.approval_url
+            if (approvalUrl) {
+              storage.setItem('dw_billing_pending_plan', pendingPlanRef.current.id)
+              storage.setItem('dw_billing_pending_period', pendingPeriodRef.current)
+              window.location.assign(approvalUrl)
+            }
+          } catch (err) {
+            notify.err('Could not start card checkout. Try PayPal account instead.')
+          }
+        }}
+        onApprove={(data) => {
+          const subscriptionId = data.subscriptionID
+          if (!subscriptionId) return
+          captureBillingSubscription({
+            subscription_id: subscriptionId,
+            plan: pendingPlanRef.current.id,
+            billing_period: pendingPeriodRef.current,
+          })
+            .then((res) => onSuccess(res.data))
+            .catch((err) => notify.err(getApiError(err, 'Failed to activate card subscription')))
+        }}
+        onError={(err) => {
+          console.error('PayPal card error', err)
+          notify.err('Card payment failed. Check card details or try PayPal account.')
+        }}
+      />
+    </PayPalScriptProvider>
+  )
+}
+
 function BillingTab() {
   const orgName = storage.getItem('dw_org_name') || 'Your workspace'
   const [billingCycle, setBillingCycle] = useState('monthly')
@@ -1893,6 +1956,8 @@ function BillingTab() {
   const [upgrading, setUpgrading] = useState('')
   const [canceling, setCanceling] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState(null)
+  const [paymentMethod, setPaymentMethod] = useState(null)
 
   const loadStatus = async () => {
     setLoading(true)
@@ -1911,6 +1976,7 @@ function BillingTab() {
     loadStatus()
   }, [])
 
+  // Handle PayPal redirect return (account flow)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const hasPayPalReturn = params.get('billing_return') === 'paypal' || params.has('subscription_id') || params.has('ba_token') || params.has('token')
@@ -1945,8 +2011,11 @@ function BillingTab() {
 
   const currentPlan = (status?.plan || storage.getItem('dw_plan') || 'free').toLowerCase()
   const subscriptionStatus = status?.subscription_status || status?.status || (currentPlan === 'free' ? 'free' : 'unknown')
+  const isPaymentIssue = ['SUSPENDED', 'FAILED', 'suspended', 'failed'].includes(subscriptionStatus)
+  const isActive = subscriptionStatus === 'ACTIVE' || subscriptionStatus === 'active'
+  const nextBillingDate = status?.next_billing_time || status?.next_billing_date || status?.current_period_end
 
-  const upgrade = async (plan) => {
+  const upgradeWithPayPal = async (plan) => {
     setUpgrading(plan.id)
     try {
       const response = await createBillingSubscription({
@@ -1966,6 +2035,24 @@ function BillingTab() {
     }
   }
 
+  const handleUpgradeClick = (plan) => {
+    if (selectedPlan?.id === plan.id) {
+      setSelectedPlan(null)
+      setPaymentMethod(null)
+    } else {
+      setSelectedPlan(plan)
+      setPaymentMethod(null)
+    }
+  }
+
+  const handleCardSuccess = (data) => {
+    setStatus(data)
+    if (data?.plan) storage.setItem('dw_plan', data.plan)
+    setSelectedPlan(null)
+    setPaymentMethod(null)
+    notify.ok('Subscription activated!')
+  }
+
   const cancel = async () => {
     setCanceling(true)
     try {
@@ -1981,37 +2068,74 @@ function BillingTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Sandbox notice */}
+      <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+        <Info className="mt-0.5 size-4 shrink-0" />
+        <div>
+          <span className="font-medium">Sandbox mode</span> — Use PayPal sandbox credentials or test card{' '}
+          <code className="rounded bg-blue-100 px-1 font-mono text-xs dark:bg-blue-900">4032034785726736</code>{' '}
+          / expiry <code className="rounded bg-blue-100 px-1 font-mono text-xs dark:bg-blue-900">01/27</code>{' '}
+          / CVV <code className="rounded bg-blue-100 px-1 font-mono text-xs dark:bg-blue-900">123</code>
+        </div>
+      </div>
+
+      {/* Payment issue banner */}
+      {isPaymentIssue && (
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <div>
+            <span className="font-medium">Payment issue detected.</span> Your subscription is {subscriptionStatus.toLowerCase()}.{' '}
+            Please update your payment method by upgrading below.
+          </div>
+        </div>
+      )}
+
+      {/* Current plan card */}
       <Card>
         <CardContent className="flex flex-col gap-4 pt-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="flex items-center gap-2 text-base font-medium"><CreditCard className="size-4 text-muted-foreground" />Current plan</h2>
+              <h2 className="flex items-center gap-2 text-base font-medium">
+                <CreditCard className="size-4 text-muted-foreground" />Current plan
+              </h2>
               <p className="mt-1 text-sm text-muted-foreground">{orgName}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="capitalize">{loading ? 'Loading' : currentPlan}</Badge>
-              <Badge variant={subscriptionStatus === 'active' ? 'default' : 'secondary'} className="capitalize">{capturing ? 'capturing' : subscriptionStatus}</Badge>
+              <Badge variant="outline" className="capitalize">{loading ? 'Loading…' : currentPlan}</Badge>
+              <Badge
+                variant={isActive ? 'default' : isPaymentIssue ? 'destructive' : 'secondary'}
+                className="capitalize"
+              >
+                {capturing ? 'activating…' : subscriptionStatus}
+              </Badge>
             </div>
           </div>
-          {(status?.current_period_end || status?.next_billing_date) && (
+
+          {/* Next billing date */}
+          {isActive && nextBillingDate && (
             <p className="text-sm text-muted-foreground">
-              Next billing date {new Date(status.current_period_end || status.next_billing_date).toLocaleDateString()}.
+              Next billing:{' '}
+              <span className="font-medium text-foreground">
+                {new Date(nextBillingDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+              </span>
             </p>
           )}
+
           {currentPlan !== 'free' && (
             <Button type="button" variant="outline" className="w-fit" onClick={cancel} disabled={canceling}>
-              {canceling ? 'Canceling...' : 'Cancel subscription'}
+              {canceling ? 'Canceling…' : 'Cancel subscription'}
             </Button>
           )}
         </CardContent>
       </Card>
 
+      {/* Plans grid */}
       <Card>
         <CardContent className="flex flex-col gap-4 pt-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-sm font-medium">Available plans</h3>
-              <p className="mt-1 text-sm text-muted-foreground">PayPal checkout opens after you choose a plan.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Pay with PayPal account or directly by card — no PayPal account needed.</p>
             </div>
             <div className="inline-flex w-fit rounded-md border bg-muted/30 p-1">
               {['monthly', 'yearly'].map((cycle) => (
@@ -2029,31 +2153,97 @@ function BillingTab() {
               ))}
             </div>
           </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             {PLANS.map((plan) => {
               const isCurrent = plan.id === currentPlan
+              const isSelected = selectedPlan?.id === plan.id
               return (
-                <div key={plan.id} className={cn('rounded-lg border p-4', isCurrent && 'border-primary/40 bg-primary/5')}>
+                <div
+                  key={plan.id}
+                  className={cn(
+                    'rounded-lg border p-4 transition-colors',
+                    isCurrent ? 'border-2 border-primary bg-primary/5' : 'border-border',
+                    isSelected && !isCurrent && 'border-primary/60 bg-primary/5',
+                  )}
+                >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-sm">{plan.name}</span>
-                      {isCurrent && <Badge variant="secondary" className="ml-2">Current</Badge>}
+                      {isCurrent && (
+                        <Badge variant="default" className="gap-1 text-xs">
+                          <CheckCircle2 className="size-3" />Current
+                        </Badge>
+                      )}
                     </div>
-                    <span className="text-sm font-bold">{planPrice(plan, billingCycle)}</span>
+                    <span className="text-sm font-bold shrink-0">{planPrice(plan, billingCycle)}</span>
                   </div>
                   <p className="mt-2 text-xs leading-5 text-muted-foreground">{plan.limit}</p>
+
                   {!isCurrent && plan.id !== 'free' && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="mt-3 w-full"
-                      onClick={() => upgrade(plan)}
-                      disabled={Boolean(upgrading)}
-                    >
-                      {upgrading === plan.id && <Loader2 data-icon="inline-start" className="animate-spin" />}
-                      {upgrading === plan.id ? 'Opening PayPal...' : 'Upgrade'}
-                    </Button>
+                    <div className="mt-3 flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={isSelected ? 'default' : 'outline'}
+                        className="w-full"
+                        onClick={() => handleUpgradeClick(plan)}
+                      >
+                        {isSelected ? 'Choose payment method ↓' : 'Upgrade'}
+                      </Button>
+
+                      {/* Payment method picker */}
+                      {isSelected && (
+                        <div className="flex flex-col gap-2 rounded-md border bg-muted/20 p-3">
+                          <p className="text-xs font-medium text-muted-foreground">Pay with:</p>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={paymentMethod === 'paypal' ? 'default' : 'outline'}
+                              className="flex-1 text-xs"
+                              onClick={() => setPaymentMethod('paypal')}
+                            >
+                              PayPal account
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={paymentMethod === 'card' ? 'default' : 'outline'}
+                              className="flex-1 text-xs"
+                              onClick={() => setPaymentMethod('card')}
+                            >
+                              Debit / Credit card
+                            </Button>
+                          </div>
+
+                          {/* PayPal account — redirects to PayPal */}
+                          {paymentMethod === 'paypal' && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => upgradeWithPayPal(plan)}
+                              disabled={Boolean(upgrading)}
+                            >
+                              {upgrading === plan.id && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                              {upgrading === plan.id ? 'Opening PayPal…' : 'Continue to PayPal →'}
+                            </Button>
+                          )}
+
+                          {/* Card — PayPal hosted card buttons (no redirect, no PayPal account) */}
+                          {paymentMethod === 'card' && (
+                            <div className="mt-1">
+                              <PayPalCardButtons
+                                plan={plan}
+                                billingCycle={billingCycle}
+                                onSuccess={handleCardSuccess}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )

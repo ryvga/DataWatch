@@ -82,19 +82,25 @@ export default function Incidents() {
       />
 
       {/* ── Stats strip ── */}
-      {stats && (
+      {stats ? (
         <div className="flex flex-wrap gap-2">
           {[
             { label: 'Open', n: stats.open, color: 'text-red-600 dark:text-red-400' },
             { label: 'Investigating', n: stats.investigating, color: 'text-amber-600 dark:text-amber-400' },
             { label: 'P1 open', n: stats.p1_open, color: 'text-red-700 dark:text-red-300 font-bold' },
             { label: 'Resolved 7d', n: stats.resolved_7d, color: 'text-emerald-600 dark:text-emerald-400' },
-            { label: 'Muted', n: stats.muted || 0, color: 'text-muted-foreground' },
+            { label: 'Muted', n: stats.muted ?? 0, color: 'text-muted-foreground' },
           ].map(s => (
             <div key={s.label} className="flex items-center gap-1.5 rounded-lg border bg-card px-3 py-1.5 text-sm">
               <span className="text-muted-foreground">{s.label}</span>
-              <span className={`font-bold tabular-nums ${s.color}`}>{s.n}</span>
+              <span className={`font-bold tabular-nums ${s.color}`}>{s.n ?? '—'}</span>
             </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-8 w-24 animate-pulse rounded-lg border bg-muted/40" />
           ))}
         </div>
       )}
