@@ -37,17 +37,19 @@ function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors }) {
   const dismissKey = `dw_rec_dismissed_${tableId}`
 
   // Auto-trigger when no monitors exist and not previously dismissed this session
+  // Guard: only run once sourceId is resolved (table data has loaded)
   useEffect(() => {
+    if (!sourceId) return
     if (hasMonitors) return
     if (sessionStorage.getItem(dismissKey)) return
     run()
-  }, [tableId, hasMonitors])
+  }, [tableId, sourceId, hasMonitors])
 
   const run = async () => {
+    if (!sourceId) return
     setLoading(true); setError(''); setRecs(null)
     try {
       const r = await recommendMonitors(sourceId, {
-        source_id: sourceId,
         table_name: tableName.split('.')[1] || tableName,
         schema_name: tableName.split('.')[0] || 'public',
       })
