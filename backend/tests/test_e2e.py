@@ -49,9 +49,11 @@ async def register_table(client, auth_headers, source_id: str, **kwargs):
         **kwargs,
     }
     # Patch scheduler.add_table_job to no-op
-    with patch("app.routers.tables.add_table_job"), \
-         patch("app.tasks.profile_table") as mock_task:
+    with patch("app.scheduler.add_table_job"), \
+         patch("app.tasks.profile_table") as mock_task, \
+         patch("app.tasks.bootstrap_table_autopilot") as mock_autopilot:
         mock_task.delay = MagicMock()
+        mock_autopilot.delay = MagicMock()
         resp = await client.post("/api/v1/tables", json=body, headers=auth_headers)
     assert resp.status_code == 201, resp.text
     return resp.json()
@@ -87,7 +89,7 @@ async def run_anomaly_checks_directly(db_session, table_id: str, profile_id: str
         mock_llm.delay = MagicMock()
         mock_alerts.delay = MagicMock()
         # Patch AsyncSessionLocal to reuse test session
-        with patch("app.tasks.AsyncSessionLocal") as mock_session_factory:
+        with patch("app.database.AsyncSessionLocal") as mock_session_factory:
             mock_cm = AsyncMock()
             mock_cm.__aenter__ = AsyncMock(return_value=db_session)
             mock_cm.__aexit__ = AsyncMock(return_value=False)

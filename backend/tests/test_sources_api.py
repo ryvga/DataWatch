@@ -112,6 +112,9 @@ async def test_pause_source_archives_source_and_deactivates_tables(monkeypatch):
         async def scalars(self, _query):
             return ScalarResult()
 
+        async def commit(self):
+            return None
+
     monkeypatch.setattr("app.scheduler.remove_table_job", lambda table_id: removed_jobs.append(table_id))
 
     await sources.pause_source(

@@ -12,6 +12,8 @@ from app.services.anomaly import AnomalyResult
 
 logger = logging.getLogger(__name__)
 
+CORE_RULE_CHECKS = {"row_count_zero", "freshness_sla_breach", "schema_drift"}
+
 
 def classify_severity(failed_checks: list[AnomalyResult]) -> str:
     """
@@ -64,6 +66,44 @@ def generate_title(table_name: str, failed_checks: list[AnomalyResult]) -> str:
 
 
 class IncidentService:
+    def _check_names(self, checks: list[AnomalyResult] | list[dict]) -> set[str]:
+        names = set()
+        for check in checks:
+            if isinstance(check, dict):
+                name = check.get("check_name")
+            else:
+                name = check.check_name
+            if name:
+                names.add(name)
+        return names
+
+    def _iso_at(self, value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        except ValueError:
+            return None
+
+    def _suppresses(self, incident: Incident, failed_checks: list[AnomalyResult]) -> bool:
+        narration = incident.llm_narration or {}
+        if not isinstance(narration, dict):
+            return False
+
+        now = datetime.now(UTC)
+        suppress_until = None
+        if incident.status == "muted":
+            suppress_until = self._iso_at(narration.get("muted_until"))
+        elif incident.status == "ignored":
+            suppress_until = self._iso_at(narration.get("false_positive_until"))
+
+        if not suppress_until or suppress_until <= now:
+            return False
+
+        previous = self._check_names(incident.fired_checks or [])
+        current = self._check_names(failed_checks)
+        return bool(previous and current and current.issubset(previous))
 
     async def create_or_update(
         self,
@@ -88,11 +128,22 @@ class IncidentService:
             for c in failed_checks
         ]
 
-        # Check for existing open incident on this table
+        suppressed = (await db.scalars(
+            select(Incident).where(
+                Incident.table_id == table.id,
+                Incident.status.in_(["muted", "ignored"]),
+            )
+        )).all()
+        for incident in suppressed:
+            if self._suppresses(incident, failed_checks):
+                logger.info("Suppressed duplicate incident for table %s due to %s incident %s", table.table_name, incident.status, incident.id)
+                return None
+
+        # Check for existing active incident on this table
         existing = await db.scalar(
             select(Incident).where(
                 Incident.table_id == table.id,
-                Incident.status == "open",
+                Incident.status.in_(["open", "acknowledged", "investigating"]),
             )
         )
 
@@ -146,8 +197,12 @@ class IncidentService:
 
         previously_failed = {c["check_name"] for c in existing.fired_checks}
         now_passing = {c.check_name for c in all_checks if c.status == "passed"}
+        now_failed = {c.check_name for c in all_checks if c.status == "failed"}
 
-        if previously_failed.issubset(now_passing):
+        core_previous = previously_failed & CORE_RULE_CHECKS
+        core_recovered = bool(core_previous) and core_previous.issubset(now_passing) and not (core_previous & now_failed)
+
+        if previously_failed.issubset(now_passing) or core_recovered:
             existing.status = "resolved"
             existing.resolved_at = datetime.now(UTC)
             logger.info("Auto-resolved incident %s for table %s", existing.id, table.table_name)

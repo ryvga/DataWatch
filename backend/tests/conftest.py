@@ -65,12 +65,20 @@ async def test_engine():
 
 @pytest_asyncio.fixture
 async def db_session(test_engine) -> AsyncSession:
-    """Rolls back after each test for isolation."""
+    """Fresh DB contents per test.
+
+    API routes commit during tests, so wrapping the fixture in a transaction makes
+    later requests fail with "closed transaction" errors. Recreate metadata for
+    reliable isolation instead.
+    """
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
     SessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
     async with SessionLocal() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+        yield session
+        await session.rollback()
 
 
 # ── FastAPI client ─────────────────────────────────────────────────────────────
@@ -84,7 +92,12 @@ async def client(db_session):
     from app.database import get_db
 
     async def override_get_db():
-        yield db_session
+        try:
+            yield db_session
+            await db_session.commit()
+        except Exception:
+            await db_session.rollback()
+            raise
 
     app.dependency_overrides[get_db] = override_get_db
 
@@ -114,13 +127,22 @@ async def test_org(client):
     })
     assert resp.status_code == 201, resp.text
     data = resp.json()
-    return {"org_id": data["org_id"], "api_key": data["api_key"], "email": email, "password": password}
+    return {
+        "org_id": data["org_id"],
+        "org_slug": data["org_slug"],
+        "api_key": data.get("api_key"),
+        "email": email,
+        "password": password,
+    }
 
 
 @pytest_asyncio.fixture
 async def auth_headers(client, test_org):
     """JWT Bearer auth headers."""
+    from app.routers import auth as auth_router
+    auth_router._rate_store.clear()
     resp = await client.post("/auth/login", json={
+        "org_slug": test_org["org_slug"],
         "email": test_org["email"],
         "password": test_org["password"],
     })

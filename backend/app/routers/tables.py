@@ -17,6 +17,7 @@ from app.models.organization import Organization
 from app.models.table_profile import TableProfile
 from app.routers.auth import get_current_org_from_jwt
 from app.services.crypto import decrypt_config
+from app.services.table_autopilot import initial_autopilot_state, not_started_autopilot_state
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/tables", tags=["tables"])
@@ -65,6 +66,7 @@ class TableResponse(BaseModel):
     last_profiled_at: datetime | None
     schema_snapshot: str | None = None
     latest_profile: ProfileSummary | None = None
+    autopilot: dict | None = None
 
 
 class RunResponse(BaseModel):
@@ -230,6 +232,7 @@ def _table_response(table: MonitoredTable, profile: ProfileSummary | None = None
         last_profiled_at=table.last_profiled_at,
         schema_snapshot=table.dbt_model_yaml,
         latest_profile=profile,
+        autopilot=table.autopilot or not_started_autopilot_state(),
     )
 
 
@@ -267,6 +270,7 @@ async def create_table(
         check_interval_minutes=body.check_interval_minutes,
         sensitivity=body.sensitivity,
         dbt_model_yaml=schema_snapshot,
+        autopilot=initial_autopilot_state(),
         is_active=True,
     )
     db.add(table)
@@ -275,6 +279,11 @@ async def create_table(
     # Enqueue first profile run
     from app.tasks import profile_table
     profile_table.delay(str(table.id))
+
+    # Enqueue AI onboarding/recommendation workflow. It is intentionally
+    # separate from profiling so a slow LLM call never blocks table creation.
+    from app.tasks import bootstrap_table_autopilot
+    bootstrap_table_autopilot.delay(str(table.id))
 
     # Register scheduler job
     from app.scheduler import add_table_job

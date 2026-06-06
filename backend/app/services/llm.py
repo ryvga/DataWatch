@@ -31,6 +31,10 @@ class NarrationResult(BaseModel):
     likely_causes: list[LikelyCause]
     impact_assessment: str
     recommended_actions: list[str]
+    debug_queries: list[str] = []
+    client_safe_summary: str = ""
+    suggested_monitors: list[str] = []
+    ownership_hint: str = ""
     data_pattern_notes: str
     confidence: Literal["high", "medium", "low"]
 
@@ -82,6 +86,10 @@ Always respond with valid JSON matching this exact schema — no preamble, no ma
     "SELECT date_trunc('hour', created_at), COUNT(*) FROM table GROUP BY 1 ORDER BY 1 DESC LIMIT 48"
   ],
   "client_safe_summary": "1-2 sentence business summary with no internal table names or technical details",
+  "suggested_monitors": [
+    "specific follow-up monitor that would catch this earlier next time"
+  ],
+  "ownership_hint": "which team/person should investigate based on table, source, or failed checks",
   "data_pattern_notes": "notable trend in historical data that explains or contextualizes the anomaly",
   "confidence": "high|medium|low"
 }
@@ -92,6 +100,8 @@ Rules:
 - recommended_actions: 3-5 actionable steps — at least one must be a runnable SQL query
 - debug_queries: 2-4 SQL queries an engineer can immediately run to investigate
 - client_safe_summary: business language only, no table names, assume non-technical reader
+- suggested_monitors: 1-3 follow-up monitors or rule ideas that would reduce repeat incidents
+- ownership_hint: name the likely owning domain/team if inferable; otherwise say "Data platform owner"
 - if row_count=0 or freshness breach: confidence = "high"
 - never say 'I cannot determine' — always give best assessment based on available data\
 """
@@ -227,6 +237,8 @@ def generate_narration(context: str, org_api_key: str | None = None, org_model: 
         "Output ONLY a JSON object with these exact keys: "
         "summary (string), likely_causes (array of objects with hypothesis+probability), "
         "impact_assessment (string), recommended_actions (array of strings), "
+        "debug_queries (array of strings), client_safe_summary (string), "
+        "suggested_monitors (array of strings), ownership_hint (string), "
         "data_pattern_notes (string), confidence (high|medium|low). "
         f"Context: {user_msg[:800]}"
     )

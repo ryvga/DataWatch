@@ -220,6 +220,11 @@ async def mark_false_positive(
     if incident.status in ("resolved", "ignored"):
         raise HTTPException(status_code=409, detail=f"Incident already {incident.status}")
     incident.status = "ignored"
+    narration = dict(incident.llm_narration or {})
+    from datetime import timezone, timedelta
+    narration["false_positive_until"] = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    narration["false_positive_reason"] = "Marked false positive by user"
+    incident.llm_narration = narration
     if not incident.title.startswith("[FP]"):
         incident.title = f"[FP] {incident.title}"
     await db.commit()

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,6 +24,7 @@ class MonitoredTable(Base):
     sensitivity: Mapped[float] = mapped_column(Float, nullable=False, default=3.0)  # z-score threshold
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     dbt_model_yaml: Mapped[str | None] = mapped_column(Text, nullable=True)
+    autopilot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -62,6 +62,7 @@ async def _profile_table_async(table_id: str) -> dict:
     from app.models.table_profile import TableProfile
     from app.services.crypto import decrypt_config
     from app.services.profiler import ProfilerService
+    from app.services.table_autopilot import mark_profile_step
 
     async with AsyncSessionLocal() as db:
         # Load table
@@ -120,6 +121,12 @@ async def _profile_table_async(table_id: str) -> dict:
 
         # Update last_profiled_at on the table
         table.last_profiled_at = datetime.now(UTC)
+        table.autopilot = mark_profile_step(
+            table.autopilot,
+            status="error" if result.error else "complete",
+            profile_id=str(profile.id),
+            error=result.error,
+        )
         await db.commit()
 
         # Enqueue anomaly checks (Day 4)
@@ -139,6 +146,52 @@ async def _profile_table_async(table_id: str) -> dict:
         }
         logger.info("profile_table complete: %s", log_payload)
         return log_payload
+
+
+@celery_app.task(
+    bind=True,
+    name="tasks.bootstrap_table_autopilot",
+    max_retries=1,
+    default_retry_delay=30,
+)
+def bootstrap_table_autopilot(self, table_id: str):
+    """Generate first-run baseline and AI monitor recommendations for a table."""
+    try:
+        return _run(_bootstrap_table_autopilot_async(table_id))
+    except Exception as exc:
+        logger.error("bootstrap_table_autopilot failed for %s: %s", table_id, exc)
+        raise self.retry(exc=exc)
+
+
+async def _bootstrap_table_autopilot_async(table_id: str) -> dict:
+    from app.database import AsyncSessionLocal
+    from app.models.data_source import DataSource
+    from app.models.monitored_table import MonitoredTable
+    from app.models.organization import Organization
+    from app.services.table_autopilot import initial_autopilot_state, run_table_autopilot
+
+    async with AsyncSessionLocal() as db:
+        table = await db.get(MonitoredTable, table_id)
+        if not table:
+            return {"status": "error", "error": "table not found"}
+        source = await db.get(DataSource, table.source_id)
+        if not source:
+            return {"status": "error", "error": "source not found"}
+        org = await db.get(Organization, source.org_id)
+        if not org:
+            return {"status": "error", "error": "org not found"}
+
+        if not table.autopilot:
+            table.autopilot = initial_autopilot_state()
+
+        state = await run_table_autopilot(db, table, source, org)
+        await db.commit()
+        return {
+            "status": "ok",
+            "table_id": table_id,
+            "safe_monitors": len(state.get("safe_monitors") or []),
+            "staged": len(state.get("recommendations") or []),
+        }
 
 
 @celery_app.task(name="tasks.run_anomaly_checks")
@@ -253,6 +306,7 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         svc = IncidentService()
 
         if failed:
+            await svc.auto_resolve(db, table, all_checks)
             # Load org_id via data source
             from app.models.data_source import DataSource
             source = await db.get(DataSource, table.source_id)
@@ -441,6 +495,7 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
         svc = IncidentService()
         failed_checks = [c for c in check_results if c.status == "failed"]
         if failed_checks and source:
+            await svc.auto_resolve(db, table, check_results)
             incident = await svc.create_or_update(db, source.org_id, table, failed_checks, profile_id)
             if incident and incident.status == "open":
                 from app.tasks import generate_llm_narration
