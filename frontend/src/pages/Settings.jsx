@@ -9,6 +9,7 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
+  Play,
   Plus,
   Send,
   Table2,
@@ -32,16 +33,20 @@ import {
   discoverSource,
   getAlerts,
   getBillingStatus,
+  getConnectorTypes,
   getInvites,
   getMe,
   getOrgMembers,
   getSources,
   getTables,
   revokeInvite,
+  runTable,
   testAlert,
   testSource,
+  testSourceConfig,
   updateProfile,
   updateSource,
+  updateTable,
 } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import { EmptyState, PageHeader } from '../components/app-ui'
@@ -82,6 +87,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { storage } from '@/lib/storage'
+import { FALLBACK_CONNECTORS, castFieldValue, defaultConfigFor, normalizeConnector } from '@/lib/connectorConfig'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import SourceConnectionDialog from '@/components/SourceConnectionDialog'
 import TableSetupDialog from '@/components/TableSetupDialog'
 
@@ -549,29 +558,123 @@ function SourceStatusDot({ status }) {
   return <span className="inline-block size-2 rounded-full bg-muted-foreground/40" title="Unknown" />
 }
 
+function cleanConfigFields(config) {
+  return Object.fromEntries(
+    Object.entries(config).filter(([, value]) => value !== '' && value !== null && value !== undefined)
+  )
+}
+
+function allFieldsEmpty(fields) {
+  return Object.values(fields).every((v) => v === '' || v === null || v === undefined)
+}
+
+function allFieldsFilled(connector, fields) {
+  return connector.fields.filter((f) => f.required).every((f) => {
+    const v = fields[f.name]
+    return v !== '' && v !== null && v !== undefined
+  })
+}
+
 function EditSourceDialog({ source, open, onOpenChange, onUpdated }) {
+  const [connectors, setConnectors] = useState(FALLBACK_CONNECTORS.map(normalizeConnector))
   const [name, setName] = useState(source?.name || '')
-  const [configText, setConfigText] = useState('')
+  const [mode, setMode] = useState('fields')
+  const [fields, setFields] = useState({})
+  const [rawJson, setRawJson] = useState('{}')
+  const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [testResult, setTestResult] = useState(null)
 
-  // Reset form when source changes or dialog opens
+  const connector = connectors.find((c) => c.type === source?.type) || connectors[0]
+
+  useEffect(() => {
+    if (!open) return
+    getConnectorTypes()
+      .then((response) => setConnectors(response.data.map(normalizeConnector)))
+      .catch(() => setConnectors(FALLBACK_CONNECTORS.map(normalizeConnector)))
+  }, [open])
+
   useEffect(() => {
     if (open && source) {
       setName(source.name)
-      setConfigText('')
+      // Start with empty fields — raw config is encrypted on server
+      const emptyFields = defaultConfigFor(connector)
+      const cleared = Object.fromEntries(Object.keys(emptyFields).map((k) => [k, '']))
+      setFields(cleared)
+      setRawJson('{}')
       setError('')
+      setTestResult(null)
+      setMode('fields')
     }
   }, [open, source])
+
+  const updateField = (field, value) => {
+    setFields((prev) => {
+      const next = { ...prev, [field.name]: castFieldValue(field, value) }
+      if (mode === 'fields') setRawJson(JSON.stringify(cleanConfigFields(next), null, 2))
+      return next
+    })
+    setTestResult(null)
+  }
+
+  const buildConfig = () => {
+    if (mode === 'json') {
+      const [config, parseError] = parseJson(rawJson, 'Connection JSON')
+      if (parseError) return [null, parseError]
+      return [cleanConfigFields(config), '']
+    }
+    return [cleanConfigFields(fields), '']
+  }
+
+  const isConfigEmpty = () => {
+    if (mode === 'json') return rawJson.trim() === '' || rawJson.trim() === '{}'
+    return allFieldsEmpty(fields)
+  }
+
+  const hasPartialFill = () => {
+    if (isConfigEmpty()) return false
+    if (mode === 'json') return false
+    return !allFieldsFilled(connector, fields)
+  }
+
+  const runTest = async () => {
+    const [connection_config, parseError] = buildConfig()
+    if (parseError) { setError(parseError); return }
+    setTesting(true); setError(''); setTestResult(null)
+    try {
+      const response = await testSourceConfig({ type: source.type, connection_config })
+      setTestResult(response.data)
+      if (response.data.connected) notify.ok('Connection test passed', `Responded in ${response.data.latency_ms}ms.`)
+      else notify.err('Connection test failed', response.data.error)
+    } catch (err) {
+      const message = err.response?.data?.detail || 'Connection test failed'
+      setError(message)
+      setTestResult({ connected: false, error: message, latency_ms: 0 })
+      notify.err('Connection test failed', message)
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const submit = async (event) => {
     event.preventDefault()
     setError('')
-    const payload = {}
-    if (name.trim() && name.trim() !== source?.name) payload.name = name.trim()
 
-    if (configText.trim()) {
-      const [config, parseError] = parseJson(configText, 'Connection config')
+    if (hasPartialFill()) {
+      setError('Fill in all required fields to replace credentials, or leave all fields empty to keep existing credentials.')
+      return
+    }
+
+    const payload = {}
+    if (name.trim() !== source?.name) payload.name = name.trim()
+
+    if (!isConfigEmpty()) {
+      if (!testResult?.connected) {
+        setError('Run a successful connection test before saving new credentials.')
+        return
+      }
+      const [config, parseError] = buildConfig()
       if (parseError) { setError(parseError); return }
       payload.connection_config = config
     }
@@ -596,41 +699,151 @@ function EditSourceDialog({ source, open, onOpenChange, onUpdated }) {
     }
   }
 
+  const configIsEmpty = isConfigEmpty()
+  const configPartial = hasPartialFill()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit source</DialogTitle>
-          <DialogDescription>Update the name or connection credentials for this data source. Leave config blank to keep existing credentials.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={submit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="edit-source-name">Name</Label>
-            <Input
-              id="edit-source-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+      <DialogContent className="max-h-[92vh] overflow-hidden p-0 sm:max-w-3xl">
+        <form onSubmit={submit} className="flex max-h-[92vh] flex-col">
+          <DialogHeader className="border-b px-5 py-4">
+            <DialogTitle>Edit source</DialogTitle>
+            <DialogDescription>
+              Update name or replace credentials for this{' '}
+              <span className="font-medium text-foreground">{SOURCE_TYPE_LABELS[source?.type] || source?.type}</span> source.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[240px_minmax(0,1fr)]">
+            <aside className="border-b bg-muted/25 p-4 lg:border-b-0 lg:border-r">
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="edit-source-name">Source name</Label>
+                  <Input
+                    id="edit-source-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Connector type</Label>
+                  <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                    <Database className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span>{SOURCE_TYPE_LABELS[source?.type] || source?.type}</span>
+                  </div>
+                </div>
+                <div className="rounded-md border bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                  Existing credentials are encrypted on the server and cannot be shown. Leave all config fields empty to keep them, or fill all required fields to replace.
+                </div>
+              </div>
+            </aside>
+
+            <div className="min-h-0 overflow-y-auto p-5">
+              <Tabs value={mode} onValueChange={(v) => { setMode(v); setTestResult(null) }}>
+                <TabsList>
+                  <TabsTrigger value="fields">Form fields</TabsTrigger>
+                  <TabsTrigger value="json">Advanced JSON</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="fields" className="mt-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {connector.fields.map((field) => (
+                      <div key={field.name} className={cn('flex flex-col gap-2', field.input_type === 'textarea' && 'sm:col-span-2')}>
+                        <Label htmlFor={`edit-field-${field.name}`}>
+                          {field.label}
+                          {field.required && <span className="text-destructive"> *</span>}
+                        </Label>
+                        {field.input_type === 'textarea' ? (
+                          <Textarea
+                            id={`edit-field-${field.name}`}
+                            className="min-h-28 font-mono text-xs"
+                            value={typeof fields[field.name] === 'string' ? fields[field.name] : JSON.stringify(fields[field.name] || {}, null, 2)}
+                            onChange={(e) => updateField(field, e.target.value)}
+                            placeholder={field.placeholder || ''}
+                          />
+                        ) : field.input_type === 'select' && field.options?.length ? (
+                          <Select value={String(fields[field.name] || '')} onValueChange={(v) => updateField(field, v)}>
+                            <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {field.options.map((option) => (
+                                  <SelectItem key={option} value={option}>{option}</SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            id={`edit-field-${field.name}`}
+                            type={field.input_type === 'number' ? 'number' : field.secret ? 'password' : 'text'}
+                            value={fields[field.name] ?? ''}
+                            onChange={(e) => updateField(field, e.target.value)}
+                            placeholder={field.placeholder || (field.required ? 'Required to replace' : 'Leave blank to keep')}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {configPartial && (
+                    <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+                      Fill in all required fields (*) to replace credentials, or clear all fields to keep existing.
+                    </p>
+                  )}
+                  {configIsEmpty && (
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      All fields are empty — existing credentials will be kept.
+                    </p>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="json" className="mt-4">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="edit-source-json">New connection JSON (leave empty to keep existing)</Label>
+                    <Textarea
+                      id="edit-source-json"
+                      className="min-h-[280px] font-mono text-xs"
+                      value={rawJson}
+                      onChange={(e) => { setRawJson(e.target.value); setTestResult(null) }}
+                      placeholder="{}"
+                    />
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              <div className="mt-4 space-y-3">
+                {testResult && (
+                  <Alert variant={testResult.connected ? 'default' : 'destructive'}>
+                    {testResult.connected ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+                    <AlertDescription>
+                      {testResult.connected
+                        ? `Connection passed in ${testResult.latency_ms}ms.`
+                        : testResult.error || 'Connection failed.'}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {error && (
+                  <Alert variant="destructive">
+                    <XCircle className="size-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="edit-source-config">New connection config (optional)</Label>
-            <Textarea
-              id="edit-source-config"
-              className="min-h-36 font-mono text-xs"
-              placeholder={SOURCE_CONFIG_TEMPLATES[source?.type] || '{\n  "host": "..."\n}'}
-              value={configText}
-              onChange={(e) => setConfigText(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">Leave blank to keep the existing encrypted credentials. If provided, a connection test will run before saving.</p>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={saving}>
-              {saving && <Loader2 data-icon="inline-start" className="animate-spin" />}
-              {saving ? 'Testing & saving...' : 'Test & Save'}
-            </Button>
+
+          <DialogFooter className="border-t px-5 py-3">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            {!configIsEmpty && (
+              <Button type="button" variant="outline" onClick={runTest} disabled={testing || configPartial}>
+                {testing ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Send data-icon="inline-start" />}
+                {testing ? 'Testing...' : 'Test connection'}
+              </Button>
+            )}
+            <Button type="submit" disabled={saving || (!configIsEmpty && !testResult?.connected && !configPartial)}>
+              {saving && <Loader2 data-icon="inline-start" className="animate-spin" />}
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -764,10 +977,156 @@ function SourcesTab() {
   )
 }
 
+const INTERVAL_OPTIONS = [
+  { value: 15, label: '15 minutes' },
+  { value: 30, label: '30 minutes' },
+  { value: 60, label: '1 hour' },
+  { value: 360, label: '6 hours' },
+  { value: 1440, label: '24 hours' },
+]
+
+const SENSITIVITY_OPTIONS = [
+  { value: 2.0, label: 'Low (2σ)' },
+  { value: 3.0, label: 'Medium (3σ)' },
+  { value: 4.0, label: 'High (4σ)' },
+  { value: 5.0, label: 'Very High (5σ)' },
+]
+
+function EditTableDialog({ table, open, onOpenChange, onUpdated }) {
+  const [form, setForm] = useState({
+    interval_minutes: 60,
+    sensitivity: 3.0,
+    freshness_column: '',
+    is_active: true,
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (open && table) {
+      setForm({
+        interval_minutes: table.check_interval_minutes || 60,
+        sensitivity: table.sensitivity || 3.0,
+        freshness_column: table.freshness_column || '',
+        is_active: table.is_active !== false,
+      })
+      setError('')
+    }
+  }, [open, table])
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      const response = await updateTable(table.id, {
+        check_interval_minutes: Number(form.interval_minutes),
+        sensitivity: Number(form.sensitivity),
+        freshness_column: form.freshness_column.trim() || null,
+        is_active: form.is_active,
+      })
+      onUpdated(response.data)
+      notify.ok('Table monitoring settings updated')
+      onOpenChange(false)
+    } catch (err) {
+      const message = getApiError(err, 'Failed to update table')
+      setError(message)
+      notify.err(message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit monitoring settings</DialogTitle>
+          <DialogDescription>
+            Adjust profiling cadence and anomaly sensitivity for{' '}
+            <span className="font-mono text-foreground">{table?.schema_name}.{table?.table_name}</span>.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label>Monitoring interval</Label>
+            <Select
+              value={String(form.interval_minutes)}
+              onValueChange={(v) => setForm((prev) => ({ ...prev, interval_minutes: Number(v) }))}
+            >
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {INTERVAL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>Sensitivity</Label>
+            <Select
+              value={String(form.sensitivity)}
+              onValueChange={(v) => setForm((prev) => ({ ...prev, sensitivity: Number(v) }))}
+            >
+              <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {SENSITIVITY_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)}>{opt.label}</SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">Higher values reduce false positives but may miss subtle anomalies.</p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-freshness-column">Freshness column (optional)</Label>
+            <Input
+              id="edit-freshness-column"
+              value={form.freshness_column}
+              onChange={(e) => setForm((prev) => ({ ...prev, freshness_column: e.target.value }))}
+              placeholder="e.g. created_at, updated_at"
+            />
+            <p className="text-xs text-muted-foreground">Leave blank to disable freshness monitoring for this table.</p>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-md border px-3 py-2.5">
+            <Checkbox
+              id="edit-table-active"
+              checked={form.is_active}
+              onCheckedChange={(checked) => setForm((prev) => ({ ...prev, is_active: Boolean(checked) }))}
+            />
+            <div>
+              <Label htmlFor="edit-table-active" className="text-sm font-medium cursor-pointer">Active monitoring</Label>
+              <p className="text-xs text-muted-foreground">Uncheck to pause scheduled profiling without deleting the table.</p>
+            </div>
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <DialogFooter>
+            <Button type="submit" disabled={saving}>
+              {saving && <Loader2 data-icon="inline-start" className="animate-spin" />}
+              {saving ? 'Saving...' : 'Save settings'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function TablesTab() {
   const [sources, setSources] = useState([])
   const [tables, setTables] = useState([])
   const [open, setOpen] = useState(false)
+  const [editTable, setEditTable] = useState(null)
+  const [running, setRunning] = useState({})
 
   useEffect(() => {
     Promise.all([getSources(), getTables()]).then(([sourcesResponse, tablesResponse]) => {
@@ -785,6 +1144,22 @@ function TablesTab() {
     } catch (err) {
       notify.err(err.response?.data?.detail || 'Failed to remove table')
     }
+  }
+
+  const handleRun = async (id) => {
+    setRunning((prev) => ({ ...prev, [id]: true }))
+    try {
+      await runTable(id)
+      notify.ok('Profile queued', 'Results available in ~30 seconds.')
+    } catch (err) {
+      notify.err(err.response?.data?.detail || 'Failed to trigger profile')
+    } finally {
+      setTimeout(() => setRunning((prev) => { const next = { ...prev }; delete next[id]; return next }), 3000)
+    }
+  }
+
+  const handleUpdated = (updated) => {
+    setTables((prev) => prev.map((t) => t.id === updated.id ? updated : t))
   }
 
   return (
@@ -830,6 +1205,16 @@ function TablesTab() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuGroup>
+                            <DropdownMenuItem onClick={() => setEditTable(table)}>
+                              <Pencil data-icon="inline-start" />
+                              Edit settings
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleRun(table.id)} disabled={running[table.id]}>
+                              {running[table.id]
+                                ? <Loader2 data-icon="inline-start" className="animate-spin" />
+                                : <Play data-icon="inline-start" />}
+                              {running[table.id] ? 'Queued...' : 'Run now'}
+                            </DropdownMenuItem>
                             <ConfirmDelete label={`${table.schema_name}.${table.table_name}`} onConfirm={() => remove(table.id)}>
                               <DropdownMenuItem onSelect={(event) => event.preventDefault()} variant="destructive">
                                 <Trash2 data-icon="inline-start" />
@@ -847,6 +1232,14 @@ function TablesTab() {
           </div>
         )}
         <TableSetupDialog open={open} onOpenChange={setOpen} sources={sources} onCreated={(table) => setTables((prev) => [...prev, table])} />
+        {editTable && (
+          <EditTableDialog
+            table={editTable}
+            open={Boolean(editTable)}
+            onOpenChange={(isOpen) => { if (!isOpen) setEditTable(null) }}
+            onUpdated={handleUpdated}
+          />
+        )}
       </CardContent>
     </Card>
   )

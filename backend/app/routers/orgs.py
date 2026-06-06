@@ -111,6 +111,7 @@ async def get_org_health(
 
     tables_count = await db.scalar(
         select(__import__("sqlalchemy", fromlist=["func"]).func.count())
+        .select_from(MonitoredTable)
         .join(DataSource, MonitoredTable.source_id == DataSource.id)
         .where(DataSource.org_id == org.id, MonitoredTable.is_active == True)
     ) or 0

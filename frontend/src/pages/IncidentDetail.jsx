@@ -251,15 +251,22 @@ function TimelineStepper({ incident }) {
   )
 }
 
-function AnalysisCard({ narration }) {
+function AnalysisCard({ narration, llmIsEmpty, llmHasError }) {
   if (!narration) {
+    const isPending = !llmIsEmpty && !llmHasError
     return (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">AI incident analysis</CardTitle>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          AI analysis is pending. The incident can still be investigated from fired checks and debug queries.
+        <CardContent>
+          {isPending ? (
+            <p className="text-sm text-muted-foreground">AI analysis is pending. The incident can still be investigated from fired checks and debug queries.</p>
+          ) : (
+            <div className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+              AI analysis is being generated. Check back in a moment.
+            </div>
+          )}
         </CardContent>
       </Card>
     )
@@ -538,7 +545,10 @@ export default function IncidentDetail() {
     }
   }, [incident?.table_id])
 
-  const narration = incident?.llm_narration && !incident.llm_narration.error ? incident.llm_narration : null
+  const llmRaw = incident?.llm_narration
+  const llmIsEmpty = !llmRaw || Object.keys(llmRaw).length === 0
+  const llmHasError = llmRaw?.error
+  const narration = llmRaw && !llmIsEmpty && !llmHasError ? llmRaw : null
   const firedChecks = useMemo(
     () => (incident?.fired_checks || []).map((check, index) => normalizeCheck(check, index)),
     [incident?.fired_checks]
@@ -673,7 +683,7 @@ export default function IncidentDetail() {
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
           <main className="flex min-w-0 flex-col gap-5">
-            <AnalysisCard narration={narration} />
+            <AnalysisCard narration={narration} llmIsEmpty={llmIsEmpty} llmHasError={llmHasError} />
             <RecommendedActionsCard actions={narration?.recommended_actions} />
             <DebugQueriesCard queries={debugQueries} onCopy={copyText} />
             <ClientSummaryCard summary={clientSummary} onCopy={copyText} />
