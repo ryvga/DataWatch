@@ -14,6 +14,7 @@ import IncidentDetail from './pages/IncidentDetail'
 import TableDetail from './pages/TableDetail'
 import Settings from './pages/Settings'
 import Reports from './pages/Reports'
+import HelpCenter from './pages/HelpCenter'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminStats from './pages/admin/AdminStats'
@@ -89,6 +90,7 @@ export default function App() {
               <Route path="incidents" element={<Incidents />} />
               <Route path="incidents/:id" element={<IncidentDetail />} />
               <Route path="reports" element={<Reports />} />
+              <Route path="help" element={<HelpCenter />} />
               <Route path="settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

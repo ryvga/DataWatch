@@ -1,10 +1,12 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
 import { useState } from 'react'
 import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Database,
+  BookOpen,
+  Building2,
+  ChevronUp,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -30,7 +32,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { BrandMark } from './app-ui'
 import { cn } from '@/lib/utils'
-import { clearSession } from '@/lib/storage'
+import { clearSession, storage } from '@/lib/storage'
 
 const links = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -38,6 +40,7 @@ const links = [
   { to: '/monitors', label: 'Monitors', icon: Activity },
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
+  { to: '/help', label: 'Help Center', icon: BookOpen },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -81,6 +84,11 @@ export default function Layout() {
     try { return localStorage.getItem('dw_sidebar_collapsed') === '1' } catch { return false }
   })
 
+  const orgName = storage.getItem('dw_org_name') || 'Workspace'
+  const userEmail = storage.getItem('dw_user_email') || ''
+  const userName = storage.getItem('dw_user_name') || userEmail.split('@')[0] || 'You'
+  const userRole = storage.getItem('dw_user_role') || 'member'
+
   const logout = () => {
     clearSession()
     nav('/login')
@@ -103,21 +111,38 @@ export default function Layout() {
           size={compact ? 'icon' : 'default'}
           className={cn(
             'w-full border border-transparent hover:border-sidebar-border hover:bg-sidebar-accent',
-            compact ? 'justify-center' : 'justify-start'
+            compact ? 'justify-center' : 'justify-start gap-2 px-2'
           )}
           aria-label="Workspace menu"
         >
-          <UserCircle className="size-4 shrink-0" />
-          {!compact && <span className="truncate text-sm">Workspace</span>}
+          <div className={cn('flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary text-xs font-bold', compact && 'size-8')}>
+            {orgName.charAt(0).toUpperCase()}
+          </div>
+          {!compact && (
+            <div className="flex min-w-0 flex-1 flex-col items-start">
+              <span className="truncate text-xs font-semibold text-sidebar-foreground leading-tight max-w-[140px]">{orgName}</span>
+              <span className="truncate text-[10px] text-sidebar-foreground/50 leading-tight max-w-[140px]">{userName} · {userRole}</span>
+            </div>
+          )}
+          {!compact && <ChevronUp className="ml-auto size-3.5 text-sidebar-foreground/40" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         side={compact ? 'right' : 'top'}
-        className="w-56 bg-popover"
+        className="w-60 bg-popover"
         sideOffset={8}
       >
-        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Appearance</DropdownMenuLabel>
+        <div className="px-3 py-2 border-b">
+          <p className="text-xs font-semibold truncate">{userName}</p>
+          <p className="text-[11px] text-muted-foreground truncate">{userEmail}</p>
+          <div className="mt-1 flex items-center gap-1.5">
+            <Building2 className="size-3 text-muted-foreground" />
+            <span className="text-[11px] text-muted-foreground">{orgName}</span>
+            <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize">{userRole}</span>
+          </div>
+        </div>
+        <DropdownMenuLabel className="text-xs text-muted-foreground font-normal mt-1">Appearance</DropdownMenuLabel>
         <DropdownMenuGroup>
           <DropdownMenuItem
             onClick={() => setTheme('light')}
@@ -136,6 +161,13 @@ export default function Layout() {
             {resolvedTheme === 'dark' && <span className="ml-auto text-xs text-muted-foreground">Active</span>}
           </DropdownMenuItem>
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/settings?tab=profile">
+            <UserCircle className="size-4 mr-2" />
+            Profile settings
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
           <LogOut className="size-4 mr-2" />
@@ -208,26 +240,29 @@ export default function Layout() {
         {/* Mobile header */}
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:hidden">
           <BrandMark />
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button type="button" variant="ghost" size="icon" aria-label="Open navigation">
-                <Menu className="size-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 bg-sidebar p-0">
-              <SheetHeader className="h-14 flex-row items-center border-b border-sidebar-border px-4">
-                <SheetTitle asChild>
-                  <BrandMark />
-                </SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-1 flex-col justify-between px-3 py-3">
-                <NavItems />
-              </div>
-              <div className="border-t border-sidebar-border px-3 py-3">
-                {renderWorkspaceMenu(false)}
-              </div>
-            </SheetContent>
-          </Sheet>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{orgName}</span>
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" aria-label="Open navigation">
+                  <Menu className="size-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-72 bg-sidebar p-0">
+                <SheetHeader className="h-14 flex-row items-center border-b border-sidebar-border px-4">
+                  <SheetTitle asChild>
+                    <BrandMark />
+                  </SheetTitle>
+                </SheetHeader>
+                <div className="flex flex-1 flex-col justify-between px-3 py-3">
+                  <NavItems />
+                </div>
+                <div className="border-t border-sidebar-border px-3 py-3">
+                  {renderWorkspaceMenu(false)}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </header>
 
         <main className="flex-1 min-h-[calc(100vh-3.5rem)] lg:min-h-screen">

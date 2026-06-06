@@ -33,12 +33,14 @@ import {
   getBillingStatus,
   getInvites,
   getMe,
+  getOrgMembers,
   getSources,
   getTables,
   revokeInvite,
   testAlert,
   testSource,
   updateProfile,
+  updateSource,
 } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import { EmptyState, PageHeader } from '../components/app-ui'
@@ -1005,10 +1007,26 @@ function ProfileTab() {
 }
 
 const ROLES = [
+  { value: 'owner', label: 'Owner', desc: 'Full control including billing, staff management, and org deletion.' },
   { value: 'admin', label: 'Admin', desc: 'Full access to sources, tables, alerts, team settings, and billing.' },
   { value: 'member', label: 'Member', desc: 'Can use dashboards, monitored tables, incidents, alerts, and reports.' },
   { value: 'viewer', label: 'Viewer', desc: 'Read-only access to workspace health, incidents, and reports.' },
 ]
+
+const ROLE_BADGE = {
+  owner: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
+  admin: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
+  member: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+  viewer: 'bg-muted text-muted-foreground border-border',
+}
+
+function RoleBadge({ role }) {
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium capitalize ${ROLE_BADGE[role] || ROLE_BADGE.viewer}`}>
+      {role}
+    </span>
+  )
+}
 
 function normalizeInvites(data) {
   if (Array.isArray(data)) return data
@@ -1018,37 +1036,48 @@ function normalizeInvites(data) {
 function TeamTab() {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('member')
+  const [members, setMembers] = useState([])
   const [invites, setInvites] = useState([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [revoking, setRevoking] = useState({})
 
-  const loadInvites = async () => {
+  // Read current user role from storage to gate invite form
+  const { storage: _s } = (() => { try { return { storage: window.localStorage } } catch { return { storage: null } } })()
+  const currentUserRole = _s?.getItem('dw_user_role') || 'member'
+  const canInvite = ['owner', 'admin'].includes(currentUserRole)
+
+  const load = async () => {
     setLoading(true)
     try {
-      const response = await getInvites()
-      setInvites(normalizeInvites(response.data))
+      const [inviteRes, membersRes] = await Promise.allSettled([
+        getInvites(),
+        getOrgMembers().catch(() => ({ data: [] })),
+      ])
+      if (inviteRes.status === 'fulfilled') setInvites(normalizeInvites(inviteRes.value.data))
+      if (membersRes.status === 'fulfilled') {
+        const raw = membersRes.value?.data
+        setMembers(Array.isArray(raw) ? raw : raw?.items || raw?.members || [])
+      }
     } catch (err) {
-      notify.err(getApiError(err, 'Could not load pending invites'))
+      notify.err(getApiError(err, 'Could not load team'))
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    loadInvites()
-  }, [])
+  useEffect(() => { load() }, [])
 
   const invite = async (event) => {
     event.preventDefault()
-    if (!email) return
+    if (!email || !canInvite) return
     const invitedEmail = email.trim()
     setSending(true)
     try {
       const response = await createInvite({ email: invitedEmail, role })
       const created = response.data
       if (created?.id) setInvites((prev) => [created, ...prev])
-      else await loadInvites()
+      else await load()
       setEmail('')
       notify.ok(`Invite sent to ${invitedEmail}`)
     } catch (err) {
@@ -1067,122 +1096,161 @@ function TeamTab() {
     } catch (err) {
       notify.err(getApiError(err, 'Failed to revoke invite'))
     } finally {
-      setRevoking((prev) => {
-        const next = { ...prev }
-        delete next[invite.id]
-        return next
-      })
+      setRevoking((prev) => { const next = { ...prev }; delete next[invite.id]; return next })
     }
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
+      {/* Current members */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
           <div>
-            <h2 className="flex items-center gap-2 text-base font-medium"><Users className="size-4 text-muted-foreground" />Invite team members</h2>
-            <p className="mt-1 text-sm text-muted-foreground">Members are isolated to your workspace and cannot access other workspaces.</p>
+            <h2 className="flex items-center gap-2 text-sm font-medium"><Users className="size-4 text-muted-foreground" />Team members</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">All active members of this workspace.</p>
           </div>
-          <form onSubmit={invite} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
-            <Input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="colleague@company.com"
-              required
-            />
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {ROLES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <Button type="submit" disabled={sending || !email}>
-              {sending && <Loader2 data-icon="inline-start" className="animate-spin" />}
-              {sending ? 'Sending...' : 'Send invite'}
-            </Button>
-          </form>
-        </CardContent>
+          <Badge variant="outline">{loading ? '…' : members.length}</Badge>
+        </div>
+        {loading ? (
+          <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" /> Loading…
+          </div>
+        ) : members.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground">No members found.</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name / Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {members.map((m) => (
+                <TableRow key={m.id}>
+                  <TableCell>
+                    <div className="font-medium">{m.full_name || m.email}</div>
+                    {m.full_name && <div className="text-xs text-muted-foreground">{m.email}</div>}
+                  </TableCell>
+                  <TableCell><RoleBadge role={m.role} /></TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {m.created_at ? new Date(m.created_at).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${m.is_active !== false ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 'border-border bg-muted text-muted-foreground'}`}>
+                      {m.is_active !== false ? 'Active' : 'Inactive'}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </Card>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
-          <div>
-            <h3 className="text-sm font-medium">Pending invites</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Invites remain pending until the recipient accepts or the token expires.</p>
+      {/* Invite form — only shown to owner/admin */}
+      {canInvite ? (
+        <Card>
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <div>
+              <h2 className="flex items-center gap-2 text-base font-medium"><Send className="size-4 text-muted-foreground" />Invite team members</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Members are isolated to your workspace and cannot access other workspaces.</p>
+            </div>
+            <form onSubmit={invite} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="colleague@company.com" required />
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {ROLES.filter((r) => r.value !== 'owner').map((item) => (
+                      <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <Button type="submit" disabled={sending || !email}>
+                {sending && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                {sending ? 'Sending…' : 'Send invite'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Only workspace owners and admins can invite new members.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending invites */}
+      {canInvite && (
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <div>
+              <h3 className="text-sm font-medium">Pending invites</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">Invites remain pending until accepted or expired.</p>
+            </div>
+            {invites.length > 0 && <Badge variant="outline">{invites.length}</Badge>}
           </div>
           {loading ? (
-            <div className="flex items-center gap-2 rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Loading pending invites...
-            </div>
+            <div className="flex items-center gap-2 p-6 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading…</div>
           ) : invites.length === 0 ? (
-            <EmptyState icon={Send} title="No pending invites" description="Send an invite to add a teammate to this workspace." />
+            <div className="p-6 text-sm text-muted-foreground">No pending invites.</div>
           ) : (
-            <div className="dw-table-wrap">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead className="w-24" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invites.map((invite) => (
-                    <TableRow key={invite.id || invite.email}>
-                      <TableCell className="font-medium">{invite.email}</TableCell>
-                      <TableCell className="capitalize text-muted-foreground">{invite.role}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {invite.expires_at ? new Date(invite.expires_at).toLocaleString() : 'Not set'}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => revoke(invite)}
-                          disabled={!invite.id || revoking[invite.id]}
-                        >
-                          {revoking[invite.id] ? 'Revoking...' : 'Revoke'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-6">
-          <h3 className="mb-3 text-sm font-medium">Role permissions</h3>
-          <div className="dw-table-wrap">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Description</TableHead>
+                  <TableHead>Expires</TableHead>
+                  <TableHead className="w-24" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {ROLES.map((item) => (
-                  <TableRow key={item.value}>
-                    <TableCell><Badge variant="outline">{item.label}</Badge></TableCell>
-                    <TableCell className="text-muted-foreground">{item.desc}</TableCell>
+                {invites.map((inv) => (
+                  <TableRow key={inv.id || inv.email}>
+                    <TableCell className="font-medium">{inv.email}</TableCell>
+                    <TableCell><RoleBadge role={inv.role} /></TableCell>
+                    <TableCell className="text-muted-foreground text-xs">
+                      {inv.expires_at ? new Date(inv.expires_at).toLocaleString() : 'Not set'}
+                    </TableCell>
+                    <TableCell>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => revoke(inv)} disabled={!inv.id || revoking[inv.id]}>
+                        {revoking[inv.id] ? 'Revoking…' : 'Revoke'}
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </div>
-        </CardContent>
+          )}
+        </Card>
+      )}
+
+      {/* Role permissions reference */}
+      <Card className="overflow-hidden p-0">
+        <div className="px-4 py-3 border-b">
+          <h3 className="text-sm font-medium">Role permissions</h3>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Role</TableHead>
+              <TableHead>Description</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {ROLES.map((item) => (
+              <TableRow key={item.value}>
+                <TableCell><RoleBadge role={item.value} /></TableCell>
+                <TableCell className="text-muted-foreground">{item.desc}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </Card>
     </div>
   )
