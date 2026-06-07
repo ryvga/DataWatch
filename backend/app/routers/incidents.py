@@ -201,6 +201,7 @@ async def acknowledge_incident(
     incident = await _get_incident_or_404(incident_id, org, db)
     if incident.status in ("resolved", "acknowledged", "investigating"):
         raise HTTPException(status_code=409, detail=f"Incident is already {incident.status}")
+    old_status = incident.status
     incident.status = "acknowledged"
     incident.acknowledged_at = datetime.now(timezone.utc)
     if hasattr(incident, "acknowledged_by_id"):
@@ -242,6 +243,7 @@ async def resolve_incident(
     incident = await _get_incident_or_404(incident_id, org, db)
     if incident.status == "resolved":
         raise HTTPException(status_code=409, detail="Incident already resolved")
+    old_status = incident.status
     incident.status = "resolved"
     incident.resolved_at = datetime.now(timezone.utc)
     if hasattr(incident, "resolved_by_id"):

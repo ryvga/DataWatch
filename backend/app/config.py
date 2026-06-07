@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     STAFF_PASSWORD: str = ""  # must be set in .env for seeding to run
     STAFF_FULL_NAME: str = "Panopta Admin"
 
+    # Multi-tenancy
+    BASE_DOMAIN: str = "panopta.app"
+
     # Email
     APP_BASE_URL: str = "http://localhost:5173"
     SMTP_HOST: str = "localhost"

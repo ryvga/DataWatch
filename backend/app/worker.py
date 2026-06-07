@@ -22,5 +22,9 @@ celery_app.conf.update(
             "task": "tasks.cleanup_old_profiles",
             "schedule": crontab(hour=3, minute=0),  # 3am UTC daily
         },
+        "send-daily-digests-hourly": {
+            "task": "tasks.send_daily_digests",
+            "schedule": crontab(minute=0),  # every hour at :00
+        },
     },
 )
