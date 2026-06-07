@@ -1,5 +1,24 @@
 import { useState } from 'react'
 import { Activity, BarChart3, Bell, ChevronRight, Database, FileText, Shield, Users, Zap, Check, ArrowRight, GitBranch, Eye } from 'lucide-react'
+
+function FaqItem({ question, answer }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="py-4">
+      <button
+        className="flex w-full items-center justify-between gap-4 text-left text-sm font-medium hover:text-primary transition-colors"
+        onClick={() => setOpen(prev => !prev)}
+        type="button"
+      >
+        {question}
+        <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && (
+        <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{answer}</p>
+      )}
+    </div>
+  )
+}
 import { BrandMark, ThemeToggle } from '../components/app-ui'
 import { workspaceUrl } from '@/lib/subdomain'
 import { Button } from '@/components/ui/button'
@@ -199,7 +218,13 @@ export default function Landing() {
               <ChevronRight className="size-4" />
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Already have a workspace? Jump right in.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Already have a workspace? Jump right in.{' '}
+            By signing up, you agree to our{' '}
+            <a href="/terms" className="underline hover:text-foreground">Terms</a>{' '}
+            and{' '}
+            <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>.
+          </p>
         </div>
       </section>
 
@@ -393,6 +418,53 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* FAQ */}
+      <section className="border-b py-20">
+        <div className="mx-auto max-w-3xl px-4">
+          <div className="mb-10 text-center">
+            <h2 className="text-3xl font-bold tracking-tight">Frequently asked questions</h2>
+          </div>
+          <div className="divide-y">
+            {[
+              {
+                q: 'How does Panopta connect to my database?',
+                a: 'You provide read-only connection credentials (host, port, user, password, database name). Panopta stores them encrypted using HKDF per-tenant Fernet keys — they are never stored in plaintext. Panopta only executes SELECT queries and never writes to your database.'
+              },
+              {
+                q: 'Does Panopta store my actual data?',
+                a: 'No. Panopta only stores aggregate statistics — row counts, null rates, column cardinalities, percentiles, min/max values, and schema structure. It never reads, copies, or stores the actual content of your rows.'
+              },
+              {
+                q: 'What counts as an "anomaly"?',
+                a: 'Panopta uses 7 detection methods: Z-Score (statistical outliers), Isolation Forest (multivariate ML), STL Seasonal Decomposition (time-series patterns), Cardinality Drop, Row Growth Rate, Rule-Based checks (empty tables, SLA breaches, schema drift), and Enum/Category Drift. Each method has configurable sensitivity.'
+              },
+              {
+                q: 'How many tables can I monitor on the free plan?',
+                a: 'The free plan allows 1 data source and up to 5 monitored tables, with 7 days of profile history and email alerts. Starter (from $49/mo) supports 3 sources and 50 tables. Growth ($149/mo) is fully unlimited.'
+              },
+              {
+                q: 'Is Panopta GDPR compliant?',
+                a: 'Yes. Panopta processes only aggregate statistics, not personal data from your databases. Account data is stored securely, encrypted at rest, and you can request deletion at any time via privacy@panopta.app.'
+              },
+              {
+                q: 'Can I get alerts on Slack or PagerDuty?',
+                a: 'Yes. Slack and webhook alerts are available on Starter ($49/mo) and above. PagerDuty, Microsoft Teams, Discord, and OpsGenie are available on Growth ($149/mo) and above. Email alerts are available on all plans including free.'
+              },
+              {
+                q: 'What is the AI narration feature?',
+                a: 'For every P1 and P2 incident, Panopta generates an AI-written report explaining: what happened (with data), the likely cause, business impact, and a recommended debug query. It uses your configured LLM via OpenRouter (you can set your own API key).'
+              },
+              {
+                q: 'How do I cancel my subscription?',
+                a: 'You can cancel anytime from Settings → Billing → Cancel subscription. Your plan remains active until the end of the billing period. No refunds on partial periods, but you will never be charged after cancellation.'
+              },
+            ].map((faq, i) => (
+              <FaqItem key={i} question={faq.q} answer={faq.a} />
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
       <section id="pricing" className="border-b py-24 bg-muted/20">
         <div className="mx-auto max-w-6xl px-4">
@@ -465,14 +537,52 @@ export default function Landing() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 sm:flex-row sm:justify-between">
-          <BrandMark />
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Panopta. All-seeing data quality monitoring.</p>
-          <div className="flex gap-4 text-xs text-muted-foreground">
-            <a href="#pricing" className="hover:text-foreground">Pricing</a>
-            <a href="#workspace-input" className="hover:text-foreground">Sign in</a>
-            <a href="#workspace-input" className="hover:text-foreground">Get started</a>
+      <footer className="border-t py-12 bg-muted/10">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 mb-10">
+            {/* Brand column */}
+            <div>
+              <BrandMark />
+              <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+                All-seeing data quality monitoring. Named for Panoptes, the tireless guardian of Greek mythology.
+              </p>
+            </div>
+            {/* Product column */}
+            <div>
+              <p className="text-sm font-semibold mb-3">Product</p>
+              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                <a href="#features" className="hover:text-foreground">Features</a>
+                <a href="#pricing" className="hover:text-foreground">Pricing</a>
+                <a href="#connectors" className="hover:text-foreground">Connectors</a>
+                <a href="#how-it-works" className="hover:text-foreground">How it works</a>
+              </div>
+            </div>
+            {/* Company column */}
+            <div>
+              <p className="text-sm font-semibold mb-3">Company</p>
+              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                <a href="/about" className="hover:text-foreground">About</a>
+                <a href="/privacy" className="hover:text-foreground">Privacy Policy</a>
+                <a href="/terms" className="hover:text-foreground">Terms of Service</a>
+              </div>
+            </div>
+            {/* Support column */}
+            <div>
+              <p className="text-sm font-semibold mb-3">Support</p>
+              <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+                <a href="#workspace-input" className="hover:text-foreground">Sign in</a>
+                <a href="#workspace-input" className="hover:text-foreground">Create workspace</a>
+                <a href="mailto:hello@panopta.app" className="hover:text-foreground">Contact us</a>
+              </div>
+            </div>
+          </div>
+          <div className="border-t pt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-between">
+            <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Panopta. All-seeing data quality monitoring.</p>
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <a href="/privacy" className="hover:text-foreground">Privacy</a>
+              <a href="/terms" className="hover:text-foreground">Terms</a>
+              <a href="/about" className="hover:text-foreground">About</a>
+            </div>
           </div>
         </div>
       </footer>
