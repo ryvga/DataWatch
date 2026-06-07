@@ -376,3 +376,11 @@ async def _send_alerts_async(incident_id: str) -> dict:
             results.append({"config_id": str(cfg.id), "channel": cfg.channel, "sent": ok})
 
         return {"incident_id": incident_id, "alerts_dispatched": len(results), "results": results}
+
+
+@celery_app.task(name="tasks.notify_incident_assignment")
+def notify_incident_assignment(incident_id: str):
+    """Placeholder: send notifications when an incident is assigned to a user or team.
+    Checks UserNotificationPrefs for recipients and dispatches accordingly.
+    Full implementation depends on alert channel config."""
+    logger.info("notify_incident_assignment: incident_id=%s (stub, no-op)", incident_id)

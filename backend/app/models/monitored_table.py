@@ -28,9 +28,17 @@ class MonitoredTable(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     last_profiled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    owner_team_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True
+    )
+    owner_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     data_source: Mapped["DataSource"] = relationship("DataSource", back_populates="monitored_tables")
     profiles: Mapped[list["TableProfile"]] = relationship("TableProfile", back_populates="table")
     check_results: Mapped[list["CheckResult"]] = relationship("CheckResult", back_populates="table")
     incidents: Mapped[list["Incident"]] = relationship("Incident", back_populates="table")
     alert_configs: Mapped[list["AlertConfig"]] = relationship("AlertConfig", back_populates="table")
+    owner_team: Mapped["Team | None"] = relationship("Team", foreign_keys=[owner_team_id], lazy="select")
+    owner_user: Mapped["User | None"] = relationship("User", foreign_keys=[owner_user_id], lazy="select")

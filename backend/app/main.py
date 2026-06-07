@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.routers import alerts, auth, incidents, orgs, sources, tables
+from app.routers import alerts, auth, incidents, notifications, orgs, sources, tables, teams
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -46,6 +46,8 @@ app.include_router(sources.router)
 app.include_router(tables.router)
 app.include_router(incidents.router)
 app.include_router(alerts.router)
+app.include_router(teams.router)
+app.include_router(notifications.router)
 
 
 @app.get("/health", tags=["infra"])

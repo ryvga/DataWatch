@@ -108,3 +108,24 @@ async def get_current_org_from_jwt(
     if not org:
         raise HTTPException(status_code=401, detail="Org not found")
     return org
+
+
+async def get_current_user_from_jwt(
+    authorization: str = Header(...),
+    db: AsyncSession = Depends(get_db),
+) -> tuple[User, Organization]:
+    """Dependency: validates Bearer JWT, returns (user, org)."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer token required")
+    token = authorization[7:]
+    try:
+        payload = decode_access_token(token)
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user = await db.get(User, payload["sub"])
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    org = await db.get(Organization, payload["org_id"])
+    if not org:
+        raise HTTPException(status_code=401, detail="Org not found")
+    return user, org

@@ -6,6 +6,9 @@ from app.models.table_profile import TableProfile
 from app.models.check_result import CheckResult
 from app.models.incident import Incident
 from app.models.alert_config import AlertConfig
+from app.models.team import Team, TeamMember
+from app.models.oncall import OncallSchedule
+from app.models.notification_prefs import UserNotificationPrefs
 
 __all__ = [
     "Organization",
@@ -17,4 +20,8 @@ __all__ = [
     "CheckResult",
     "Incident",
     "AlertConfig",
+    "Team",
+    "TeamMember",
+    "OncallSchedule",
+    "UserNotificationPrefs",
 ]

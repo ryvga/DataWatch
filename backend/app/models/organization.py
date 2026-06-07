@@ -27,3 +27,4 @@ class Organization(Base):
     data_sources: Mapped[list["DataSource"]] = relationship("DataSource", back_populates="organization")
     incidents: Mapped[list["Incident"]] = relationship("Incident", back_populates="organization")
     alert_configs: Mapped[list["AlertConfig"]] = relationship("AlertConfig", back_populates="organization")
+    teams: Mapped[list["Team"]] = relationship("Team", back_populates="organization")

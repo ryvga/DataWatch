@@ -25,6 +25,7 @@ class User(Base):
     )
 
     organization: Mapped["Organization"] = relationship("Organization", back_populates="users")
+    team_memberships: Mapped[list["TeamMember"]] = relationship("TeamMember", back_populates="user")
 
 
 class ApiKey(Base):

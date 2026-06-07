@@ -34,6 +34,24 @@ class Incident(Base):
     )
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    assigned_team_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("teams.id", ondelete="SET NULL"), nullable=True
+    )
+    acknowledged_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     organization: Mapped["Organization"] = relationship("Organization", back_populates="incidents")
     table: Mapped["MonitoredTable"] = relationship("MonitoredTable", back_populates="incidents")
+    assignee: Mapped["User | None"] = relationship(
+        "User", foreign_keys=[assignee_id], lazy="select"
+    )
+    assigned_team: Mapped["Team | None"] = relationship(
+        "Team", foreign_keys=[assigned_team_id], lazy="select"
+    )
