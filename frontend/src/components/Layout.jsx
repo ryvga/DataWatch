@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Bell,
   BookOpen,
   Building2,
   ChevronUp,
@@ -233,6 +234,18 @@ export default function Layout() {
 
         {/* Bottom workspace menu */}
         <div className="border-t border-sidebar-border px-2 py-3">
+          {!collapsed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 mb-1 text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              onClick={() => nav('/incidents?assigned_to_me=true')}
+              title="My assigned incidents"
+            >
+              <Bell className="size-4" />
+              My Incidents
+            </Button>
+          )}
           {renderWorkspaceMenu(collapsed)}
         </div>
       </aside>

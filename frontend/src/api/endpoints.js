@@ -137,3 +137,6 @@ export const deleteOncallSlot = (teamId, slotId) => api.delete(`/api/v1/teams/${
 // ── Notification preferences ─────────────────────────────────────────────────
 export const getNotificationPrefs = () => api.get('/api/v1/me/notification-preferences')
 export const updateNotificationPrefs = (body) => api.patch('/api/v1/me/notification-preferences', body)
+
+// ── Notification preferences + Assignment ────────────────────────────────────
+export const assignIncident = (id, body) => api.patch(`/api/v1/incidents/${id}/assign`, body)

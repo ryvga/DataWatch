@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Clock, Search } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Search, User } from 'lucide-react'
 import { getIncidents, getIncidentStats } from '../api/endpoints'
 import IncidentCard from '../components/IncidentCard'
 import { EmptyState, LoadingState, PageHeader } from '../components/app-ui'
@@ -26,10 +26,13 @@ export default function Incidents() {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [interval, setInterval_] = useState(30000)
+  const [assignedToMe, setAssignedToMe] = useState(false)
   const activeTabRef = useRef(activeTab)
   const severityRef = useRef(severity)
+  const assignedToMeRef = useRef(assignedToMe)
   activeTabRef.current = activeTab
   severityRef.current = severity
+  assignedToMeRef.current = assignedToMe
 
   const load = (tab, sev) => {
     const resolvedTab = tab ?? activeTabRef.current
@@ -41,6 +44,7 @@ export default function Incidents() {
       else params.status = resolvedTab
     }
     if (resolvedSev !== 'all') params.severity = resolvedSev
+    if (assignedToMeRef.current) params.assigned_to_me = true
     return getIncidents(params).then(r => setIncidents(r.data)).finally(() => setLoading(false))
   }
 
@@ -122,6 +126,21 @@ export default function Incidents() {
             </button>
           ))}
         </div>
+
+        {/* Mine toggle */}
+        <button
+          className={cn(
+            'inline-flex h-8 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors',
+            assignedToMe
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-input bg-background text-foreground hover:bg-muted'
+          )}
+          onClick={() => { setAssignedToMe(v => !v); load() }}
+          type="button"
+        >
+          <User className="size-3.5" />
+          Mine
+        </button>
 
         {/* Severity */}
         <Select value={severity} onValueChange={v => { setSeverity(v); load(activeTabRef.current, v) }}>
