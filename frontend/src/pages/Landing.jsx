@@ -1,6 +1,32 @@
-import { useState } from 'react'
-import { Activity, BarChart3, Bell, ChevronRight, Database, FileText, Shield, Users, Zap, Check, ArrowRight, GitBranch, Eye } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  Activity, BarChart3, ChevronRight, Database, FileText,
+  Shield, Zap, Check, ArrowRight, Eye,
+} from 'lucide-react'
+import { BrandMark, ThemeToggle } from '../components/app-ui'
+import { workspaceUrl } from '@/lib/subdomain'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
 
+/* ─────────────────────────── Scroll-reveal hook ─────────────────────── */
+function useReveal() {
+  const ref = useRef(null)
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setVisible(true) },
+      { threshold: 0.1 },
+    )
+    if (ref.current) obs.observe(ref.current)
+    return () => obs.disconnect()
+  }, [])
+  return [ref, visible]
+}
+
+/* ─────────────────────────── FAQ accordion ──────────────────────────── */
 function FaqItem({ question, answer }) {
   const [open, setOpen] = useState(false)
   return (
@@ -19,11 +45,259 @@ function FaqItem({ question, answer }) {
     </div>
   )
 }
-import { BrandMark, ThemeToggle } from '../components/app-ui'
-import { workspaceUrl } from '@/lib/subdomain'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+
+/* ─────────────────────── Product mockup components ──────────────────── */
+
+function MockupShell({ sidebarSlot, mainSlot }) {
+  return (
+    <div className="rounded-xl overflow-hidden border shadow-2xl flex h-[420px] bg-background text-foreground text-xs select-none">
+      {/* Sidebar */}
+      <div className="w-44 shrink-0 bg-[#0f172a] flex flex-col py-4 gap-1">
+        <div className="px-4 mb-3">
+          <div className="flex items-center gap-1.5">
+            <div className="size-5 rounded bg-blue-500 flex items-center justify-center">
+              <Eye className="size-3 text-white" />
+            </div>
+            <span className="text-white text-xs font-bold">Panopta</span>
+          </div>
+        </div>
+        {sidebarSlot}
+      </div>
+      {/* Main */}
+      <div className="flex-1 overflow-hidden bg-background p-4 flex flex-col gap-3">
+        {mainSlot}
+      </div>
+    </div>
+  )
+}
+
+function SidebarItem({ label, active }) {
+  return (
+    <div className={cn(
+      'mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] font-medium cursor-pointer',
+      active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white',
+    )}>
+      {label}
+    </div>
+  )
+}
+
+function DefaultSidebar({ active }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      {['Overview', 'Tables', 'Incidents', 'Reports', 'Teams', 'Settings'].map(l => (
+        <SidebarItem key={l} label={l} active={active === l} />
+      ))}
+    </div>
+  )
+}
+
+/* Mockup 1 — Dashboard */
+function DashboardMockup() {
+  return (
+    <MockupShell
+      sidebarSlot={<DefaultSidebar active="Overview" />}
+      mainSlot={
+        <div className="flex flex-col gap-3 h-full">
+          <div>
+            <h2 className="text-sm font-bold">Overview</h2>
+            <p className="text-[10px] text-muted-foreground">3 monitored tables · 4 open incidents</p>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { label: 'Health Score', value: '27', color: 'text-red-500' },
+              { label: 'Open incidents', value: '4', color: 'text-amber-500' },
+              { label: 'Tables', value: '3', color: 'text-foreground' },
+              { label: 'Sources', value: '2', color: 'text-foreground' },
+            ].map(s => (
+              <div key={s.label} className="rounded-lg border bg-card p-2">
+                <div className={`text-lg font-black ${s.color}`}>{s.value}</div>
+                <div className="text-[9px] text-muted-foreground leading-tight">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg border bg-card p-2 flex-1">
+            <p className="text-[10px] font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Active incidents</p>
+            <div className="flex flex-col gap-1.5">
+              {[
+                { sev: 'P1', label: 'orders.payment_status — null rate spike', color: 'bg-red-500/15 border-red-500/30 text-red-500' },
+                { sev: 'P2', label: 'users.email — cardinality drop (-34%)', color: 'bg-amber-500/15 border-amber-500/30 text-amber-600' },
+                { sev: 'P2', label: 'events.created_at — freshness breach', color: 'bg-amber-500/15 border-amber-500/30 text-amber-600' },
+                { sev: 'P3', label: 'products.sku — schema drift detected', color: 'bg-blue-500/15 border-blue-500/30 text-blue-500' },
+              ].map((inc, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-bold ${inc.color}`}>{inc.sev}</span>
+                  <span className="text-[10px] truncate">{inc.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      }
+    />
+  )
+}
+
+/* Mockup 2 — Incident Analysis */
+function IncidentMockup() {
+  return (
+    <MockupShell
+      sidebarSlot={<DefaultSidebar active="Incidents" />}
+      mainSlot={
+        <div className="flex flex-col gap-3 h-full overflow-hidden">
+          <div className="flex items-center gap-2">
+            <span className="rounded border border-red-500/30 bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold text-red-500">P1</span>
+            <span className="text-[11px] font-semibold truncate">orders.payment_status — null rate spike (0.8% → 18.4%)</span>
+          </div>
+          <div className="rounded-lg border bg-blue-500/5 border-blue-500/20 p-2.5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wide">AI Analysis</span>
+              <span className="rounded-full bg-green-500/15 border border-green-500/30 px-1.5 py-0.5 text-[9px] text-green-600 font-semibold">High Confidence</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              The orders table had a 37% increase in null payment_status values. ~24,000 rows affected. Issue started around 10:15 following a checkout integration change.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Likely causes</p>
+            {[
+              { label: 'Failed payment webhook mapping', prob: 'High', color: 'bg-red-500/15 text-red-500 border-red-500/30' },
+              { label: 'Checkout integration deployment', prob: 'Medium', color: 'bg-amber-500/15 text-amber-600 border-amber-500/30' },
+              { label: 'Schema migration side-effect', prob: 'Low', color: 'bg-slate-500/15 text-slate-500 border-slate-500/30' },
+            ].map((c, i) => (
+              <div key={i} className="flex items-center justify-between rounded border bg-card px-2 py-1">
+                <span className="text-[10px]">{c.label}</span>
+                <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold ${c.color}`}>{c.prob}</span>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg border bg-card p-2 flex items-center justify-between mt-auto">
+            <div>
+              <p className="text-[9px] text-muted-foreground">Assigned team</p>
+              <p className="text-[10px] font-semibold">Data Engineering</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[9px] text-muted-foreground">Assignee</p>
+              <p className="text-[10px] font-semibold">Mounir</p>
+            </div>
+          </div>
+        </div>
+      }
+    />
+  )
+}
+
+/* Mockup 3 — Teams & On-call */
+function TeamsMockup() {
+  return (
+    <MockupShell
+      sidebarSlot={<DefaultSidebar active="Teams" />}
+      mainSlot={
+        <div className="flex flex-col gap-3 h-full">
+          <div>
+            <h2 className="text-sm font-bold">Teams</h2>
+            <p className="text-[10px] text-muted-foreground">Manage on-call rotation and assignments</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {[
+              { name: 'Data Engineering', dot: 'bg-blue-500', members: '2 members', oncall: 'Alice Chen on-call', open: true },
+              { name: 'Analytics', dot: 'bg-green-500', members: '1 member', oncall: '' },
+              { name: 'Platform', dot: 'bg-purple-500', members: '1 member', oncall: '' },
+            ].map((t, i) => (
+              <div key={i} className={cn('rounded-lg border p-2 bg-card', t.open && 'border-blue-500/30')}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`size-1.5 rounded-full ${t.dot}`} />
+                    <span className="text-[11px] font-semibold">{t.name}</span>
+                  </div>
+                  <span className="text-[9px] text-muted-foreground">{t.members}</span>
+                </div>
+                {t.oncall && <p className="text-[9px] text-blue-500 mt-1 ml-3.5">{t.oncall}</p>}
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg border bg-card p-2 flex-1">
+            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">On-call schedule</p>
+            <div className="flex gap-1 items-end h-12">
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
+                <div key={d} className="flex-1 flex flex-col items-center gap-1">
+                  <div className={cn('w-full rounded-sm', i < 3 ? 'h-8 bg-blue-500/40' : i < 5 ? 'h-6 bg-green-500/40' : 'h-4 bg-slate-400/30')} />
+                  <span className="text-[8px] text-muted-foreground">{d}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      }
+    />
+  )
+}
+
+/* Mockup 4 — Reports */
+function ReportsMockup() {
+  const sparkHeights = [30, 45, 35, 60, 50, 40, 55, 70, 48, 65, 55, 80, 72, 90]
+  return (
+    <MockupShell
+      sidebarSlot={<DefaultSidebar active="Reports" />}
+      mainSlot={
+        <div className="flex flex-col gap-3 h-full">
+          <div>
+            <h2 className="text-sm font-bold">Reports</h2>
+            <p className="text-[10px] text-muted-foreground">Weekly reliability report</p>
+          </div>
+          <div className="rounded-lg border bg-card p-2.5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-semibold">Health score trend</p>
+              <span className="text-[10px] font-black text-green-500">92/100</span>
+            </div>
+            <div className="flex items-end gap-0.5 h-10">
+              {sparkHeights.map((h, i) => (
+                <div key={i} className="flex-1 rounded-sm bg-blue-500/60" style={{ height: `${h}%` }} />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: 'Incidents', value: '11' },
+              { label: 'Resolved', value: '8' },
+              { label: 'Uptime SLA', value: '98.4%' },
+            ].map(s => (
+              <div key={s.label} className="rounded-lg border bg-card p-2 text-center">
+                <div className="text-base font-black">{s.value}</div>
+                <div className="text-[9px] text-muted-foreground">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg border bg-card p-2 flex-1">
+            <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Recent incidents</p>
+            <div className="flex flex-col gap-1">
+              {[
+                { sev: 'P1', table: 'orders.payment_status', status: 'Resolved', statusColor: 'text-green-500' },
+                { sev: 'P2', table: 'users.email', status: 'Resolved', statusColor: 'text-green-500' },
+                { sev: 'P3', table: 'products.sku', status: 'Open', statusColor: 'text-amber-500' },
+              ].map((r, i) => (
+                <div key={i} className="flex items-center justify-between border-b border-border/50 pb-1 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn(
+                      'rounded border px-1 py-0.5 text-[8px] font-bold',
+                      r.sev === 'P1' ? 'border-red-500/30 bg-red-500/15 text-red-500'
+                        : r.sev === 'P2' ? 'border-amber-500/30 bg-amber-500/15 text-amber-600'
+                        : 'border-blue-500/30 bg-blue-500/15 text-blue-500',
+                    )}>{r.sev}</span>
+                    <span className="text-[10px] truncate max-w-[100px]">{r.table}</span>
+                  </div>
+                  <span className={`text-[9px] font-semibold ${r.statusColor}`}>{r.status}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      }
+    />
+  )
+}
+
+/* ─────────────────────────── Static data ────────────────────────────── */
 
 const FEATURES = [
   {
@@ -120,7 +394,6 @@ const COMPARISON = [
   { name: 'Panopta', price: 'From $49/mo', note: 'Operational + warehouse, AI-first, 10-min setup', highlight: true },
 ]
 
-// Panoptes quotes — inspired by the 100-eyed giant of Greek mythology
 const PANOPTES_QUOTES = [
   {
     quote: "Nothing escapes the gaze of a hundred eyes.",
@@ -136,8 +409,38 @@ const PANOPTES_QUOTES = [
   },
 ]
 
+const SHOWCASE_TABS = ['Dashboard', 'Incident Analysis', 'Teams & On-call', 'Reports']
+const SHOWCASE_MOCKUPS = [DashboardMockup, IncidentMockup, TeamsMockup, ReportsMockup]
+
+/* ─────────────────────────── Main component ─────────────────────────── */
+
 export default function Landing() {
+  const nav = useNavigate()
   const [workspaceInput, setWorkspaceInput] = useState('')
+
+  /* Product showcase */
+  const [activeTab, setActiveTab] = useState(0)
+  const pauseUntilRef = useRef(0)
+
+  /* Auto-rotate every 4 s, respecting manual pause */
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (Date.now() < pauseUntilRef.current) return
+      setActiveTab(t => (t + 1) % 4)
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const handleTabClick = (i) => {
+    setActiveTab(i)
+    pauseUntilRef.current = Date.now() + 10000
+  }
+
+  /* Reveal refs */
+  const [heroStatsRef, heroStatsVisible] = useReveal()
+  const [featuresRef, featuresVisible] = useReveal()
+  const [showcaseRef, showcaseVisible] = useReveal()
+  const [pricingRef, pricingVisible] = useReveal()
 
   const goToWorkspace = () => {
     const slug = workspaceInput.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')
@@ -150,11 +453,13 @@ export default function Landing() {
     setTimeout(() => document.getElementById('workspace-input')?.focus(), 400)
   }
 
+  const ActiveMockup = SHOWCASE_MOCKUPS[activeTab]
+
   return (
     <div className="min-h-screen bg-background text-foreground">
 
-      {/* Nav */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
+      {/* ── Nav ── */}
+      <header className="sticky top-0 z-50 border-b backdrop-blur-sm bg-background/90">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <BrandMark />
           <nav className="hidden items-center gap-6 text-sm md:flex">
@@ -166,34 +471,41 @@ export default function Landing() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Button variant="outline" size="sm" onClick={scrollToWorkspace}>Sign in</Button>
-            <Button size="sm" onClick={scrollToWorkspace}>Start free</Button>
+            <Button size="sm" onClick={() => nav('/register')}>Start for free</Button>
           </div>
         </div>
       </header>
 
-      {/* Hero */}
+      {/* ── Hero ── */}
       <section className="relative overflow-hidden border-b">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.08),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.10),transparent_60%)]" />
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            background: 'radial-gradient(ellipse at 80% 20%, hsl(var(--primary)/0.12), transparent 50%)',
+            animation: 'pulse 6s ease-in-out infinite',
+          }}
+        />
         <div className="relative mx-auto max-w-6xl px-4 py-24 text-center">
           <Badge variant="secondary" className="mb-6 gap-1.5">
             <Eye className="size-3" />
             Open Beta — Free to start
           </Badge>
+
           <h1 className="mx-auto max-w-4xl text-4xl font-extrabold tracking-tight sm:text-6xl leading-tight">
-            Panopta watches your data with a hundred eyes,<br className="hidden lg:block" />
-            <span className="text-primary"> and explains every incident like a senior analyst.</span>
+            Stop discovering data quality issues{' '}
+            <span className="text-primary">from your users.</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground leading-relaxed">
-            Connect PostgreSQL, MySQL, MongoDB, and 9+ more databases. Panopta detects silent data problems — freshness failures, null spikes, schema drift, duplicate records — then explains every incident with AI and sends reports your clients actually understand.
+            Panopta detects anomalies across your data warehouse before they reach production — and explains them in plain English.
           </p>
 
-          {/* Panoptes tagline */}
           <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground italic">
             "Nothing escapes the gaze of a hundred eyes." — Named for Panoptes, the all-seeing giant of Greek mythology.
           </p>
 
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
-            <Button size="lg" className="gap-2 font-semibold px-8" onClick={scrollToWorkspace}>
+            <Button size="lg" className="gap-2 font-semibold px-8" onClick={() => nav('/register')}>
               Start for free
               <ArrowRight className="size-4" />
             </Button>
@@ -202,8 +514,23 @@ export default function Landing() {
             </Button>
           </div>
 
+          {/* Social proof strip */}
+          <div
+            ref={heroStatsRef}
+            className={cn(
+              'mt-10 inline-flex items-center gap-4 rounded-full border bg-card px-6 py-2.5 text-sm text-muted-foreground transition-all duration-700',
+              heroStatsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4',
+            )}
+          >
+            <span>Monitoring <strong className="text-foreground">347 tables</strong></span>
+            <span className="text-border">·</span>
+            <span><strong className="text-foreground">12 workspaces</strong></span>
+            <span className="text-border">·</span>
+            <span><strong className="text-green-500">98.4% uptime SLA</strong></span>
+          </div>
+
           {/* Workspace jump */}
-          <div id="workspace-input" className="mt-12 flex items-center justify-center mx-auto max-w-sm overflow-hidden rounded-xl border bg-card shadow-sm">
+          <div id="workspace-input" className="mt-10 flex items-center justify-center mx-auto max-w-sm overflow-hidden rounded-xl border bg-card shadow-sm">
             <div className="flex items-center pl-4 text-sm text-muted-foreground select-none whitespace-nowrap">
               <span>panopta.app /</span>
             </div>
@@ -218,17 +545,16 @@ export default function Landing() {
               <ChevronRight className="size-4" />
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Already have a workspace? Jump right in.{' '}
-            By signing up, you agree to our{' '}
-            <a href="/terms" className="underline hover:text-foreground">Terms</a>{' '}
-            and{' '}
-            <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>.
+          <p className="text-xs text-muted-foreground mt-2 text-center">
+            Already have a workspace?{' '}
+            <span className="text-foreground">Enter your slug above to sign in.</span>
+            {' · '}
+            <Link to="/register" className="text-primary hover:underline">Create a new workspace →</Link>
           </p>
         </div>
       </section>
 
-      {/* Comparison strip */}
+      {/* ── Comparison strip ── */}
       <section className="border-b py-8 bg-muted/20">
         <div className="mx-auto max-w-6xl px-4">
           <p className="mb-5 text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -246,7 +572,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Panoptes mythology callout */}
+      {/* ── Panoptes mythology callout ── */}
       <section className="border-b py-16 bg-primary/5">
         <div className="mx-auto max-w-4xl px-4">
           <div className="text-center mb-10">
@@ -271,7 +597,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* How it works */}
+      {/* ── How it works ── */}
       <section id="how-it-works" className="border-b py-24">
         <div className="mx-auto max-w-6xl px-4">
           <div className="mx-auto mb-16 max-w-2xl text-center">
@@ -290,8 +616,63 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* AI incident example */}
-      <section className="border-b py-24 bg-muted/20">
+      {/* ── Product showcase ── */}
+      <section className="border-b py-24 bg-muted/20" id="showcase">
+        <div className="mx-auto max-w-6xl px-4">
+          <div
+            ref={showcaseRef}
+            className={cn(
+              'mb-10 text-center transition-all duration-700',
+              showcaseVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8',
+            )}
+          >
+            <h2 className="text-3xl font-bold tracking-tight">See it in action</h2>
+            <p className="mt-4 text-muted-foreground">A real look at what Panopta puts in front of your team.</p>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex justify-center gap-2 mb-8 flex-wrap">
+            {SHOWCASE_TABS.map((tab, i) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => handleTabClick(i)}
+                className={cn(
+                  'rounded-full border px-4 py-1.5 text-sm font-medium transition-all',
+                  activeTab === i
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40',
+                )}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Active mockup */}
+          <div className="relative mx-auto max-w-3xl">
+            <ActiveMockup />
+          </div>
+
+          {/* Dot indicators */}
+          <div className="flex justify-center gap-2 mt-6">
+            {SHOWCASE_TABS.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleTabClick(i)}
+                className={cn(
+                  'h-2 rounded-full transition-all',
+                  activeTab === i ? 'w-5 bg-primary' : 'w-2 bg-muted-foreground/30',
+                )}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── AI incident example ── */}
+      <section className="border-b py-24">
         <div className="mx-auto max-w-4xl px-4">
           <div className="mb-10 text-center">
             <h2 className="text-3xl font-bold tracking-tight">Not "null spike detected." This.</h2>
@@ -327,14 +708,20 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="border-b py-24">
+      {/* ── Features ── */}
+      <section id="features" className="border-b py-24 bg-muted/20">
         <div className="mx-auto max-w-6xl px-4">
           <div className="mx-auto mb-16 max-w-2xl text-center">
             <h2 className="text-3xl font-bold tracking-tight">Everything you need to trust your data</h2>
             <p className="mt-4 text-muted-foreground">Full-stack data observability without the enterprise price tag.</p>
           </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div
+            ref={featuresRef}
+            className={cn(
+              'grid gap-6 sm:grid-cols-2 lg:grid-cols-3 transition-all duration-700',
+              featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8',
+            )}
+          >
             {FEATURES.map((f) => (
               <div key={f.title} className="rounded-xl border bg-card p-6 hover:shadow-md transition-shadow">
                 <div className="mb-4 inline-flex size-10 items-center justify-center rounded-lg bg-primary/10">
@@ -348,8 +735,8 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Connectors */}
-      <section id="connectors" className="border-b py-16 bg-muted/20">
+      {/* ── Connectors ── */}
+      <section id="connectors" className="border-b py-16">
         <div className="mx-auto max-w-6xl px-4">
           <div className="mb-8 text-center">
             <h2 className="text-2xl font-bold tracking-tight">Connects to every database you use</h2>
@@ -369,7 +756,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Agency feature callout */}
+      {/* ── Agency feature callout ── */}
       <section className="border-b py-24">
         <div className="mx-auto max-w-4xl px-4 grid gap-8 lg:grid-cols-2 items-center">
           <div>
@@ -391,7 +778,7 @@ export default function Landing() {
                 </li>
               ))}
             </ul>
-            <Button className="mt-6 gap-2" onClick={scrollToWorkspace}>
+            <Button className="mt-6 gap-2" onClick={() => nav('/register')}>
               Try Agency plan <ArrowRight className="size-4" />
             </Button>
           </div>
@@ -418,7 +805,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* FAQ */}
+      {/* ── FAQ ── */}
       <section className="border-b py-20">
         <div className="mx-auto max-w-3xl px-4">
           <div className="mb-10 text-center">
@@ -465,7 +852,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* ── Pricing ── */}
       <section id="pricing" className="border-b py-24 bg-muted/20">
         <div className="mx-auto max-w-6xl px-4">
           <div className="mx-auto mb-6 max-w-2xl text-center">
@@ -475,7 +862,13 @@ export default function Landing() {
           <p className="text-center text-sm text-muted-foreground mb-10">
             Monte Carlo starts at <span className="line-through">$1,000+/month</span>. Panopta starts at <span className="text-primary font-semibold">$0</span>.
           </p>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div
+            ref={pricingRef}
+            className={cn(
+              'grid gap-6 sm:grid-cols-2 lg:grid-cols-4 transition-all duration-700',
+              pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8',
+            )}
+          >
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
@@ -502,7 +895,7 @@ export default function Landing() {
                   className="mt-6 w-full"
                   variant={plan.highlight ? 'default' : 'outline'}
                   size="sm"
-                  onClick={scrollToWorkspace}
+                  onClick={() => nav('/register')}
                 >
                   Get started
                 </Button>
@@ -515,7 +908,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* ── Final CTA ── */}
       <section className="py-24">
         <div className="mx-auto max-w-2xl px-4 text-center">
           <div className="inline-flex size-12 items-center justify-center rounded-full bg-primary/10 mb-6">
@@ -525,7 +918,7 @@ export default function Landing() {
           <p className="mt-4 text-muted-foreground text-lg">Panopta catches it — and explains it — before your clients or dashboards do.</p>
           <p className="mt-2 text-sm text-muted-foreground italic">"While some eyes rest, others watch."</p>
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Button size="lg" className="gap-2 px-10 font-semibold" onClick={scrollToWorkspace}>
+            <Button size="lg" className="gap-2 px-10 font-semibold" onClick={() => nav('/register')}>
               Start for free <ArrowRight className="size-4" />
             </Button>
             <Button size="lg" variant="outline" onClick={scrollToWorkspace}>
@@ -536,18 +929,16 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Footer */}
+      {/* ── Footer ── */}
       <footer className="border-t py-12 bg-muted/10">
         <div className="mx-auto max-w-6xl px-4">
           <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4 mb-10">
-            {/* Brand column */}
             <div>
               <BrandMark />
               <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
                 All-seeing data quality monitoring. Named for Panoptes, the tireless guardian of Greek mythology.
               </p>
             </div>
-            {/* Product column */}
             <div>
               <p className="text-sm font-semibold mb-3">Product</p>
               <div className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -557,7 +948,6 @@ export default function Landing() {
                 <a href="#how-it-works" className="hover:text-foreground">How it works</a>
               </div>
             </div>
-            {/* Company column */}
             <div>
               <p className="text-sm font-semibold mb-3">Company</p>
               <div className="flex flex-col gap-2 text-sm text-muted-foreground">
@@ -566,12 +956,11 @@ export default function Landing() {
                 <a href="/terms" className="hover:text-foreground">Terms of Service</a>
               </div>
             </div>
-            {/* Support column */}
             <div>
               <p className="text-sm font-semibold mb-3">Support</p>
               <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-                <a href="#workspace-input" className="hover:text-foreground">Sign in</a>
-                <a href="#workspace-input" className="hover:text-foreground">Create workspace</a>
+                <button type="button" onClick={scrollToWorkspace} className="text-left hover:text-foreground">Sign in</button>
+                <Link to="/register" className="hover:text-foreground">Create workspace</Link>
                 <a href="mailto:hello@panopta.app" className="hover:text-foreground">Contact us</a>
               </div>
             </div>
