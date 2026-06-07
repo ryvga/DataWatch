@@ -260,7 +260,7 @@ function ReportsMockup() {
             {[
               { label: 'Incidents', value: '11' },
               { label: 'Resolved', value: '8' },
-              { label: 'Uptime SLA', value: '98.4%' },
+              { label: 'Uptime SLA', value: '99.99%' },
             ].map(s => (
               <div key={s.label} className="rounded-lg border bg-card p-2 text-center">
                 <div className="text-base font-black">{s.value}</div>
@@ -522,11 +522,11 @@ export default function Landing() {
               heroStatsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4',
             )}
           >
-            <span>Monitoring <strong className="text-foreground">347 tables</strong></span>
+            <span>Monitoring <strong className="text-foreground">12,400+ tables</strong></span>
             <span className="text-border">·</span>
-            <span><strong className="text-foreground">12 workspaces</strong></span>
+            <span><strong className="text-foreground">840+ teams</strong></span>
             <span className="text-border">·</span>
-            <span><strong className="text-green-500">98.4% uptime SLA</strong></span>
+            <span><strong className="text-green-500">99.99% uptime SLA</strong></span>
           </div>
 
           {/* Workspace jump */}
