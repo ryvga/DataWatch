@@ -16,6 +16,9 @@ import Settings from './pages/Settings'
 import Reports from './pages/Reports'
 import HelpCenter from './pages/HelpCenter'
 import Teams from './pages/Teams'
+import Privacy from './pages/Privacy'
+import Terms from './pages/Terms'
+import About from './pages/About'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminStats from './pages/admin/AdminStats'
@@ -112,6 +115,9 @@ export default function App() {
           <Route path="/accept-invite" element={<AcceptInvite />} />
           <Route path="/accept-invite/:token" element={<AcceptInvite />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/about" element={<About />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

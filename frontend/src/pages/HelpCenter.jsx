@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, ChevronDown, ChevronRight, BarChart2, TrendingUp, Activity, AlertCircle, Layers, Target, GitBranch, ArrowUpDown, Percent, Clock, Hash } from 'lucide-react'
+import { Search, ChevronDown, ChevronRight, BarChart2, TrendingUp, Activity, AlertCircle, Layers, Target, GitBranch, ArrowUpDown, Percent, Clock, Hash, BookOpen } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -332,6 +332,43 @@ An alert fires when |Z_mean| > 3. This complements Percentile Drift — distribu
   },
 ]
 
+const GLOSSARY_TERMS = [
+  { term: 'Profile', def: "A snapshot of a table's statistics at a point in time: row count, column metrics (null rate, cardinality, percentiles), schema fingerprint, and freshness. Profiles are the raw data Panopta uses for anomaly detection." },
+  { term: 'Check', def: 'A single anomaly evaluation (e.g., Z-Score on row count). Each profile run executes all enabled checks. A check result is either "passed", "failed", or "skipped" (insufficient history).' },
+  { term: 'Incident', def: 'Created when one or more checks fail. Incidents have severity (P1/P2/P3) and status (open → acknowledged → resolved). Repeat failures append to the same incident rather than creating new ones.' },
+  { term: 'Sensitivity', def: 'The z-score threshold for flagging an anomaly. Default: 3.0 (3 standard deviations from mean). Lower = more sensitive (more alerts). Higher = less sensitive (fewer alerts). Configurable per table.' },
+  { term: 'Schema fingerprint', def: "A hash of the table's column names and types. Changes in the fingerprint between profiles trigger a schema drift check (P2 incident)." },
+  { term: 'Cardinality ratio', def: 'Distinct values ÷ total rows. A cardinality drop > 30% relative to the 14-day average triggers the Cardinality Drop check.' },
+  { term: 'Freshness column', def: 'A timestamp column used to measure how recently data was written (e.g., created_at). Panopta computes seconds since the max value of this column.' },
+  { term: 'Null rate', def: 'Fraction of NULL values in a column. Null rate spike > 20 percentage points triggers a P1 rule-based check.' },
+  { term: 'Isolation Forest', def: 'A machine learning algorithm that detects multivariate anomalies. Trained on the last 21+ profiles. Flags runs with anomaly score < -0.1.' },
+  { term: 'STL Seasonal Decomposition', def: 'Separates time-series data into Trend + Seasonal + Residual components. Flags residuals > 3σ as anomalies. Requires at least 21 daily profiles.' },
+]
+
+const HELP_FAQS = [
+  { q: 'Why am I getting false positives?', a: 'False positives usually occur when the sensitivity threshold is too low for your table\'s natural variance. Try increasing the sensitivity setting on the table detail page (e.g., from 3.0 to 4.0). For tables with strong weekly patterns, the STL Seasonal check is more accurate than Z-Score.' },
+  { q: 'How do I tune sensitivity for a table?', a: 'Go to the table detail page → Settings. Lower sensitivity (e.g., 2.0) = more alerts, catches subtle anomalies. Higher sensitivity (e.g., 5.0) = fewer alerts, only flags major deviations. Start at 3.0 (default) and adjust based on your alert volume.' },
+  { q: 'What does "skipped — insufficient history" mean?', a: 'Some checks require a minimum number of historical profiles before they can run. Z-Score needs 7, Isolation Forest needs 21. If your table was recently added, these checks will show "skipped" until enough profiles have been collected.' },
+  { q: 'How often does profiling run?', a: 'Profiling runs at the interval you configured when adding the table (minimum 15 minutes, maximum 24 hours). The default is 60 minutes. You can change the interval from the table detail page.' },
+  { q: 'Can I add custom detection rules?', a: 'Yes. The NL Rule Builder (available on Starter and above) lets you describe a rule in plain English — e.g. "alert if revenue_usd > 10000 for more than 5 rows" — and Panopta generates a SQL-backed check automatically.' },
+  { q: 'How does the AI narration work?', a: 'For P1 and P2 incidents, Panopta sends the incident context (table stats, failed checks, historical baseline, schema) to an LLM via OpenRouter. The LLM generates a structured report with root cause analysis, business impact, and a debug query. You can configure your own API key per workspace.' },
+  { q: 'What is the difference between Z-Score and Isolation Forest?', a: 'Z-Score evaluates one metric at a time (e.g., just row count) against its historical distribution. Isolation Forest evaluates multiple metrics simultaneously (row count, null rate, cardinality, mean, stddev) and catches anomalies that are only visible when all metrics are considered together.' },
+  { q: 'Why did my incident auto-resolve?', a: 'Panopta auto-resolves open incidents when the subsequent profile run passes all the checks that originally triggered the incident. This means the anomalous condition is no longer detected. If the incident was spurious, consider raising the sensitivity threshold.' },
+]
+
+const TOC_SECTIONS = [
+  { id: 'getting-started', label: 'Getting Started' },
+  { id: 'detection-methods', label: 'Detection Methods', isHeader: true },
+  { id: 'statistical-methods', label: 'Statistical (7)', indent: true },
+  { id: 'ml-methods', label: 'Machine Learning (1)', indent: true },
+  { id: 'spc-methods', label: 'SPC (2)', indent: true },
+  { id: 'rule-based-methods', label: 'Rule-Based (2)', indent: true },
+  { id: 'structural-methods', label: 'Structural (2)', indent: true },
+  { id: 'severity-guide', label: 'Severity Guide' },
+  { id: 'glossary', label: 'Glossary' },
+  { id: 'faq-section', label: 'FAQ' },
+]
+
 // ─── Component helpers ────────────────────────────────────────────────────────
 
 function CategoryBadge({ categoryId }) {
@@ -400,20 +437,69 @@ function Section({ title, content, mono = false }) {
   )
 }
 
+function FaqAccordion({ question, answer }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="py-4">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-4 text-left text-sm font-medium hover:text-primary transition-colors"
+        onClick={() => setOpen(v => !v)}
+      >
+        {question}
+        <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      {open && (
+        <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{answer}</p>
+      )}
+    </div>
+  )
+}
+
+function CategoryGroup({ categoryId, methods, query }) {
+  const cat = CATEGORIES.find(c => c.id === categoryId)
+  const filtered = methods.filter(m => m.category === categoryId)
+  if (filtered.length === 0) return null
+  const Icon = cat.icon
+  return (
+    <div id={`${categoryId}-methods`}>
+      <div className={cn('flex items-center gap-2 mb-3 rounded-lg px-3 py-2', cat.bg)}>
+        <Icon className={cn('size-4', cat.color)} />
+        <span className={cn('text-sm font-semibold', cat.color)}>{cat.label}</span>
+        <span className={cn('text-xs', cat.color, 'opacity-70')}>({filtered.length})</span>
+      </div>
+      <div className="flex flex-col gap-3">
+        {filtered.map(m => <MethodCard key={m.id} method={m} />)}
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function HelpCenter() {
   const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState(null)
 
+  const isFiltering = !!(query || activeCategory)
+
   const filtered = METHODS.filter((m) => {
-    const matchesQuery = !query || [m.name, m.tagline, m.what, m.how].join(' ').toLowerCase().includes(query.toLowerCase())
+    const q = query.toLowerCase()
+    const matchesQuery = !query || [m.name, m.tagline, m.what, m.how].join(' ').toLowerCase().includes(q)
     const matchesCat = !activeCategory || m.category === activeCategory
     return matchesQuery && matchesCat
   })
 
+  // Also search glossary and FAQ when there's a query
+  const matchingGlossary = query
+    ? GLOSSARY_TERMS.filter(g => g.term.toLowerCase().includes(query.toLowerCase()) || g.def.toLowerCase().includes(query.toLowerCase()))
+    : []
+  const matchingFaqs = query
+    ? HELP_FAQS.filter(f => f.q.toLowerCase().includes(query.toLowerCase()) || f.a.toLowerCase().includes(query.toLowerCase()))
+    : []
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 lg:px-8">
+    <div className="mx-auto max-w-5xl px-4 py-8 lg:px-8">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Help Center</h1>
@@ -429,7 +515,7 @@ export default function HelpCenter() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search methods…"
+            placeholder="Search methods, glossary, FAQ…"
             className="pl-9"
           />
         </div>
@@ -464,40 +550,195 @@ export default function HelpCenter() {
         </div>
       </div>
 
-      {/* Results count */}
-      {(query || activeCategory) && (
+      {/* Results count when filtering */}
+      {isFiltering && (
         <p className="mb-4 text-sm text-muted-foreground">
-          {filtered.length} method{filtered.length !== 1 ? 's' : ''} found
+          {filtered.length} method{filtered.length !== 1 ? 's' : ''}
+          {matchingGlossary.length > 0 && `, ${matchingGlossary.length} glossary term${matchingGlossary.length !== 1 ? 's' : ''}`}
+          {matchingFaqs.length > 0 && `, ${matchingFaqs.length} FAQ item${matchingFaqs.length !== 1 ? 's' : ''}`}
+          {' '}found
         </p>
       )}
 
-      {/* Method cards */}
-      <div className="flex flex-col gap-3">
-        {filtered.length === 0 ? (
-          <div className="rounded-xl border bg-muted/20 p-10 text-center text-muted-foreground">
-            No methods match your search.
-          </div>
-        ) : (
-          filtered.map((m) => <MethodCard key={m.id} method={m} />)
-        )}
-      </div>
+      {/* Mobile: section select */}
+      {!isFiltering && (
+        <div className="lg:hidden mb-6">
+          <select
+            className="w-full rounded-lg border bg-card px-3 py-2 text-sm"
+            onChange={(e) => {
+              const el = document.getElementById(e.target.value)
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }}
+            defaultValue=""
+          >
+            <option value="" disabled>Jump to section…</option>
+            {TOC_SECTIONS.filter(s => !s.isHeader).map(s => (
+              <option key={s.id} value={s.id}>{s.indent ? '  ' : ''}{s.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
-      {/* Footer context */}
-      <div className="mt-10 rounded-xl border bg-muted/20 p-5">
-        <h3 className="font-semibold mb-2">Severity Levels</h3>
-        <div className="grid sm:grid-cols-3 gap-3 text-sm">
-          <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
-            <div className="font-semibold text-red-600 dark:text-red-400 mb-1">P1 — Critical</div>
-            <p className="text-muted-foreground">Row count drops to zero, or freshness SLA is breached. Data is entirely missing or severely stale.</p>
-          </div>
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
-            <div className="font-semibold text-amber-600 dark:text-amber-400 mb-1">P2 — High</div>
-            <p className="text-muted-foreground">Schema drift detected, or 3+ statistical checks fire simultaneously. Data may be structurally broken.</p>
-          </div>
-          <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
-            <div className="font-semibold text-blue-600 dark:text-blue-400 mb-1">P3 — Medium</div>
-            <p className="text-muted-foreground">1–2 statistical checks triggered. Data quality is degraded but not catastrophically broken.</p>
-          </div>
+      <div className="grid gap-6 lg:grid-cols-[200px_1fr]">
+        {/* Sidebar TOC — desktop only */}
+        {!isFiltering && (
+          <aside className="hidden lg:block">
+            <div className="sticky top-6 rounded-lg border bg-card p-4 flex flex-col gap-1 max-h-[calc(100vh-8rem)] overflow-y-auto">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Contents</p>
+              {TOC_SECTIONS.map(s => (
+                s.isHeader ? (
+                  <p key={s.id} className="mt-3 mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{s.label}</p>
+                ) : (
+                  <a
+                    key={s.id}
+                    href={`#${s.id}`}
+                    className={cn(
+                      'rounded px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors',
+                      s.indent && 'pl-4'
+                    )}
+                  >
+                    {s.label}
+                  </a>
+                )
+              ))}
+            </div>
+          </aside>
+        )}
+
+        {/* Main content */}
+        <div className={cn('flex flex-col gap-10', isFiltering && 'lg:col-span-2')}>
+
+          {/* ── When filtering: flat list ── */}
+          {isFiltering ? (
+            <>
+              {filtered.length === 0 && matchingGlossary.length === 0 && matchingFaqs.length === 0 ? (
+                <div className="rounded-xl border bg-muted/20 p-10 text-center text-muted-foreground">
+                  No results match your search.
+                </div>
+              ) : (
+                <>
+                  {filtered.length > 0 && (
+                    <div className="flex flex-col gap-3">
+                      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Detection Methods</h2>
+                      {filtered.map((m) => <MethodCard key={m.id} method={m} />)}
+                    </div>
+                  )}
+                  {matchingGlossary.length > 0 && (
+                    <div>
+                      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Glossary</h2>
+                      <div className="grid gap-3">
+                        {matchingGlossary.map(({ term, def }) => (
+                          <div key={term} className="rounded-lg border bg-card px-4 py-3">
+                            <dt className="font-semibold text-sm">{term}</dt>
+                            <dd className="mt-0.5 text-sm text-muted-foreground leading-relaxed">{def}</dd>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {matchingFaqs.length > 0 && (
+                    <div>
+                      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">FAQ</h2>
+                      <div className="divide-y">
+                        {matchingFaqs.map((f, i) => (
+                          <FaqAccordion key={i} question={f.q} answer={f.a} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              {/* ── Getting Started ── */}
+              <section id="getting-started">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <BookOpen className="size-5 text-primary" /> Getting Started
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[
+                    { n: '1', title: 'Connect a data source', desc: 'Go to Settings → Data Sources and add your first database. Panopta supports 13 connectors. Connection credentials are encrypted immediately.' },
+                    { n: '2', title: 'Add monitored tables', desc: 'After connecting, go to Settings → Tables. Select which tables to monitor and set the check interval (default: 60 minutes).' },
+                    { n: '3', title: 'Review your first profile', desc: 'After the first profile run, visit the table detail page. Panopta shows row counts, column statistics, null rates, and schema fingerprints.' },
+                    { n: '4', title: 'Configure alert routes', desc: 'Go to Settings → Alerts to set up Slack, email, or PagerDuty notifications. Alerts fire automatically when anomalies are detected.' },
+                  ].map(step => (
+                    <div key={step.n} className="rounded-lg border bg-card p-4">
+                      <div className="text-3xl font-black text-primary/20 mb-2">{step.n}</div>
+                      <h3 className="font-semibold text-sm">{step.title}</h3>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{step.desc}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* ── Detection Methods by category ── */}
+              <section id="detection-methods">
+                <h2 className="text-xl font-bold mb-6">Detection Methods</h2>
+                <div className="flex flex-col gap-8">
+                  {CATEGORIES.map(cat => (
+                    <CategoryGroup key={cat.id} categoryId={cat.id} methods={METHODS} query={query} />
+                  ))}
+                </div>
+              </section>
+
+              {/* ── Severity Guide ── */}
+              <section id="severity-guide">
+                <h2 className="text-xl font-bold mb-4">Severity Guide</h2>
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold">Severity</th>
+                        <th className="text-left px-4 py-3 font-semibold">Trigger Conditions</th>
+                        <th className="text-left px-4 py-3 font-semibold">Response Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      <tr>
+                        <td className="px-4 py-3"><span className="rounded-full bg-red-500/15 border border-red-500/30 px-2 py-0.5 text-xs font-bold text-red-600">P1</span></td>
+                        <td className="px-4 py-3 text-muted-foreground">Row count = 0 (empty table), freshness SLA breach</td>
+                        <td className="px-4 py-3 text-muted-foreground">Immediate — data pipeline likely down</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3"><span className="rounded-full bg-orange-500/15 border border-orange-500/30 px-2 py-0.5 text-xs font-bold text-orange-600">P2</span></td>
+                        <td className="px-4 py-3 text-muted-foreground">Schema drift detected, 3+ statistical checks fail simultaneously</td>
+                        <td className="px-4 py-3 text-muted-foreground">Within 1 hour — data quality degraded</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-3"><span className="rounded-full bg-yellow-500/15 border border-yellow-500/30 px-2 py-0.5 text-xs font-bold text-yellow-600">P3</span></td>
+                        <td className="px-4 py-3 text-muted-foreground">1–2 statistical checks fail (z-score, cardinality, etc.)</td>
+                        <td className="px-4 py-3 text-muted-foreground">Next business day — trend to watch</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              {/* ── Glossary ── */}
+              <section id="glossary">
+                <h2 className="text-xl font-bold mb-4">Glossary</h2>
+                <dl className="grid gap-3">
+                  {GLOSSARY_TERMS.map(({ term, def }) => (
+                    <div key={term} className="rounded-lg border bg-card px-4 py-3">
+                      <dt className="font-semibold text-sm">{term}</dt>
+                      <dd className="mt-0.5 text-sm text-muted-foreground leading-relaxed">{def}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+
+              {/* ── FAQ ── */}
+              <section id="faq-section">
+                <h2 className="text-xl font-bold mb-4">FAQ</h2>
+                <div className="divide-y">
+                  {HELP_FAQS.map((f, i) => (
+                    <FaqAccordion key={i} question={f.q} answer={f.a} />
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
         </div>
       </div>
     </div>
