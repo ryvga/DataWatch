@@ -376,3 +376,234 @@ async def _send_alerts_async(incident_id: str) -> dict:
             results.append({"config_id": str(cfg.id), "channel": cfg.channel, "sent": ok})
 
         return {"incident_id": incident_id, "alerts_dispatched": len(results), "results": results}
+
+
+# ── Team / User Notification Tasks ────────────────────────────────────────────
+
+@celery_app.task(bind=True, name="tasks.notify_incident_assignment", max_retries=1, default_retry_delay=10)
+def notify_incident_assignment(self, incident_id: str) -> dict:
+    """Email assignee and/or team members when an incident is assigned."""
+    try:
+        return _run(_notify_incident_assignment_async(incident_id))
+    except Exception as exc:
+        logger.error("notify_incident_assignment failed for %s: %s", incident_id, exc)
+        return {"status": "error", "incident_id": incident_id}
+
+
+async def _notify_incident_assignment_async(incident_id: str) -> dict:
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.incident import Incident
+    from app.models.notification_prefs import UserNotificationPrefs
+    from app.models.team import Team, TeamMember
+    from app.models.user import User
+    from app.services.email import send_incident_assigned_email, send_team_incident_email
+    from app.config import settings
+
+    async with AsyncSessionLocal() as db:
+        inc = await db.get(Incident, incident_id)
+        if not inc:
+            return {"status": "not_found"}
+
+        base_url = settings.APP_BASE_URL
+        incident_url = f"{base_url}/incidents/{incident_id}"
+        notified = []
+
+        # Notify individual assignee
+        assignee_id = getattr(inc, "assignee_id", None)
+        if assignee_id:
+            user = await db.get(User, assignee_id)
+            if user and getattr(user, "is_active", True):
+                prefs = await db.scalar(
+                    select(UserNotificationPrefs).where(UserNotificationPrefs.user_id == user.id)
+                )
+                if not prefs or prefs.notify_assigned:
+                    ok = send_incident_assigned_email(
+                        user.email, user.full_name or user.email,
+                        inc.title, inc.severity, incident_url
+                    )
+                    if ok:
+                        notified.append(str(user.id))
+
+        # Notify team members
+        assigned_team_id = getattr(inc, "assigned_team_id", None)
+        if assigned_team_id:
+            team = await db.get(Team, assigned_team_id)
+            members = (await db.scalars(
+                select(TeamMember).where(TeamMember.team_id == assigned_team_id)
+            )).all()
+            to_emails = []
+            for m in members:
+                member_user = await db.get(User, m.user_id)
+                if not member_user or not getattr(member_user, "is_active", True):
+                    continue
+                if str(member_user.id) in notified:
+                    continue  # already notified as assignee
+                prefs = await db.scalar(
+                    select(UserNotificationPrefs).where(UserNotificationPrefs.user_id == member_user.id)
+                )
+                if not prefs or prefs.notify_team:
+                    to_emails.append(member_user.email)
+
+            if to_emails and team:
+                assignee_name = None
+                if assignee_id:
+                    assignee = await db.get(User, assignee_id)
+                    if assignee:
+                        assignee_name = assignee.full_name or assignee.email
+                send_team_incident_email(
+                    to_emails, team.name, inc.title, inc.severity, assignee_name, incident_url
+                )
+
+        return {"status": "ok", "notified": notified}
+
+
+@celery_app.task(bind=True, name="tasks.notify_incident_status_change", max_retries=1, default_retry_delay=10)
+def notify_incident_status_change(self, incident_id: str, old_status: str, new_status: str) -> dict:
+    """Email assignee + team members when incident status changes."""
+    try:
+        return _run(_notify_status_change_async(incident_id, old_status, new_status))
+    except Exception as exc:
+        logger.error("notify_status_change failed for %s: %s", incident_id, exc)
+        return {"status": "error"}
+
+
+async def _notify_status_change_async(incident_id: str, old_status: str, new_status: str) -> dict:
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.incident import Incident
+    from app.models.notification_prefs import UserNotificationPrefs
+    from app.models.team import TeamMember
+    from app.models.user import User
+    from app.services.email import send_incident_status_change_email
+    from app.config import settings
+
+    async with AsyncSessionLocal() as db:
+        inc = await db.get(Incident, incident_id)
+        if not inc:
+            return {"status": "not_found"}
+
+        base_url = settings.APP_BASE_URL
+        incident_url = f"{base_url}/incidents/{incident_id}"
+        users_to_notify: set[str] = set()
+
+        # Collect: assignee + all team members
+        assignee_id = getattr(inc, "assignee_id", None)
+        assigned_team_id = getattr(inc, "assigned_team_id", None)
+        if assignee_id:
+            users_to_notify.add(str(assignee_id))
+        if assigned_team_id:
+            members = (await db.scalars(
+                select(TeamMember).where(TeamMember.team_id == assigned_team_id)
+            )).all()
+            for m in members:
+                users_to_notify.add(str(m.user_id))
+
+        notified = 0
+        for user_id in users_to_notify:
+            user = await db.get(User, user_id)
+            if not user or not getattr(user, "is_active", True):
+                continue
+            prefs = await db.scalar(
+                select(UserNotificationPrefs).where(UserNotificationPrefs.user_id == user.id)
+            )
+            if prefs and not prefs.notify_status_change:
+                continue
+            send_incident_status_change_email(
+                user.email, user.full_name or user.email,
+                inc.title, old_status, new_status, incident_url
+            )
+            notified += 1
+
+        return {"status": "ok", "notified": notified}
+
+
+@celery_app.task(bind=True, name="tasks.send_daily_digests", max_retries=0)
+def send_daily_digests(self) -> dict:
+    """Send daily digest emails. Called by beat every hour; self-gates by digest_hour."""
+    try:
+        return _run(_send_daily_digests_async())
+    except Exception as exc:
+        logger.error("send_daily_digests failed: %s", exc)
+        return {"status": "error"}
+
+
+async def _send_daily_digests_async() -> dict:
+    from datetime import datetime, timezone
+
+    from sqlalchemy import func, select
+
+    from app.config import settings
+    from app.database import AsyncSessionLocal
+    from app.models.incident import Incident
+    from app.models.notification_prefs import UserNotificationPrefs
+    from app.models.organization import Organization
+    from app.models.user import User
+    from app.services.email import send_daily_digest_email
+
+    now_utc = datetime.now(timezone.utc)
+    current_hour = now_utc.hour
+    sent = 0
+
+    async with AsyncSessionLocal() as db:
+        # Find users whose digest_hour matches current UTC hour
+        prefs_to_send = (await db.scalars(
+            select(UserNotificationPrefs).where(
+                UserNotificationPrefs.daily_digest == True,
+                UserNotificationPrefs.digest_hour == current_hour,
+            )
+        )).all()
+
+        for prefs in prefs_to_send:
+            # Respect mute_until
+            if prefs.mute_until and prefs.mute_until > now_utc.replace(tzinfo=None):
+                continue
+
+            user = await db.get(User, prefs.user_id)
+            if not user or not getattr(user, "is_active", True):
+                continue
+            org = await db.get(Organization, prefs.org_id)
+            if not org:
+                continue
+
+            # Load org stats
+            open_incidents = (await db.scalars(
+                select(Incident).where(
+                    Incident.org_id == org.id,
+                    Incident.status.in_(["open", "acknowledged", "investigating"])
+                ).order_by(Incident.severity, Incident.created_at.desc()).limit(10)
+            )).all()
+
+            today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+            resolved_today = await db.scalar(
+                select(func.count()).select_from(Incident).where(
+                    Incident.org_id == org.id,
+                    Incident.status == "resolved",
+                    Incident.resolved_at >= today_start,
+                )
+            ) or 0
+
+            stats = {
+                "p1_open": sum(1 for i in open_incidents if i.severity == "P1"),
+                "p2_open": sum(1 for i in open_incidents if i.severity == "P2"),
+                "p3_open": sum(1 for i in open_incidents if i.severity == "P3"),
+                "resolved_today": resolved_today,
+                "stale_tables": 0,
+            }
+            incident_dicts = [{"severity": i.severity, "title": i.title} for i in open_incidents]
+
+            if "localhost" in settings.APP_BASE_URL:
+                dashboard_url = settings.APP_BASE_URL.replace("localhost", f"{org.slug}.localhost")
+            else:
+                dashboard_url = f"https://{org.slug}.{settings.BASE_DOMAIN}"
+
+            ok = send_daily_digest_email(
+                user.email, user.full_name or user.email,
+                org.name, stats, incident_dicts, dashboard_url
+            )
+            if ok:
+                sent += 1
+
+    return {"status": "ok", "sent": sent}

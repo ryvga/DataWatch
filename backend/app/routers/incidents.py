@@ -105,8 +105,16 @@ async def acknowledge_incident(
     incident = await _get_incident_or_404(incident_id, org, db)
     if incident.status != "open":
         raise HTTPException(status_code=409, detail=f"Incident is already {incident.status}")
+    old_status = incident.status
     incident.status = "acknowledged"
     incident.acknowledged_at = datetime.now(timezone.utc)
+    await db.commit()
+    try:
+        from app.tasks import notify_incident_status_change
+        notify_incident_status_change.delay(str(incident.id), old_status, incident.status)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to queue status change notification: %s", e)
     return _incident_response(incident)
 
 
@@ -120,6 +128,14 @@ async def resolve_incident(
     incident = await _get_incident_or_404(incident_id, org, db)
     if incident.status == "resolved":
         raise HTTPException(status_code=409, detail="Incident already resolved")
+    old_status = incident.status
     incident.status = "resolved"
     incident.resolved_at = datetime.now(timezone.utc)
+    await db.commit()
+    try:
+        from app.tasks import notify_incident_status_change
+        notify_incident_status_change.delay(str(incident.id), old_status, incident.status)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to queue status change notification: %s", e)
     return _incident_response(incident)

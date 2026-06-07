@@ -21,9 +21,19 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://openrouter.ai/api/v1"
     LLM_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
 
+    # Multi-tenancy
+    BASE_DOMAIN: str = "panopta.app"
+
     # Email
+    APP_BASE_URL: str = "http://localhost:5173"
     SENDGRID_API_KEY: str = ""
-    FROM_EMAIL: str = "alerts@datawatch.io"
+    FROM_EMAIL: str = "alerts@panopta.app"
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = False
+    SMTP_TIMEOUT: int = 10
 
     @property
     def is_production(self) -> bool:
