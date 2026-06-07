@@ -6,12 +6,14 @@ export default function Incidents() {
   const [incidents, setIncidents] = useState([])
   const [status, setStatus] = useState('')
   const [severity, setSeverity] = useState('')
+  const [assignedToMe, setAssignedToMe] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  const load = (s = status, sev = severity) => {
+  const load = (s = status, sev = severity, mine = assignedToMe) => {
     const params = { limit: 100 }
     if (s) params.status = s
     if (sev) params.severity = sev
+    if (mine) params.assigned_to_me = true
     getIncidents(params).then(r => setIncidents(r.data)).finally(() => setLoading(false))
   }
 
@@ -21,10 +23,10 @@ export default function Incidents() {
     <div className="p-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-white">Incidents</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <select
             value={status}
-            onChange={(e) => { setStatus(e.target.value); load(e.target.value, severity) }}
+            onChange={(e) => { setStatus(e.target.value); load(e.target.value, severity, assignedToMe) }}
             className="bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-3 py-1.5 text-sm"
           >
             <option value="">All statuses</option>
@@ -34,7 +36,7 @@ export default function Incidents() {
           </select>
           <select
             value={severity}
-            onChange={(e) => { setSeverity(e.target.value); load(status, e.target.value) }}
+            onChange={(e) => { setSeverity(e.target.value); load(status, e.target.value, assignedToMe) }}
             className="bg-gray-800 border border-gray-700 text-gray-300 rounded-lg px-3 py-1.5 text-sm"
           >
             <option value="">All severities</option>
@@ -42,6 +44,21 @@ export default function Incidents() {
             <option value="P2">P2</option>
             <option value="P3">P3</option>
           </select>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !assignedToMe
+              setAssignedToMe(next)
+              load(status, severity, next)
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              assignedToMe
+                ? 'bg-blue-600/20 text-blue-400 border-blue-500/40'
+                : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-gray-200'
+            }`}
+          >
+            👤 Mine
+          </button>
         </div>
       </div>
 

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
-import { getIncident, acknowledgeIncident, resolveIncident } from '../api/endpoints'
+import { getIncident, acknowledgeIncident, resolveIncident, assignIncident, getTeams, getOrgMembers } from '../api/endpoints'
 import NarrationPanel from '../components/NarrationPanel'
 import SeverityBadge from '../components/SeverityBadge'
 import HealthBadge from '../components/HealthBadge'
+import UserPicker from '../components/UserPicker'
 
 function TimelineStep({ label, ts, active }) {
   return (
@@ -20,15 +21,137 @@ function TimelineStep({ label, ts, active }) {
   )
 }
 
+function AssignmentCard({ incident, teams, orgMembers, onAssigned }) {
+  const [assigneeId, setAssigneeId] = useState(incident?.assignee_id || '')
+  const [teamId, setTeamId] = useState(incident?.assigned_team_id || '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const assigneeName = incident?.assignee_name ||
+    orgMembers.find(m => m.id === incident?.assignee_id)?.full_name ||
+    orgMembers.find(m => m.id === incident?.assignee_id)?.email
+
+  const teamName = incident?.assigned_team_name ||
+    teams.find(t => t.id === incident?.assigned_team_id)?.name
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError('')
+    try {
+      await assignIncident(incident.id, {
+        assignee_id: assigneeId || null,
+        assigned_team_id: teamId || null,
+      })
+      onAssigned?.()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to update assignment')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const changed = assigneeId !== (incident?.assignee_id || '') ||
+    teamId !== (incident?.assigned_team_id || '')
+
+  return (
+    <div className="card space-y-4">
+      <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+        <span>👤</span> Assignment
+      </h3>
+
+      {/* Current assignment chips */}
+      {(incident?.assignee_id || incident?.assigned_team_id) && (
+        <div className="flex flex-wrap gap-2">
+          {incident.assignee_id && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-700 bg-gray-800/50 px-2.5 py-1 text-xs font-medium text-gray-300">
+              👤 {assigneeName || 'Assigned user'}
+            </span>
+          )}
+          {incident.assigned_team_id && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-700/40 bg-blue-600/10 px-2.5 py-1 text-xs font-medium text-blue-400">
+              👥 {teamName || 'Assigned team'}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <label className="label">Assignee</label>
+          <UserPicker
+            value={assigneeId}
+            onChange={setAssigneeId}
+            placeholder="Assign to user…"
+            members={orgMembers}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="label">Team</label>
+          <select
+            className="input"
+            value={teamId}
+            onChange={e => setTeamId(e.target.value)}
+          >
+            <option value="">No team</option>
+            {teams.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Acknowledged by / Resolved by info */}
+      {(incident?.acknowledged_by_id || incident?.resolved_by_id) && (
+        <div className="flex flex-wrap gap-4 text-xs text-gray-500 border-t border-gray-800 pt-3">
+          {incident.acknowledged_by_id && (
+            <span>Acknowledged by <strong className="text-gray-300">{
+              orgMembers.find(m => m.id === incident.acknowledged_by_id)?.full_name ||
+              orgMembers.find(m => m.id === incident.acknowledged_by_id)?.email ||
+              'a team member'
+            }</strong></span>
+          )}
+          {incident.resolved_by_id && (
+            <span>Resolved by <strong className="text-gray-300">{
+              orgMembers.find(m => m.id === incident.resolved_by_id)?.full_name ||
+              orgMembers.find(m => m.id === incident.resolved_by_id)?.email ||
+              'a team member'
+            }</strong></span>
+          )}
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      {changed && (
+        <button
+          type="button"
+          className="btn-primary text-xs w-fit"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? 'Saving…' : 'Save assignment'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function IncidentDetail() {
   const { id } = useParams()
   const nav = useNavigate()
   const [incident, setIncident] = useState(null)
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState(false)
+  const [teams, setTeams] = useState([])
+  const [orgMembers, setOrgMembers] = useState([])
 
   useEffect(() => {
     getIncident(id).then(r => setIncident(r.data)).finally(() => setLoading(false))
+    getTeams().then(r => setTeams(r.data || [])).catch(() => {})
+    getOrgMembers().then(r => {
+      const raw = r.data
+      setOrgMembers(Array.isArray(raw) ? raw : raw?.items || raw?.members || [])
+    }).catch(() => {})
   }, [id])
 
   const doAck = async () => {
@@ -115,8 +238,15 @@ export default function IncidentDetail() {
           )}
         </div>
 
-        {/* Sidebar — timeline */}
+        {/* Sidebar — assignment + timeline */}
         <div className="space-y-5">
+          <AssignmentCard
+            incident={incident}
+            teams={teams}
+            orgMembers={orgMembers}
+            onAssigned={() => getIncident(id).then(r => setIncident(r.data))}
+          />
+
           <div className="card">
             <h3 className="text-sm font-semibold text-gray-300 mb-4">Timeline</h3>
             <div className="space-y-4">

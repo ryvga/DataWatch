@@ -37,3 +37,14 @@ export const testAlert = (id) => api.post(`/api/v1/alerts/${id}/test`)
 // Org
 export const getOrg = () => api.get('/orgs/me')
 export const getHealth = () => api.get('/health')
+export const getOrgMembers = () => api.get('/orgs/me/members')
+
+// ── Teams (for pickers — minimal) ─────────────────────────────────────────────
+export const getTeams = (params) => api.get('/api/v1/teams', { params })
+
+// ── Incident assignment ───────────────────────────────────────────────────────
+export const assignIncident = (id, body) => api.patch(`/api/v1/incidents/${id}/assign`, body)
+
+// ── Notification preferences ──────────────────────────────────────────────────
+export const getNotificationPrefs = () => api.get('/api/v1/me/notification-preferences')
+export const updateNotificationPrefs = (body) => api.patch('/api/v1/me/notification-preferences', body)

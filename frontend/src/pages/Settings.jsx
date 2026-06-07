@@ -3,9 +3,10 @@ import {
   getSources, createSource, testSource, deleteSource,
   getTables, createTable, discoverSource,
   getAlerts, createAlert, deleteAlert, testAlert,
+  getNotificationPrefs, updateNotificationPrefs,
 } from '../api/endpoints'
 
-const TABS = ['Data Sources', 'Tables', 'Alerts', 'API Keys']
+const TABS = ['Data Sources', 'Tables', 'Alerts', 'Notifications', 'API Keys']
 
 // ── Data Sources Tab ──────────────────────────────────────────────────────────
 function SourcesTab() {
@@ -283,6 +284,148 @@ function AlertsTab() {
   )
 }
 
+// ── Notifications Tab ─────────────────────────────────────────────────────────
+function NotificationsTab() {
+  const [prefs, setPrefs] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    getNotificationPrefs()
+      .then(r => setPrefs(r.data))
+      .catch(() => setPrefs({ notify_assigned: true, notify_team: true, notify_status_change: true, daily_digest: false, digest_hour: 8 }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const update = (key, value) => setPrefs(prev => ({ ...prev, [key]: value }))
+
+  const save = async () => {
+    if (!prefs) return
+    setSaving(true)
+    setError('')
+    setSaved(false)
+    try {
+      await updateNotificationPrefs(prefs)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to save preferences')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) return <div className="text-gray-500 text-sm">Loading…</div>
+
+  const PREF_ROWS = [
+    { key: 'notify_assigned', label: 'Incident assigned to me', desc: 'Email when an incident is directly assigned to you.' },
+    { key: 'notify_team', label: 'Team incident assigned', desc: 'Email when an incident is assigned to one of your teams.' },
+    { key: 'notify_status_change', label: 'Incident status changes', desc: 'Email when an incident you are involved with changes status.' },
+  ]
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+        🔔 Email Notifications
+      </h2>
+      <p className="text-xs text-gray-500">Choose which events trigger email notifications to you.</p>
+
+      <div className="card space-y-4">
+        {PREF_ROWS.map(({ key, label, desc }) => (
+          <div key={key} className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-200">{label}</p>
+              <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+            </div>
+            <label className="flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={prefs?.[key] ?? true}
+                onChange={e => update(key, e.target.checked)}
+              />
+              <div className={`relative w-9 h-5 rounded-full transition-colors ${
+                prefs?.[key] ? 'bg-blue-600' : 'bg-gray-700'
+              }`}>
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                  prefs?.[key] ? 'translate-x-4' : ''
+                }`} />
+              </div>
+            </label>
+          </div>
+        ))}
+
+        <div className="border-t border-gray-800 pt-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-200">Daily digest email</p>
+              <p className="text-xs text-gray-500 mt-0.5">Receive a morning summary of open incidents and resolved issues.</p>
+            </div>
+            <label className="flex items-center cursor-pointer shrink-0">
+              <input
+                type="checkbox"
+                className="sr-only"
+                checked={prefs?.daily_digest ?? false}
+                onChange={e => update('daily_digest', e.target.checked)}
+              />
+              <div className={`relative w-9 h-5 rounded-full transition-colors ${
+                prefs?.daily_digest ? 'bg-blue-600' : 'bg-gray-700'
+              }`}>
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                  prefs?.daily_digest ? 'translate-x-4' : ''
+                }`} />
+              </div>
+            </label>
+          </div>
+          {prefs?.daily_digest && (
+            <div className="mt-3 flex items-center gap-3">
+              <label className="text-sm text-gray-500 shrink-0">Send at (UTC hour):</label>
+              <select
+                className="input w-36"
+                value={String(prefs?.digest_hour ?? 8)}
+                onChange={e => update('digest_hour', parseInt(e.target.value))}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={String(i)}>
+                    {String(i).padStart(2, '0')}:00 UTC
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {prefs?.mute_until && new Date(prefs.mute_until) > new Date() && (
+          <div className="flex items-center gap-3 rounded-lg border border-yellow-700/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
+            ⚠️ All notifications muted until {new Date(prefs.mute_until).toLocaleString()}.
+            <button
+              type="button"
+              className="ml-auto text-xs underline hover:no-underline"
+              onClick={() => update('mute_until', null)}
+            >
+              Unmute
+            </button>
+          </div>
+        )}
+
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        {saved && <p className="text-xs text-green-400">Preferences saved.</p>}
+
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="btn-primary text-xs w-fit"
+        >
+          {saving ? 'Saving…' : 'Save preferences'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── API Keys Tab ──────────────────────────────────────────────────────────────
 function ApiKeysTab() {
   const [key] = useState(localStorage.getItem('dw_api_key') || '')
@@ -309,7 +452,7 @@ function ApiKeysTab() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Settings() {
   const [tab, setTab] = useState(0)
-  const COMPONENTS = [SourcesTab, TablesTab, AlertsTab, ApiKeysTab]
+  const COMPONENTS = [SourcesTab, TablesTab, AlertsTab, NotificationsTab, ApiKeysTab]
   const TabComponent = COMPONENTS[tab]
 
   return (

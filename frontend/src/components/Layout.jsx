@@ -44,7 +44,15 @@ export default function Layout() {
             </NavLink>
           ))}
         </nav>
-        <div className="p-3 border-t border-gray-800">
+        <div className="p-3 border-t border-gray-800 space-y-1">
+          <button
+            onClick={() => nav('/incidents?assigned_to_me=true')}
+            title="View incidents assigned to me"
+            aria-label="My incidents"
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+          >
+            <span>🔔</span> My Incidents
+          </button>
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-800 hover:text-gray-300 transition-colors"
