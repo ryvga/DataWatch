@@ -13,7 +13,7 @@ export function BrandMark({ className, iconOnly = false }) {
       <img
         src="/panopta-no-text.svg"
         alt="Panopta"
-        className="size-8 shrink-0 dark:invert"
+        className="h-7 w-auto shrink-0 dark:invert"
         aria-hidden={iconOnly}
       />
       {!iconOnly && (
