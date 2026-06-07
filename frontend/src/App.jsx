@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import AcceptInvite from './pages/AcceptInvite'
 import ResetPassword from './pages/ResetPassword'
 import Landing from './pages/Landing'
+import Register from './pages/Register'
 import Overview from './pages/Overview'
 import Tables from './pages/Tables'
 import Monitors from './pages/Monitors'
@@ -118,6 +119,7 @@ export default function App() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/about" element={<About />} />
+          <Route path="/register" element={<Register />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

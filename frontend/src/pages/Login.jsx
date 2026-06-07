@@ -87,6 +87,7 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [forgotOpen, setForgotOpen] = useState(false)
+  const [welcome, setWelcome] = useState(false)
 
   useEffect(() => {
     if (isSessionValid()) { nav('/'); return }
@@ -95,6 +96,8 @@ export default function Login() {
     if (ws) setForm((f) => ({ ...f, org_slug: ws }))
     // ?register=1 → open register tab directly
     if (new URLSearchParams(window.location.search).get('register') === '1') setMode('register')
+    // ?registered=1 → show welcome banner after new org creation
+    if (new URLSearchParams(window.location.search).get('registered') === '1') setWelcome(true)
   }, [])
 
   const set = (key) => (e) => setForm((p) => ({ ...p, [key]: e.target.value }))
@@ -197,6 +200,12 @@ export default function Login() {
               </CardHeader>
 
               <CardContent className="flex flex-col gap-5">
+                {welcome && (
+                  <div className="flex items-center gap-2 rounded-lg border border-green-700 bg-green-950/40 px-3 py-2 text-sm text-green-300">
+                    <span>✅</span>
+                    <span>Workspace created! Sign in to get started.</span>
+                  </div>
+                )}
                 <Tabs value={mode} onValueChange={(v) => { setMode(v); setError('') }}>
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="login">Sign in</TabsTrigger>
