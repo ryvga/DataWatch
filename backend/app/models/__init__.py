@@ -9,6 +9,8 @@ from app.models.alert_config import AlertConfig
 from app.models.invite import Invite
 from app.models.team import Team, TeamMember
 from app.models.custom_monitor import CustomMonitor
+from app.models.oncall import OncallSchedule
+from app.models.notification_prefs import UserNotificationPrefs
 
 __all__ = [
     "Organization",
@@ -25,4 +27,6 @@ __all__ = [
     "Team",
     "TeamMember",
     "CustomMonitor",
+    "OncallSchedule",
+    "UserNotificationPrefs",
 ]

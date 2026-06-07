@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone
 from numbers import Number
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +41,8 @@ class TableUpdate(BaseModel):
     sensitivity: float | None = None
     dbt_model_yaml: str | None = None
     is_active: bool | None = None
+    owner_team_id: str | None = None
+    owner_user_id: str | None = None
 
 
 class ProfileSummary(BaseModel):
@@ -294,6 +296,7 @@ async def create_table(
 
 @router.get("", response_model=list[TableResponse])
 async def list_tables(
+    owner_team_id: str | None = Query(None),
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
@@ -302,9 +305,11 @@ async def list_tables(
         select(DataSource.id).where(DataSource.org_id == org.id)
     )).all()
 
-    tables = (await db.scalars(
-        select(MonitoredTable).where(MonitoredTable.source_id.in_(source_ids))
-    )).all()
+    q = select(MonitoredTable).where(MonitoredTable.source_id.in_(source_ids))
+    if owner_team_id:
+        q = q.where(MonitoredTable.owner_team_id == owner_team_id)
+
+    tables = (await db.scalars(q)).all()
 
     result = []
     for t in tables:
