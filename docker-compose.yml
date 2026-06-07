@@ -1,4 +1,18 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# DataWatch / Panopta — Development Docker Compose
+#
+# Sections:
+#   Infrastructure   postgres · redis · mailhog
+#   Demo databases   demo-db · analytics-db
+#   Application      migrate · api · worker
+#   Frontend         frontend
+#   Optional         seed  (docker compose --profile seed up seed)
+# ──────────────────────────────────────────────────────────────────────────────
+
 services:
+
+  # ── Infrastructure ───────────────────────────────────────────────────────────
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -15,7 +29,28 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Test/demo database 1 — acme-corp e-commerce (shopDemo) ───────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # MailHog — dev SMTP server + web UI at http://localhost:8025
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    environment:
+      MH_STORAGE: memory
+
+  # ── Demo databases ───────────────────────────────────────────────────────────
+
+  # acme-corp e-commerce (shopDemo)
   demo-db:
     image: postgres:16-alpine
     environment:
@@ -33,7 +68,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Test/demo database 2 — startup-io SaaS analytics ─────────────────────
+  # startup-io SaaS analytics
   analytics-db:
     image: postgres:16-alpine
     environment:
@@ -51,24 +86,21 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+  # ── Application ──────────────────────────────────────────────────────────────
 
-  # ── MailHog — dev SMTP + web UI ───────────────────────────────────────────
-  mailhog:
-    image: mailhog/mailhog:latest
-    ports:
-      - "1025:1025"   # SMTP
-      - "8025:8025"   # Web UI → http://localhost:8025
-    environment:
-      MH_STORAGE: memory
+  # One-shot: runs Alembic migrations then exits.
+  # api and worker wait for this to complete successfully before starting.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   api:
     build:
@@ -81,6 +113,10 @@ services:
       - ./backend:/app
     env_file:
       - .env
+    environment:
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_USE_TLS=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,6 +124,8 @@ services:
         condition: service_healthy
       mailhog:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -98,11 +136,19 @@ services:
       - ./backend:/app
     env_file:
       - .env
+    environment:
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
+      - SMTP_USE_TLS=false
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
 
   frontend:
     build:
@@ -112,6 +158,35 @@ services:
       - "5173:80"
     depends_on:
       - api
+
+  # ── Optional: seed (docker compose --profile seed up seed) ───────────────────
+  #
+  # Populates the database with demo orgs, users, data sources, and injected
+  # anomalies. Only runs when explicitly requested — not part of `docker compose
+  # up -d`. Requires api to be up so the seed script can hit the REST API.
+  #
+  # Usage: docker compose --profile seed up seed
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python /scripts/seed_demo.py --full
+    volumes:
+      - ./backend:/app
+      - ./scripts:/scripts
+    working_dir: /scripts
+    env_file:
+      - .env
+    environment:
+      - API_URL=http://api:8000
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+    restart: "no"
+    profiles:
+      - seed
 
 volumes:
   postgres_data:
