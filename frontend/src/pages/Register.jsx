@@ -128,7 +128,7 @@ export default function Register() {
         {/* Left panel */}
         <div className="hidden lg:flex flex-col justify-between border-r border-gray-800 bg-gradient-to-br from-blue-950/40 via-gray-900 to-gray-900 p-10">
           <div>
-            <div className="mb-2 text-2xl">🔭</div>
+            <img src="/panopta-no-text.svg" alt="Panopta" className="mb-4 size-10 invert" />
             <h1 className="text-3xl font-bold text-white leading-tight">
               Catch data quality issues before your users do.
             </h1>
@@ -158,7 +158,7 @@ export default function Register() {
         {/* Right panel — registration form */}
         <div className="p-8">
           <div className="mb-6 text-center lg:text-left">
-            <span className="text-2xl">🔭</span>
+            <img src="/panopta-no-text.svg" alt="Panopta" className="mb-2 size-8 invert inline-block lg:inline-block" />
             <h2 className="mt-2 text-xl font-bold text-white">Create your workspace</h2>
             <p className="mt-1 text-sm text-gray-400">Set up a new Panopta organisation for your team.</p>
           </div>

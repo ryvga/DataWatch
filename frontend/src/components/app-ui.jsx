@@ -9,14 +9,13 @@ import { cn } from '@/lib/utils'
 export function BrandMark({ className, iconOnly = false }) {
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
-      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-        {/* Eye icon — 100 eyes on your data, inspired by Panoptes */}
-        <svg viewBox="0 0 32 32" aria-hidden="true" className="size-5">
-          <ellipse cx="16" cy="16" rx="10" ry="7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-          <circle cx="16" cy="16" r="3.5" fill="currentColor" />
-          <circle cx="16" cy="16" r="1.4" fill="none" stroke="white" strokeWidth="1" />
-        </svg>
-      </div>
+      {/* No-text SVG logo — black paths, transparent bg. dark:invert makes it white on dark bg */}
+      <img
+        src="/panopta-no-text.svg"
+        alt="Panopta"
+        className="size-8 shrink-0 dark:invert"
+        aria-hidden={iconOnly}
+      />
       {!iconOnly && (
         <div className="min-w-0 leading-none">
           <div className="text-sm font-bold tracking-tight text-foreground">Panopta</div>

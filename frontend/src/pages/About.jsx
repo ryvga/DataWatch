@@ -1,4 +1,4 @@
-import { Eye, Database, Shield, Zap, Users, BarChart3, Globe, Clock, ArrowRight, CheckCircle } from 'lucide-react'
+import { Eye, Shield, Zap, Users, ArrowRight, CheckCircle } from 'lucide-react'
 import { BrandMark, ThemeToggle } from '../components/app-ui'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,15 +36,15 @@ const VALUES = [
 ]
 
 const WHAT_WE_MONITOR = [
-  'Row count drops & spikes',
-  'Null rate changes',
-  'Schema drift & column drops',
-  'Freshness SLA breaches',
-  'Cardinality drops',
-  'Enum / category drift',
-  'Statistical anomalies (Z-Score, Isolation Forest, STL)',
+  'Row count drops & unexpected spikes',
+  'Missing data and null rate changes',
+  'Schema changes & column drops',
+  'Data freshness SLA breaches',
+  'Cardinality drops in key fields',
+  'New or disappearing category values',
+  'Statistical anomalies across all table metrics',
   'Duplicate record injection',
-  'Row growth rate outliers',
+  'Unusual row growth patterns',
   'Cross-table volume inconsistencies',
 ]
 
@@ -121,11 +121,11 @@ export default function About() {
             <div className="lg:w-1/2">
               <h2 className="text-2xl font-bold tracking-tight mb-4">What Panopta watches for</h2>
               <p className="text-sm text-muted-foreground leading-relaxed mb-6">
-                From simple freshness checks to multivariate statistical anomaly detection, Panopta runs 7 different methods on every table profile — covering the failure patterns that matter most.
+                Panopta monitors every angle of your data — from obvious failures like missing rows to subtle shifts like unusual patterns in a single column — so nothing slips through unnoticed.
               </p>
-              <a href="/help">
+              <a href="/register">
                 <Button variant="outline" size="sm" className="gap-1.5">
-                  See all detection methods <ArrowRight className="size-3.5" />
+                  Start monitoring for free <ArrowRight className="size-3.5" />
                 </Button>
               </a>
             </div>
@@ -155,43 +155,6 @@ export default function About() {
                 </div>
                 <h3 className="font-semibold">{f.title}</h3>
                 <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Platform highlights */}
-      <section className="border-b py-20 bg-muted/20">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 className="text-2xl font-bold tracking-tight mb-2 text-center">Built for production from day one</h2>
-          <p className="text-center text-muted-foreground text-sm mb-10">
-            The platform your data team will actually rely on — not a toy that breaks under real workloads.
-          </p>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {[
-              {
-                icon: Globe,
-                title: '13 connectors',
-                desc: 'PostgreSQL, MySQL, MongoDB, ClickHouse, BigQuery, Snowflake, Redshift, SQL Server, Cassandra, Databricks, Trino, DuckDB, SQLite.',
-              },
-              {
-                icon: Clock,
-                title: 'Always-on profiling',
-                desc: 'Schedule profiles from every 15 minutes to daily. APScheduler runs inside the API — no external scheduler needed.',
-              },
-              {
-                icon: BarChart3,
-                title: 'Deep metrics',
-                desc: 'Null rates, distinct counts, percentiles (p25/p50/p75/p95), schema fingerprints, row growth — captured every run, forever.',
-              },
-            ].map(f => (
-              <div key={f.title} className="rounded-xl border bg-card p-5">
-                <div className="mb-3 inline-flex size-9 items-center justify-center rounded-lg bg-primary/10">
-                  <f.icon className="size-5 text-primary" />
-                </div>
-                <h3 className="font-semibold text-sm">{f.title}</h3>
-                <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
