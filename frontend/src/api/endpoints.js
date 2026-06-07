@@ -116,3 +116,24 @@ export const adminCreateStaff = (data) => adminApi.post(`${ADMIN}/staff`, data)
 export const adminDeactivateStaff = (id) => adminApi.patch(`${ADMIN}/staff/${id}/deactivate`)
 export const adminResetStaffPassword = (id) => adminApi.post(`${ADMIN}/staff/${id}/reset-password`)
 export const adminGetInvites = (orgId) => adminApi.get(`${ADMIN}/orgs/${orgId}/invites`)
+
+// ── Teams ──────────────────────────────────────────────────────────────────
+export const getTeams = () => api.get('/api/v1/teams')
+export const createTeam = (body) => api.post('/api/v1/teams', body)
+export const updateTeam = (id, body) => api.patch(`/api/v1/teams/${id}`, body)
+export const deleteTeam = (id) => api.delete(`/api/v1/teams/${id}`)
+export const getTeam = (id) => api.get(`/api/v1/teams/${id}`)
+export const getTeamMembers = (id) => api.get(`/api/v1/teams/${id}/members`)
+export const addTeamMember = (id, body) => api.post(`/api/v1/teams/${id}/members`, body)
+export const removeTeamMember = (teamId, userId) => api.delete(`/api/v1/teams/${teamId}/members/${userId}`)
+export const updateTeamMemberRole = (teamId, userId, body) => api.patch(`/api/v1/teams/${teamId}/members/${userId}`, body)
+
+// ── On-call ─────────────────────────────────────────────────────────────────
+export const getOncall = (teamId) => api.get(`/api/v1/teams/${teamId}/oncall`)
+export const getCurrentOncall = (teamId) => api.get(`/api/v1/teams/${teamId}/oncall/current`)
+export const addOncallSlot = (teamId, body) => api.post(`/api/v1/teams/${teamId}/oncall`, body)
+export const deleteOncallSlot = (teamId, slotId) => api.delete(`/api/v1/teams/${teamId}/oncall/${slotId}`)
+
+// ── Notification preferences ─────────────────────────────────────────────────
+export const getNotificationPrefs = () => api.get('/api/v1/me/notification-preferences')
+export const updateNotificationPrefs = (body) => api.patch('/api/v1/me/notification-preferences', body)

@@ -17,6 +17,7 @@ import {
   Sun,
   Table2,
   UserCircle,
+  Users,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
@@ -38,6 +39,7 @@ const links = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/tables', label: 'Tables', icon: Table2 },
   { to: '/monitors', label: 'Monitors', icon: Activity },
+  { to: '/teams', label: 'Teams', icon: Users },
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
   { to: '/help', label: 'Help Center', icon: BookOpen },
