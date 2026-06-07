@@ -470,7 +470,7 @@ function OncallTab({ team }) {
     )
   }
 
-  const currentName = current?.full_name || current?.user?.full_name || current?.email || current?.user?.email
+  const currentName = current?.user_name || current?.full_name || current?.user?.full_name || current?.user_email || current?.email || current?.user?.email
 
   return (
     <div className="flex flex-col gap-4">
@@ -503,7 +503,7 @@ function OncallTab({ team }) {
             </TableHeader>
             <TableBody>
               {slots.map(slot => {
-                const name = slot.full_name || slot.user?.full_name || slot.email || slot.user?.email || slot.user_id
+                const name = slot.user_name || slot.full_name || slot.user?.full_name || slot.user_email || slot.email || slot.user?.email || slot.user_id
                 return (
                   <TableRow key={slot.id}>
                     <TableCell className="font-medium">{name}</TableCell>
@@ -833,7 +833,7 @@ export default function Teams() {
                         {team.member_count ?? '—'}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {team.current_oncall?.full_name || team.current_oncall?.email || '—'}
+                        {team.current_oncall?.user_name || team.current_oncall?.full_name || team.current_oncall?.user_email || team.current_oncall?.email || '—'}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
