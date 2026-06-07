@@ -15,6 +15,7 @@ import TableDetail from './pages/TableDetail'
 import Settings from './pages/Settings'
 import Reports from './pages/Reports'
 import HelpCenter from './pages/HelpCenter'
+import Teams from './pages/Teams'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminStats from './pages/admin/AdminStats'
@@ -87,6 +88,7 @@ export default function App() {
               <Route path="tables" element={<Tables />} />
               <Route path="tables/:id" element={<TableDetail />} />
               <Route path="monitors" element={<Monitors />} />
+              <Route path="teams" element={<Teams />} />
               <Route path="incidents" element={<Incidents />} />
               <Route path="incidents/:id" element={<IncidentDetail />} />
               <Route path="reports" element={<Reports />} />
