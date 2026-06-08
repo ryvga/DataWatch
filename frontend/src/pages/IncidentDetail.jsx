@@ -592,85 +592,92 @@ function AssignmentCard({ incident, teams, orgMembers, onAssigned }) {
     teamId !== (incident?.assigned_team_id || '')
 
   return (
-    <div className="card space-y-4">
-      <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-        <span>👤</span> Assignment
-      </h3>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <svg xmlns="http://www.w3.org/2000/svg" className="size-4 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+          Assignment
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {/* Current assignment chips */}
+        {(incident?.assignee_id || incident?.assigned_team_id) && (
+          <div className="flex flex-wrap gap-2">
+            {incident.assignee_id && (
+              <Badge variant="secondary" className="gap-1.5 font-normal">
+                <svg xmlns="http://www.w3.org/2000/svg" className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+                {assigneeName || 'Assigned user'}
+              </Badge>
+            )}
+            {incident.assigned_team_id && (
+              <Badge variant="outline" className="gap-1.5 font-normal text-blue-600 dark:text-blue-400 border-blue-600/30">
+                <svg xmlns="http://www.w3.org/2000/svg" className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                {teamName || 'Assigned team'}
+              </Badge>
+            )}
+          </div>
+        )}
 
-      {/* Current assignment chips */}
-      {(incident?.assignee_id || incident?.assigned_team_id) && (
-        <div className="flex flex-wrap gap-2">
-          {incident.assignee_id && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-700 bg-gray-800/50 px-2.5 py-1 text-xs font-medium text-gray-300">
-              👤 {assigneeName || 'Assigned user'}
-            </span>
-          )}
-          {incident.assigned_team_id && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-700/40 bg-blue-600/10 px-2.5 py-1 text-xs font-medium text-blue-400">
-              👥 {teamName || 'Assigned team'}
-            </span>
-          )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Assignee</label>
+            <UserPicker
+              value={assigneeId}
+              onChange={setAssigneeId}
+              placeholder="Assign to user…"
+              members={orgMembers}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Team</label>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              value={teamId}
+              onChange={e => setTeamId(e.target.value)}
+            >
+              <option value="">No team</option>
+              {teams.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
         </div>
-      )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex flex-col gap-1.5">
-          <label className="label">Assignee</label>
-          <UserPicker
-            value={assigneeId}
-            onChange={setAssigneeId}
-            placeholder="Assign to user…"
-            members={orgMembers}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="label">Team</label>
-          <select
-            className="input"
-            value={teamId}
-            onChange={e => setTeamId(e.target.value)}
+        {/* Acknowledged by / Resolved by info */}
+        {(incident?.acknowledged_by_id || incident?.resolved_by_id) && (
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground border-t pt-3">
+            {incident.acknowledged_by_id && (
+              <span>Acknowledged by <strong className="text-foreground font-medium">{
+                orgMembers.find(m => m.id === incident.acknowledged_by_id)?.full_name ||
+                orgMembers.find(m => m.id === incident.acknowledged_by_id)?.email ||
+                'a team member'
+              }</strong></span>
+            )}
+            {incident.resolved_by_id && (
+              <span>Resolved by <strong className="text-foreground font-medium">{
+                orgMembers.find(m => m.id === incident.resolved_by_id)?.full_name ||
+                orgMembers.find(m => m.id === incident.resolved_by_id)?.email ||
+                'a team member'
+              }</strong></span>
+            )}
+          </div>
+        )}
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        {changed && (
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSave}
+            disabled={saving}
+            className="w-fit"
           >
-            <option value="">No team</option>
-            {teams.map(t => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Acknowledged by / Resolved by info */}
-      {(incident?.acknowledged_by_id || incident?.resolved_by_id) && (
-        <div className="flex flex-wrap gap-4 text-xs text-gray-500 border-t border-gray-800 pt-3">
-          {incident.acknowledged_by_id && (
-            <span>Acknowledged by <strong className="text-gray-300">{
-              orgMembers.find(m => m.id === incident.acknowledged_by_id)?.full_name ||
-              orgMembers.find(m => m.id === incident.acknowledged_by_id)?.email ||
-              'a team member'
-            }</strong></span>
-          )}
-          {incident.resolved_by_id && (
-            <span>Resolved by <strong className="text-gray-300">{
-              orgMembers.find(m => m.id === incident.resolved_by_id)?.full_name ||
-              orgMembers.find(m => m.id === incident.resolved_by_id)?.email ||
-              'a team member'
-            }</strong></span>
-          )}
-        </div>
-      )}
-
-      {error && <p className="text-xs text-red-400">{error}</p>}
-
-      {changed && (
-        <button
-          type="button"
-          className="btn-primary text-xs w-fit"
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? 'Saving…' : 'Save assignment'}
-        </button>
-      )}
-    </div>
+            {saving ? 'Saving…' : 'Save assignment'}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

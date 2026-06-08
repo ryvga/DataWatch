@@ -69,8 +69,9 @@ function HealthScoreRing({ score = 0, grade = 'N/A', color = 'red' }) {
         <Badge variant="outline" className={colorClass}>
           Grade {grade}
         </Badge>
-        <div className="mt-3 text-sm text-muted-foreground">
-          Weekly organization health based on incidents and check results.
+        <div className="mt-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">Last 7 days</div>
+        <div className="mt-2 text-sm text-muted-foreground">
+          Weighted average of passed checks and open incidents over the past week. The Overview page shows the last 24h snapshot.
         </div>
       </div>
     </div>

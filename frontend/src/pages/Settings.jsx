@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js'
 import { notify } from '@/lib/notify'
 import {
@@ -72,7 +73,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -296,13 +297,15 @@ function NotificationsTab() {
   ]
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-        🔔 Email Notifications
-      </h2>
-      <p className="text-xs text-gray-500">Choose which events trigger email notifications to you.</p>
-
-      <div className="card space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          Email Notifications
+        </CardTitle>
+        <CardDescription>Choose which events trigger email notifications to you.</CardDescription>
+      </CardHeader>
+      <CardContent>
+      <div className="space-y-4">
         {PREF_ROWS.map(({ key, label, desc }) => (
           <div key={key} className="flex items-start justify-between gap-4">
             <div>
@@ -383,16 +386,17 @@ function NotificationsTab() {
         {error && <p className="text-xs text-red-400">{error}</p>}
         {saved && <p className="text-xs text-green-400">Preferences saved.</p>}
 
-        <button
+        <Button
           type="button"
           onClick={save}
           disabled={saving}
-          className="btn-primary text-xs w-fit"
+          size="sm"
         >
           {saving ? 'Saving…' : 'Save preferences'}
-        </button>
+        </Button>
       </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -2644,10 +2648,10 @@ function BillingTab() {
 }
 
 export default function Settings() {
-  const [active, setActive] = useState(() => {
-    const tab = new URLSearchParams(window.location.search).get('tab')
-    return SETTINGS_SECTIONS.some((section) => section.value === tab) ? tab : 'profile'
-  })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tab = searchParams.get('tab')
+  const active = SETTINGS_SECTIONS.some((s) => s.value === tab) ? tab : 'profile'
+  const setActive = (value) => setSearchParams({ tab: value }, { replace: true })
   const activeSection = SETTINGS_SECTIONS.find((section) => section.value === active) || SETTINGS_SECTIONS[0]
   const ActiveComponent = activeSection.Component
 

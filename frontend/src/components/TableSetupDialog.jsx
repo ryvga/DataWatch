@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, Database, Loader2, RefreshCw, Search, Sparkles, Table2 } from 'lucide-react'
-import { createTable, discoverSource, getSchemas, getSourceTableSchema, recommendMonitors } from '@/api/endpoints'
+import { createCustomMonitor, createTable, discoverSource, getSchemas, getSourceTableSchema, recommendMonitors } from '@/api/endpoints'
 import { notify } from '@/lib/notify'
 import { extractColumnsFromDDL, freshnessCandidates } from '@/lib/connectorConfig'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -25,6 +25,54 @@ const SENSITIVITY = [
   { value: '3.0', label: 'Balanced' },
   { value: '4.0', label: 'Conservative' },
 ]
+
+const AI_THINKING_MESSAGES = [
+  'Interrogating the schema with extreme prejudice…',
+  'Consulting the ancient scrolls of data quality…',
+  'Running SELECT * FROM wisdom WHERE applicable = true…',
+  'Profiling your data like a suspicious DBA…',
+  'Computing anomaly thresholds… blame statistics, not me…',
+  'Asking the LLM to think harder…',
+  'Parsing DDL faster than your migration scripts…',
+  'Evaluating null rates with zero tolerance…',
+  'Cross-referencing column names against bad decisions…',
+  'Detecting schema drift before it detects you…',
+  'Training a tiny model on your table\'s vibes…',
+  'Counting rows that shouldn\'t exist…',
+  'Applying 3σ judgment to your cardinality choices…',
+  'Joining facts to opinions at O(n²) complexity…',
+  'Generating monitors you\'ll definitely forget to review…',
+]
+
+function recToSql(rec, schemaName, tableName) {
+  const full = `"${schemaName}"."${tableName}"`
+  const col = rec.column_name ? `"${rec.column_name}"` : null
+  switch (rec.monitor_type) {
+    case 'null_rate':
+      return col ? `SELECT COUNT(*) FROM ${full} WHERE ${col} IS NULL` : null
+    case 'duplicate':
+      return col
+        ? `SELECT COUNT(*) - COUNT(DISTINCT ${col}) FROM ${full}`
+        : `SELECT COUNT(*) - COUNT(DISTINCT *) FROM ${full}`
+    case 'freshness':
+      return col
+        ? `SELECT COUNT(*) FROM ${full} WHERE ${col} < NOW() - INTERVAL '24 hours'`
+        : null
+    case 'row_count':
+      return `SELECT CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END FROM ${full}`
+    case 'value_range':
+      return col ? `SELECT COUNT(*) FROM ${full} WHERE ${col} < 0` : null
+    case 'enum_drift':
+      return col
+        ? `SELECT COUNT(*) FROM ${full} WHERE ${col} IS NOT NULL AND ${col}::text NOT IN (SELECT DISTINCT ${col}::text FROM ${full} LIMIT 50)`
+        : null
+    case 'schema_drift':
+    case 'custom_sql':
+      return null
+    default:
+      return null
+  }
+}
 
 function flattenSchemas(schemas) {
   return schemas.flatMap((schema) =>
@@ -57,7 +105,10 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
   const [recsLoading, setRecsLoading] = useState(false)
   const [applying, setApplying] = useState({})
   const [applied, setApplied] = useState({})
+  const [applyingAll, setApplyingAll] = useState(false)
   const [createdTable, setCreatedTable] = useState(null)
+  const [thinkingMsgIndex, setThinkingMsgIndex] = useState(0)
+  const thinkingIntervalRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
@@ -155,6 +206,10 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
       // Transition to recommendations step
       setStep('recommendations')
       setRecsLoading(true)
+      setThinkingMsgIndex(0)
+      thinkingIntervalRef.current = setInterval(() => {
+        setThinkingMsgIndex((i) => (i + 1) % AI_THINKING_MESSAGES.length)
+      }, 6000)
       try {
         const recResponse = await recommendMonitors(sourceId, {
           source_id: sourceId,
@@ -166,6 +221,7 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
         setRecs([])
       } finally {
         setRecsLoading(false)
+        clearInterval(thinkingIntervalRef.current)
       }
     } catch (err) {
       const message = err.response?.data?.detail || 'Failed to add table'
@@ -179,15 +235,21 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
   const SEVERITY_COLORS = { P1: 'text-red-600 dark:text-red-400', P2: 'text-orange-600 dark:text-orange-400', P3: 'text-yellow-600 dark:text-yellow-400' }
 
   async function applyRec(rec, index) {
+    if (!createdTable?.id) return
+    const sql = recToSql(rec, createdTable.schema_name, createdTable.table_name)
+    if (!sql) {
+      setApplied((prev) => ({ ...prev, [index]: true }))
+      notify.ok('Already covered', `${rec.name} is handled by the built-in profiler`)
+      return
+    }
     setApplying((prev) => ({ ...prev, [index]: true }))
     try {
-      await createTable({
-        source_id: sourceId,
-        schema_name: createdTable?.schema_name || '',
-        table_name: createdTable?.table_name || '',
-        freshness_column: rec.column_name || null,
-        check_interval_minutes: Number(interval),
-        sensitivity: Number(sensitivity),
+      await createCustomMonitor(createdTable.id, {
+        name: rec.name,
+        description: rec.rationale || '',
+        sql_query: sql,
+        severity: rec.severity,
+        run_on_profile: true,
       })
       setApplied((prev) => ({ ...prev, [index]: true }))
       notify.ok('Monitor added', rec.name)
@@ -196,6 +258,15 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
     } finally {
       setApplying((prev) => { const next = { ...prev }; delete next[index]; return next })
     }
+  }
+
+  async function applyAll() {
+    if (!recs?.length || !createdTable?.id) return
+    setApplyingAll(true)
+    for (let i = 0; i < recs.length; i++) {
+      if (!applied[i]) await applyRec(recs[i], i)
+    }
+    setApplyingAll(false)
   }
 
   if (step === 'recommendations') {
@@ -214,10 +285,22 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
             </DialogHeader>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
               {recsLoading ? (
-                <div className="flex flex-col gap-2">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-16 animate-pulse rounded-lg border bg-muted/40" />
-                  ))}
+                <div className="flex flex-col items-center gap-6 py-8 text-center">
+                  <div className="relative size-12">
+                    <Loader2 className="size-12 animate-spin text-primary/30" />
+                    <Sparkles className="absolute inset-0 m-auto size-5 text-primary" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground transition-all">
+                      {AI_THINKING_MESSAGES[thinkingMsgIndex]}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Consulting the LLM about your table…</p>
+                  </div>
+                  <div className="w-full max-w-sm space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-14 animate-pulse rounded-lg border bg-muted/40" style={{ animationDelay: `${i * 150}ms` }} />
+                    ))}
+                  </div>
                 </div>
               ) : recs?.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No monitor recommendations generated for this table.</p>
@@ -249,6 +332,12 @@ export default function TableSetupDialog({ open, onOpenChange, sources, onCreate
               )}
             </div>
             <DialogFooter className="border-t px-5 py-3">
+              {!recsLoading && recs?.length > 0 && Object.keys(applied).length < recs.length && (
+                <Button type="button" variant="outline" disabled={applyingAll} onClick={applyAll}>
+                  {applyingAll ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                  Apply all
+                </Button>
+              )}
               <Button type="button" onClick={() => onOpenChange(false)}>Done</Button>
             </DialogFooter>
           </div>

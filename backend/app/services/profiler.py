@@ -105,8 +105,15 @@ class ProfilerService:
             parts = line.split()
             if len(parts) >= 2:
                 col_name = parts[0]
-                data_type = parts[1]
                 nullable = "NOT NULL" not in line
+                # Strip trailing NULL/NOT NULL to capture multi-word types
+                # e.g. "character varying NULL" → "character varying"
+                remainder = line[len(col_name):].strip()
+                for suffix in ("NOT NULL", "NULL"):
+                    if remainder.endswith(suffix):
+                        remainder = remainder[: -len(suffix)].strip()
+                        break
+                data_type = remainder if remainder else parts[1]
                 columns.append(ColumnInfo(name=col_name, data_type=data_type, is_nullable=nullable))
         return columns
 

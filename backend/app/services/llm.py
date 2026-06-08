@@ -85,7 +85,7 @@ Always respond with valid JSON matching this exact schema — no preamble, no ma
     "SELECT * FROM table WHERE column IS NULL AND created_at >= NOW() - INTERVAL '24 hours' LIMIT 100",
     "SELECT date_trunc('hour', created_at), COUNT(*) FROM table GROUP BY 1 ORDER BY 1 DESC LIMIT 48"
   ],
-  "client_safe_summary": "1-2 sentence business summary with no internal table names or technical details",
+  "client_safe_summary": "2-3 sentence stakeholder-facing summary. State what the business impact is (e.g. which reports, KPIs, or user-facing features may be affected), when the issue was detected, and what action is being taken. No table names, schema details, or technical jargon. Write as if sending a brief update to a VP or product manager.",
   "suggested_monitors": [
     "specific follow-up monitor that would catch this earlier next time"
   ],
@@ -99,7 +99,7 @@ Rules:
 - likely_causes: 2-3 entries, most probable first, each hypothesis must be specific
 - recommended_actions: 3-5 actionable steps — at least one must be a runnable SQL query
 - debug_queries: 2-4 SQL queries an engineer can immediately run to investigate
-- client_safe_summary: business language only, no table names, assume non-technical reader
+- client_safe_summary: 2-3 sentences, zero technical jargon, no table/column names. Cover: (1) what business capability is affected, (2) when detected and approximate severity, (3) what the team is doing about it. Think "engineering status update to a business stakeholder".
 - suggested_monitors: 1-3 follow-up monitors or rule ideas that would reduce repeat incidents
 - ownership_hint: name the likely owning domain/team if inferable; otherwise say "Data platform owner"
 - if row_count=0 or freshness breach: confidence = "high"

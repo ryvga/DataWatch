@@ -13,6 +13,8 @@ import {
   Table2,
   UserX,
   Shield,
+  CalendarPlus,
+  ChevronDown,
 } from 'lucide-react'
 import {
   getTeams,
@@ -58,6 +60,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -400,13 +411,227 @@ function MembersTab({ team, userRole }) {
 
 // ── On-call tab ────────────────────────────────────────────────────────────
 
+/** Returns initials (up to 2 chars) from a display name or email. */
+function getInitials(name) {
+  if (!name) return '?'
+  const clean = name.split('@')[0]
+  const parts = clean.trim().split(/\s+/)
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return clean.slice(0, 2).toUpperCase()
+}
+
+/** Format a duration in ms to "Xh Ym" or "Xd Yh". */
+function formatDuration(ms) {
+  if (ms <= 0) return '0m'
+  const totalMinutes = Math.floor(ms / 60000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const mins = totalMinutes % 60
+  if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+  if (hours > 0) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+  return `${mins}m`
+}
+
+/** Format an ISO datetime to a friendly label like "Mon Jun 9, 9:00 AM" */
+function formatSlotDate(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  } catch {
+    return iso
+  }
+}
+
+/** Single on-call slot card for the timeline. */
+function OncallSlotCard({ slot, isCurrent, onDelete }) {
+  const name = slot.user_name || slot.full_name || slot.user?.full_name || slot.user_email || slot.email || slot.user?.email || slot.user_id
+  const start = new Date(slot.starts_at)
+  const end = new Date(slot.ends_at)
+  const now = new Date()
+  const isPast = end < now
+  const durationMs = end - start
+
+  return (
+    <div
+      className={cn(
+        'relative flex items-start gap-4 rounded-lg border bg-card p-4 transition-opacity',
+        isCurrent && 'border-emerald-500/40',
+        isPast && !isCurrent && 'opacity-50',
+      )}
+    >
+      {/* Accent bar for current slot */}
+      {isCurrent && (
+        <span className="absolute left-0 top-3 bottom-3 w-1 rounded-r bg-emerald-500" />
+      )}
+
+      {/* Avatar */}
+      <div
+        className={cn(
+          'flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+          isCurrent
+            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+            : isPast
+              ? 'bg-muted text-muted-foreground'
+              : 'bg-primary/10 text-primary',
+        )}
+      >
+        {getInitials(name)}
+      </div>
+
+      {/* Details */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={cn('text-sm font-medium', isPast && !isCurrent && 'text-muted-foreground')}>
+            {name}
+          </span>
+          {isCurrent && (
+            <Badge variant="outline" className="border-emerald-500/40 text-emerald-700 dark:text-emerald-400 text-[10px] px-1.5 py-0">
+              Active
+            </Badge>
+          )}
+          {isPast && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
+              Past
+            </Badge>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatSlotDate(slot.starts_at)} &rarr; {formatSlotDate(slot.ends_at)}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Duration: {formatDuration(durationMs)}
+        </p>
+      </div>
+
+      {/* Delete */}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove slot" className="shrink-0 self-start">
+            <Trash2 className="size-3.5 text-muted-foreground hover:text-destructive" />
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove on-call slot?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove {name}'s on-call slot from {formatSlotDate(slot.starts_at)} to {formatSlotDate(slot.ends_at)}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => onDelete(slot.id)}>Remove</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}
+
+/** Add-slot modal dialog. */
+function AddOncallDialog({ teamId, onAdded }) {
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ user_id: '', starts_at: '', ends_at: '' })
+  const [adding, setAdding] = useState(false)
+
+  const reset = () => setForm({ user_id: '', starts_at: '', ends_at: '' })
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!form.user_id || !form.starts_at || !form.ends_at) return
+    setAdding(true)
+    try {
+      const res = await addOncallSlot(teamId, {
+        user_id: form.user_id,
+        starts_at: new Date(form.starts_at).toISOString(),
+        ends_at: new Date(form.ends_at).toISOString(),
+      })
+      onAdded(res.data)
+      notify.ok('On-call slot added')
+      reset()
+      setOpen(false)
+    } catch (err) {
+      notify.err(getApiError(err, 'Failed to add on-call slot'))
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset() }}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="outline" size="sm">
+          <CalendarPlus data-icon="inline-start" className="size-3.5" />
+          Schedule coverage
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Schedule on-call coverage</DialogTitle>
+          <DialogDescription>
+            Assign a team member to be on-call during a specific time window.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4 pt-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="oncall-member">Team member</Label>
+            <UserPicker
+              value={form.user_id}
+              onChange={(v) => setForm(prev => ({ ...prev, user_id: v }))}
+              placeholder="Select a team member…"
+              excludeIds={[]}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="oncall-start">Start</Label>
+              <Input
+                id="oncall-start"
+                type="datetime-local"
+                value={form.starts_at}
+                onChange={(e) => setForm(prev => ({ ...prev, starts_at: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="oncall-end">End</Label>
+              <Input
+                id="oncall-end"
+                type="datetime-local"
+                value={form.ends_at}
+                onChange={(e) => setForm(prev => ({ ...prev, ends_at: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="submit"
+              disabled={!form.user_id || !form.starts_at || !form.ends_at || adding}
+            >
+              {adding && <Loader2 data-icon="inline-start" className="animate-spin" />}
+              {adding ? 'Saving…' : 'Add slot'}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 function OncallTab({ team }) {
   const [slots, setSlots] = useState([])
   const [current, setCurrent] = useState(null)
   const [loading, setLoading] = useState(true)
   const [members, setMembers] = useState([])
-  const [form, setForm] = useState({ user_id: '', starts_at: '', ends_at: '' })
-  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     if (!team) return
@@ -422,25 +647,6 @@ function OncallTab({ team }) {
     }).finally(() => setLoading(false))
   }, [team])
 
-  const handleAdd = async () => {
-    if (!form.user_id || !form.starts_at || !form.ends_at) return
-    setAdding(true)
-    try {
-      const res = await addOncallSlot(team.id, {
-        user_id: form.user_id,
-        starts_at: new Date(form.starts_at).toISOString(),
-        ends_at: new Date(form.ends_at).toISOString(),
-      })
-      setSlots(prev => [...prev, res.data])
-      setForm({ user_id: '', starts_at: '', ends_at: '' })
-      notify.ok('On-call slot added')
-    } catch (err) {
-      notify.err(getApiError(err, 'Failed to add on-call slot'))
-    } finally {
-      setAdding(false)
-    }
-  }
-
   const handleDelete = async (slotId) => {
     try {
       await deleteOncallSlot(team.id, slotId)
@@ -448,17 +654,6 @@ function OncallTab({ team }) {
       notify.ok('Slot removed')
     } catch (err) {
       notify.err(getApiError(err, 'Failed to remove slot'))
-    }
-  }
-
-  const memberIds = members.map(m => m.user_id || m.id)
-
-  const formatDt = (iso) => {
-    if (!iso) return '—'
-    try {
-      return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-    } catch {
-      return iso
     }
   }
 
@@ -470,119 +665,113 @@ function OncallTab({ team }) {
     )
   }
 
+  const now = new Date()
   const currentName = current?.user_name || current?.full_name || current?.user?.full_name || current?.user_email || current?.email || current?.user?.email
 
-  return (
-    <div className="flex flex-col gap-4">
-      {/* Current on-call banner */}
-      <div className={cn(
-        'flex items-center gap-2 rounded-lg border px-4 py-3 text-sm',
-        current ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-muted bg-muted/30'
-      )}>
-        <Shield className={cn('size-4 shrink-0', current ? 'text-emerald-600' : 'text-muted-foreground')} />
-        {current ? (
-          <span>Currently on-call: <span className="font-semibold text-emerald-700 dark:text-emerald-400">{currentName}</span></span>
-        ) : (
-          <span className="text-muted-foreground">No one is currently on-call</span>
-        )}
-      </div>
+  // Countdown for current slot end
+  let countdown = null
+  if (current?.ends_at) {
+    const msLeft = new Date(current.ends_at) - now
+    if (msLeft > 0) countdown = formatDuration(msLeft)
+  }
 
-      {/* Slots table */}
-      {slots.length === 0 ? (
-        <EmptyState icon={Clock} title="No on-call slots" description="Schedule on-call coverage for team members." />
+  // Sort slots: upcoming first, then past
+  const upcoming = slots
+    .filter(s => new Date(s.ends_at) >= now)
+    .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))
+  const past = slots
+    .filter(s => new Date(s.ends_at) < now)
+    .sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at))
+
+  return (
+    <div className="flex flex-col gap-5">
+
+      {/* Hero: who is on duty now */}
+      {current ? (
+        <div className="flex items-center gap-4 rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-5 py-4">
+          {/* Avatar */}
+          <div className="relative flex size-12 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+            {getInitials(currentName)}
+            {/* Pulse dot */}
+            <span className="absolute right-0 top-0 flex size-3">
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex size-3 rounded-full bg-emerald-500" />
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-500">On duty now</p>
+            <p className="text-base font-semibold text-foreground truncate">{currentName}</p>
+            {countdown && (
+              <p className="text-xs text-muted-foreground">Ends in {countdown}</p>
+            )}
+          </div>
+          <Badge className="shrink-0 border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" variant="outline">
+            Active
+          </Badge>
+        </div>
       ) : (
-        <div className="dw-table-wrap">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead>Starts</TableHead>
-                <TableHead>Ends</TableHead>
-                <TableHead className="w-12" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {slots.map(slot => {
-                const name = slot.user_name || slot.full_name || slot.user?.full_name || slot.user_email || slot.email || slot.user?.email || slot.user_id
-                return (
-                  <TableRow key={slot.id}>
-                    <TableCell className="font-medium">{name}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDt(slot.starts_at)}</TableCell>
-                    <TableCell className="text-muted-foreground">{formatDt(slot.ends_at)}</TableCell>
-                    <TableCell>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button type="button" variant="ghost" size="icon-sm" aria-label="Remove slot">
-                            <Trash2 className="size-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Remove on-call slot?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will remove {name}'s on-call slot from {formatDt(slot.starts_at)} to {formatDt(slot.ends_at)}.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(slot.id)}>Remove</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+        <div className="flex items-center gap-4 rounded-xl border bg-muted/30 px-5 py-4">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-muted">
+            <Shield className="size-5 text-muted-foreground" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-foreground">No active coverage</p>
+            <p className="text-xs text-muted-foreground">No one is currently on-call for this team.</p>
+          </div>
+          <AddOncallDialog teamId={team.id} onAdded={(slot) => setSlots(prev => [...prev, slot])} />
         </div>
       )}
 
-      {/* Add slot form */}
-      <div className="rounded-lg border bg-muted/30 p-4">
-        <p className="mb-3 text-sm font-medium">Add on-call slot</p>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <Label className="text-xs text-muted-foreground mb-1">Team member</Label>
-              <UserPicker
-                value={form.user_id}
-                onChange={(v) => setForm(prev => ({ ...prev, user_id: v }))}
-                placeholder="Select team member…"
-                excludeIds={[]}
-              />
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">Start</Label>
-              <Input
-                type="datetime-local"
-                value={form.starts_at}
-                onChange={(e) => setForm(prev => ({ ...prev, starts_at: e.target.value }))}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs text-muted-foreground">End</Label>
-              <Input
-                type="datetime-local"
-                value={form.ends_at}
-                onChange={(e) => setForm(prev => ({ ...prev, ends_at: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div>
-            <Button
-              type="button"
-              onClick={handleAdd}
-              disabled={!form.user_id || !form.starts_at || !form.ends_at || adding}
-            >
-              {adding ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <Plus data-icon="inline-start" />}
-              {adding ? 'Adding…' : 'Add slot'}
-            </Button>
-          </div>
-        </div>
+      {/* Section header with add button */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-foreground">
+          Schedule
+          {slots.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-muted-foreground">{slots.length} slot{slots.length !== 1 ? 's' : ''}</span>
+          )}
+        </p>
+        <AddOncallDialog teamId={team.id} onAdded={(slot) => setSlots(prev => [...prev, slot])} />
       </div>
+
+      {/* Timeline */}
+      {slots.length === 0 ? (
+        <EmptyState
+          icon={Clock}
+          title="No on-call slots"
+          description="Schedule coverage windows to ensure someone is always reachable."
+        />
+      ) : (
+        <div className="flex flex-col gap-3">
+          {upcoming.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Upcoming</p>
+              {upcoming.map(slot => (
+                <OncallSlotCard
+                  key={slot.id}
+                  slot={slot}
+                  isCurrent={current?.id === slot.id || (
+                    new Date(slot.starts_at) <= now && new Date(slot.ends_at) >= now
+                  )}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
+          {past.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Past</p>
+              {past.map(slot => (
+                <OncallSlotCard
+                  key={slot.id}
+                  slot={slot}
+                  isCurrent={false}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

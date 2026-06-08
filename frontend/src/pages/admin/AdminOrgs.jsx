@@ -36,7 +36,7 @@ function StatCell({ label, value, detail }) {
       <CardHeader className="px-4 pb-1 pt-4">
         <CardTitle className="text-xs font-medium text-muted-foreground">{label}</CardTitle>
       </CardHeader>
-      <CardContent className="px-4 pb-4">
+      <CardContent className="px-4 py-4">
         <div className="text-2xl font-semibold tabular-nums">{value}</div>
         {detail && <div className="mt-1 text-xs text-muted-foreground">{detail}</div>}
       </CardContent>

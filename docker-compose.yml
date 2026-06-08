@@ -31,8 +31,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -50,20 +48,20 @@ services:
 
   # ── Demo databases ───────────────────────────────────────────────────────────
 
-  # acme-corp e-commerce (shopDemo)
-  demo-db:
+  # acme-corp e-commerce
+  acme-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: shopDemo
+      POSTGRES_DB: acmedb
       POSTGRES_USER: readonly_user
       POSTGRES_PASSWORD: readonly_pass
     volumes:
-      - demo_db_data:/var/lib/postgresql/data
-      - ./scripts/demo_db_init.sql:/docker-entrypoint-initdb.d/init.sql
+      - acme_db_data:/var/lib/postgresql/data
+      - ./scripts/acme_db_init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5434:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U readonly_user -d shopDemo"]
+      test: ["CMD-SHELL", "pg_isready -U readonly_user -d acmedb"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -77,7 +75,7 @@ services:
       POSTGRES_PASSWORD: readonly_pass
     volumes:
       - analytics_db_data:/var/lib/postgresql/data
-      - ./scripts/analytics_db_init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./scripts/startup_db_init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5435:5432"
     healthcheck:
@@ -126,12 +124,16 @@ services:
         condition: service_started
       migrate:
         condition: service_completed_successfully
+      acme-db:
+        condition: service_healthy
+      analytics-db:
+        condition: service_healthy
 
   worker:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A app.worker worker --loglevel=info --pool=threads --concurrency=4
+    command: celery -A app.worker worker --loglevel=info --pool=solo
     volumes:
       - ./backend:/app
     env_file:
@@ -170,7 +172,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: python /scripts/seed_demo.py --full
+    command: python /scripts/quickstart.py --full
     volumes:
       - ./backend:/app
       - ./scripts:/scripts
@@ -179,16 +181,55 @@ services:
       - .env
     environment:
       - API_URL=http://api:8000
+      - ACME_DB_URL=postgresql://write_user:write_pass@acme-db:5432/acmedb
+      - ANALYTICS_DB_URL=postgresql://write_user:write_pass@analytics-db:5432/analyticsdb
     depends_on:
       migrate:
         condition: service_completed_successfully
       api:
         condition: service_started
+      acme-db:
+        condition: service_healthy
+      analytics-db:
+        condition: service_healthy
     restart: "no"
     profiles:
       - seed
 
+  # ── Optional: simulator (docker compose --profile simulator up simulator) ────
+  #
+  # Continuously mutates the live databases to generate realistic data quality
+  # incidents. Runs a random anomaly scenario every ~90s and auto-triggers
+  # DataWatch profile runs so incidents appear immediately.
+  #
+  # Usage:
+  #   docker compose --profile simulator up simulator
+  #   docker compose --profile simulator up -d simulator   # background
+  #
+  # Run a specific scenario once:
+  #   docker compose --profile simulator run --rm simulator \
+  #     python /scripts/simulator.py --scenario null_spike
+  simulator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python /scripts/simulator.py --interval 90 --api-url http://api:8000
+    volumes:
+      - ./scripts:/scripts
+    environment:
+      ACME_DB_URL: postgresql://write_user:write_pass@acme-db:5432/acmedb
+      ANALYTICS_DB_URL: postgresql://write_user:write_pass@analytics-db:5432/analyticsdb
+      DATAWATCH_API_URL: http://api:8000
+    depends_on:
+      acme-db:
+        condition: service_healthy
+      analytics-db:
+        condition: service_healthy
+    profiles:
+      - simulator
+    restart: unless-stopped
+
 volumes:
   postgres_data:
-  demo_db_data:
+  acme_db_data:
   analytics_db_data:
