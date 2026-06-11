@@ -631,7 +631,7 @@ function AssignmentCard({ incident, teams, orgMembers, onAssigned }) {
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-muted-foreground">Team</label>
             <select
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               value={teamId}
               onChange={e => setTeamId(e.target.value)}
             >

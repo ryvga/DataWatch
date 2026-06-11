@@ -47,6 +47,7 @@ class RecommendMonitorsRequest(BaseModel):
     source_id: str = ""  # ignored — comes from URL path
     table_name: str
     schema_name: str = "public"
+    table_id: str | None = None  # optional: pass to exclude existing monitors
 
 
 @router.post("/sources/{source_id}/recommend-monitors")
@@ -58,6 +59,8 @@ async def recommend_monitors(
 ):
     from sqlalchemy import select
     from app.models.data_source import DataSource
+    from app.models.custom_monitor import CustomMonitor
+    from app.models.monitored_table import MonitoredTable
     from app.services.crypto import decrypt_config
     from app.connectors.factory import ConnectorFactory
     from app.services.profiler import ProfilerService
@@ -79,6 +82,18 @@ async def recommend_monitors(
             org_model = org.llm_model
         except Exception:
             pass
+
+    # Collect existing monitors so the LLM skips duplicates
+    existing_monitors: list[dict] = []
+    if body.table_id:
+        existing_custom = (await db.scalars(
+            select(CustomMonitor).where(CustomMonitor.table_id == body.table_id, CustomMonitor.is_active == True)
+        )).all()
+        existing_monitors = [{"monitor_type": "custom_sql", "name": m.name} for m in existing_custom]
+        table = await db.get(MonitoredTable, body.table_id)
+        if table and table.autopilot:
+            prior_safe = table.autopilot.get("safe_monitors") or []
+            existing_monitors.extend(prior_safe)
 
     try:
         config = decrypt_config(source.connection_config["encrypted"], str(org.id))
@@ -103,6 +118,7 @@ async def recommend_monitors(
             org_llm_key=org_llm_key,
             org_model=org_model,
             db_type=source.type,
+            existing_monitors=existing_monitors or None,
         )
         return {"table": body.table_name, "recommendations": monitors, "count": len(monitors)}
     except Exception as e:

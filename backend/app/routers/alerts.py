@@ -152,10 +152,15 @@ async def test_alert_config(
     class _FakeIncident:
         id = "test-00000000"
         severity = "P3"
+        status = "open"
         title = "Panopta test alert — configuration verified"
         fired_checks = []
+        table_id = None
+        org_id = None
+        llm_narration = None
         from datetime import datetime, timezone
         created_at = datetime.now(timezone.utc)
+        resolved_at = None
 
     if not cfg.is_active:
         raise HTTPException(status_code=410, detail="This alert route is deleted and cannot be tested.")

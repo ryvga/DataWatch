@@ -151,8 +151,8 @@ async def _profile_table_async(table_id: str) -> dict:
 @celery_app.task(
     bind=True,
     name="tasks.bootstrap_table_autopilot",
-    max_retries=1,
-    default_retry_delay=30,
+    max_retries=5,
+    default_retry_delay=60,
 )
 def bootstrap_table_autopilot(self, table_id: str):
     """Generate first-run baseline and AI monitor recommendations for a table."""
@@ -160,7 +160,11 @@ def bootstrap_table_autopilot(self, table_id: str):
         return _run(_bootstrap_table_autopilot_async(table_id))
     except Exception as exc:
         logger.error("bootstrap_table_autopilot failed for %s: %s", table_id, exc)
-        raise self.retry(exc=exc)
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc)
+        # All retries exhausted — mark autopilot as failed so the UI shows a retry button
+        _run(_mark_autopilot_failed_async(table_id, str(exc)))
+        return {"status": "failed", "table_id": table_id, "error": str(exc)}
 
 
 async def _bootstrap_table_autopilot_async(table_id: str) -> dict:
@@ -192,6 +196,26 @@ async def _bootstrap_table_autopilot_async(table_id: str) -> dict:
             "safe_monitors": len(state.get("safe_monitors") or []),
             "staged": len(state.get("recommendations") or []),
         }
+
+
+async def _mark_autopilot_failed_async(table_id: str, error: str) -> None:
+    from datetime import UTC, datetime
+    from app.database import AsyncSessionLocal
+    from app.models.monitored_table import MonitoredTable
+
+    async with AsyncSessionLocal() as db:
+        table = await db.get(MonitoredTable, table_id)
+        if not table:
+            return
+        state = dict(table.autopilot or {})
+        state["status"] = "failed"
+        state["updated_at"] = datetime.now(UTC).isoformat()
+        state["recommended_next_action"] = "Autopilot failed. Click 'Retry' to try again."
+        steps = dict(state.get("steps") or {})
+        steps["recommendations"] = {"status": "failed", "label": "AI monitor recommendations", "error": error}
+        state["steps"] = steps
+        table.autopilot = state
+        await db.commit()
 
 
 @celery_app.task(name="tasks.run_anomaly_checks")

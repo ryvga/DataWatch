@@ -186,20 +186,40 @@ def _extract_monitor_list(parsed: Any) -> list[Any]:
     return []
 
 
+def _format_existing_monitors(monitors: list[dict]) -> str:
+    if not monitors:
+        return ""
+    lines = []
+    for m in monitors:
+        mtype = m.get("monitor_type") or m.get("type") or "custom_sql"
+        name = m.get("name") or ""
+        col = m.get("column_name") or ""
+        lines.append(f"- {mtype} on {col or 'table'}: {name}")
+    return "\n".join(lines)
+
+
 async def recommend_monitors(
     table_name: str,
     columns: list[dict],
     org_llm_key: str | None,
     org_model: str | None,
     db_type: str = "postgres",
+    existing_monitors: list[dict] | None = None,
 ) -> list[dict]:
     effective_key = org_llm_key or settings.OPENROUTER_API_KEY
     if not effective_key:
         return _safe_default_monitors(table_name, columns)
 
     formatted_columns = _format_columns(columns)
+    existing_section = ""
+    if existing_monitors:
+        existing_section = (
+            f"\nAlready active monitors (do NOT suggest duplicates):\n"
+            f"{_format_existing_monitors(existing_monitors)}\n"
+        )
     user_prompt = (
-        f"Table '{table_name}' in {db_type} has these columns:\n{formatted_columns}\n\n"
+        f"Table '{table_name}' in {db_type} has these columns:\n{formatted_columns}\n"
+        f"{existing_section}\n"
         "Recommend monitors as JSON array of "
         "{monitor_type, column_name (or null), name, rationale, severity (P1/P2/P3), "
         "config (dict with any relevant params)}.\n"

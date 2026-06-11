@@ -248,6 +248,17 @@ async def create_table(
 ):
     source = await _resolve_org_from_source(body.source_id, org, db)
 
+    # Reject duplicate (same source + schema + table)
+    existing = await db.scalar(
+        select(MonitoredTable).where(
+            MonitoredTable.source_id == body.source_id,
+            MonitoredTable.schema_name == body.schema_name,
+            MonitoredTable.table_name == body.table_name,
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail=f"Table {body.schema_name}.{body.table_name} is already monitored for this source.")
+
     # Enforce plan limit
     from app.services.plans import enforce_table_limit
     await enforce_table_limit(org, db)
@@ -388,6 +399,21 @@ async def trigger_profile(
     table = await _get_table_or_404(table_id, org, db)
     from app.tasks import profile_table
     task = profile_table.delay(str(table.id))
+    return {"status": "queued", "task_id": str(task.id)}
+
+
+@router.post("/{table_id}/retry-autopilot", status_code=202)
+async def retry_autopilot(
+    table_id: str,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    table = await _get_table_or_404(table_id, org, db)
+    from app.services.table_autopilot import initial_autopilot_state
+    table.autopilot = initial_autopilot_state()
+    await db.commit()
+    from app.tasks import bootstrap_table_autopilot
+    task = bootstrap_table_autopilot.delay(str(table.id))
     return {"status": "queued", "task_id": str(task.id)}
 
 

@@ -87,6 +87,7 @@ export const createCustomMonitor = (tableId, data) => api.post(`/api/v1/tables/$
 export const updateCustomMonitor = (tableId, monitorId, data) => api.patch(`/api/v1/tables/${tableId}/custom-monitors/${monitorId}`, data)
 export const deleteCustomMonitor = (tableId, monitorId) => api.delete(`/api/v1/tables/${tableId}/custom-monitors/${monitorId}`)
 export const runCustomMonitorNow = (tableId, monitorId) => api.post(`/api/v1/tables/${tableId}/custom-monitors/${monitorId}/run`, null, { timeout: 120000 })
+export const retryAutopilot = (tableId) => api.post(`/api/v1/tables/${tableId}/retry-autopilot`)
 
 // ── Admin (staff only) ────────────────────────────────────────────────────────
 

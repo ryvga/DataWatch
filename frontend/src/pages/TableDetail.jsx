@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, CheckCircle2, Code2, Edit3, Loader2, Play, PlusCircle, Search, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
-import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck } from '../api/endpoints'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, Bell, CheckCircle2, Code2, Edit3, Loader2, Play, PlusCircle, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
+import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck, retryAutopilot, getAlerts, getAlertChannels, createAlert, deleteAlert, testAlert } from '../api/endpoints'
 import { toast } from 'sonner'
 import HealthBadge from '../components/HealthBadge'
 import MetricChart from '../components/MetricChart'
@@ -88,20 +88,40 @@ function recommendationSql(rec, tableName) {
   return ''
 }
 
-function AutopilotPanel({ table, onMonitorSaved }) {
+function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
   const [applying, setApplying] = useState({})
+  const [addingSafe, setAddingSafe] = useState({})
+  const [retrying, setRetrying] = useState(false)
   const state = table?.autopilot
   if (!state) return null
 
   const steps = state.steps || {}
   const safeMonitors = state.safe_monitors || []
   const recommendations = state.recommendations || []
+  const isFailed = state.status === 'failed'
+  // Stuck = overall status is not yet "ready" AND the recommendations step is still queued/pending
+  const recStatus = steps.recommendations?.status
+  const isQueued = state.status === 'queued' || state.status === 'not_started'
+    || (state.status === 'profiling_complete' && (recStatus === 'queued' || recStatus === 'pending'))
   const stepEntries = [
     ['profile', 'First profile'],
-    ['safe_baseline', 'Safe baseline'],
-    ['recommendations', 'AI recommendations'],
+    ['safe_baseline', 'Safe baseline monitors'],
+    ['recommendations', 'AI monitor recommendations'],
     ['alerts', 'Alert routing'],
   ].map(([key, fallback]) => [key, steps[key] || { label: fallback, status: 'pending' }])
+
+  const handleRetry = async () => {
+    setRetrying(true)
+    try {
+      await retryAutopilot(table.id)
+      notify.ok('Autopilot requeued — refreshing in a few seconds…')
+      setTimeout(() => onRefreshTable?.(), 3000)
+    } catch (e) {
+      notify.err(e?.response?.data?.detail || 'Failed to retry autopilot')
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   const applyRecommendation = async (rec, index) => {
     setApplying((prev) => ({ ...prev, [rec.id || index]: true }))
@@ -131,13 +151,47 @@ function AutopilotPanel({ table, onMonitorSaved }) {
     }
   }
 
+  const addSafeMonitor = async (monitor, index) => {
+    setAddingSafe((prev) => ({ ...prev, [index]: true }))
+    try {
+      const sql = recommendationSql(monitor, `${table.schema_name}.${table.table_name}`)
+      if (!sql) {
+        notify.err('Cannot generate SQL for this monitor type.')
+        return
+      }
+      await createCustomMonitor(table.id, {
+        name: monitor.name || monitor.monitor_type,
+        description: monitor.rationale || `Built-in ${monitor.monitor_type} monitor`,
+        sql_query: sql,
+        severity: monitor.severity || 'P2',
+        run_on_profile: true,
+      })
+      notify.ok('Monitor added', monitor.name)
+      onMonitorSaved?.()
+    } catch (e) {
+      notify.err(e?.response?.data?.detail || 'Failed to add monitor')
+    } finally {
+      setAddingSafe((prev) => {
+        const next = { ...prev }
+        delete next[index]
+        return next
+      })
+    }
+  }
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base flex items-center gap-2">
           <ShieldCheck className="size-4 text-primary" />
           Table Autopilot
         </CardTitle>
+        {(isFailed || isQueued) && (
+          <Button size="sm" variant="outline" onClick={handleRetry} disabled={retrying}>
+            {retrying ? <Loader2 className="size-3.5 animate-spin mr-1" /> : <RefreshCw className="size-3.5 mr-1" />}
+            {isFailed ? 'Retry' : 'Run AI analysis'}
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -146,8 +200,12 @@ function AutopilotPanel({ table, onMonitorSaved }) {
               <div className="flex items-center gap-2">
                 {['complete', 'enabled', 'ready'].includes(step.status) ? (
                   <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                ) : step.status === 'failed' ? (
+                  <AlertTriangle className="size-4 text-destructive" />
                 ) : step.status === 'queued' || step.status === 'pending' ? (
-                  <Loader2 className="size-4 text-muted-foreground" />
+                  <Loader2 className="size-4 text-muted-foreground animate-spin" />
+                ) : step.status === 'needs_review' ? (
+                  <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
                 ) : (
                   <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
                 )}
@@ -164,20 +222,33 @@ function AutopilotPanel({ table, onMonitorSaved }) {
 
         {safeMonitors.length > 0 && (
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Auto-enabled baseline</p>
-            <div className="flex flex-wrap gap-2">
-              {safeMonitors.map((monitor, index) => (
-                <Badge key={`${monitor.name}-${index}`} variant="outline" className="font-normal">
-                  {monitor.severity || 'P3'} · {monitor.name || monitor.monitor_type}
-                </Badge>
-              ))}
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Baseline monitors (auto-enabled by AI)</p>
+            <div className="flex flex-col gap-2">
+              {safeMonitors.map((monitor, index) => {
+                const sql = recommendationSql(monitor, `${table.schema_name}.${table.table_name}`)
+                return (
+                  <div key={`${monitor.name}-${index}`} className="rounded-md border bg-muted/10 px-3 py-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={SEVERITY_BADGE_CLASSES[monitor.severity] || ''}>{monitor.severity || 'P2'}</Badge>
+                      <span className="text-sm font-medium">{monitor.name || monitor.monitor_type}</span>
+                      <Badge variant="secondary" className="font-mono text-xs">{monitor.monitor_type}</Badge>
+                      {sql && (
+                        <Button size="sm" variant="outline" className="ml-auto" disabled={!!addingSafe[index]} onClick={() => addSafeMonitor(monitor, index)}>
+                          {addingSafe[index] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add as monitor'}
+                        </Button>
+                      )}
+                    </div>
+                    {monitor.rationale && <p className="mt-1 text-xs text-muted-foreground">{monitor.rationale}</p>}
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}
 
         {recommendations.length > 0 && (
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Staged for review</p>
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">AI recommendations — staged for review</p>
             {recommendations.map((rec, index) => {
               const key = rec.id || index
               return (
@@ -201,7 +272,7 @@ function AutopilotPanel({ table, onMonitorSaved }) {
   )
 }
 
-function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMonitorSaved }) {
+function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMonitorSaved, existingMonitorCount = 0 }) {
   const [recs, setRecs] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -226,6 +297,7 @@ function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMon
       const r = await recommendMonitors(sourceId, {
         table_name: tableName.split('.')[1] || tableName,
         schema_name: tableName.split('.')[0] || 'public',
+        table_id: tableId,
       })
       setRecs(r.data.recommendations || [])
     } catch (e) {
@@ -499,6 +571,212 @@ function NLRuleBuilder({ tableId, tableName, onMonitorSaved }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ── Alert Routing ─────────────────────────────────────────────────────────────
+
+const CHANNEL_LABELS = { slack: 'Slack', email: 'Email', pagerduty: 'PagerDuty' }
+
+function AlertRoutingPanel({ tableId }) {
+  const [alerts, setAlerts] = useState([])
+  const [channels, setChannels] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [channel, setChannel] = useState('slack')
+  const [minSeverity, setMinSeverity] = useState('P3')
+  const [config, setConfig] = useState({})
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(null)
+  const [deleting, setDeleting] = useState(null)
+
+  const load = async () => {
+    try {
+      const [alertsRes, channelsRes] = await Promise.all([getAlerts(), getAlertChannels()])
+      setAlerts((alertsRes.data || []).filter(a => a.table_id === tableId || !a.table_id))
+      const chs = channelsRes.data?.channels || []
+      setChannels(chs)
+      // Set default channel to first available
+      const first = chs.find(c => c.available)
+      if (first) setChannel(first.id)
+    } catch (e) {
+      // silently skip
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [tableId])
+
+  const tableAlerts = alerts.filter(a => a.table_id === tableId)
+  const workspaceAlerts = alerts.filter(a => !a.table_id)
+  const availableChannels = channels.filter(c => c.available)
+
+  const resetForm = () => {
+    const firstChannel = availableChannels[0]?.id || 'email'
+    setChannel(firstChannel); setMinSeverity('P3'); setConfig({}); setShowForm(false)
+  }
+
+  const handleSave = async (e) => {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await createAlert({ table_id: tableId, channel, config: { ...config, min_severity: minSeverity } })
+      notify.ok('Alert route added')
+      resetForm()
+      load()
+    } catch (e) {
+      notify.err(e?.response?.data?.detail || 'Failed to create alert route')
+    } finally { setSaving(false) }
+  }
+
+  const handleTest = async (alertId) => {
+    setTesting(alertId)
+    try {
+      const r = await testAlert(alertId)
+      notify.ok(r.data?.message || 'Test alert sent')
+    } catch (e) {
+      notify.err(e?.response?.data?.detail || 'Test failed')
+    } finally { setTesting(null) }
+  }
+
+  const handleDelete = async (alertId) => {
+    setDeleting(alertId)
+    try {
+      await deleteAlert(alertId)
+      load()
+    } catch (e) {
+      notify.err(e?.response?.data?.detail || 'Failed to remove')
+    } finally { setDeleting(null) }
+  }
+
+  const renderConfigFields = () => {
+    // slack / teams / discord all use webhook_url; generic webhook uses url
+    if (channel === 'slack' || channel === 'teams' || channel === 'discord') return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground font-medium">Webhook URL *</label>
+        <input className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" required
+          placeholder="https://hooks.slack.com/services/..." value={config.webhook_url || ''} onChange={e => setConfig({ ...config, webhook_url: e.target.value })} />
+      </div>
+    )
+    if (channel === 'webhook') return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground font-medium">Endpoint URL *</label>
+        <input className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" required
+          placeholder="https://webhook.site/..." value={config.url || ''} onChange={e => setConfig({ ...config, url: e.target.value })} />
+      </div>
+    )
+    if (channel === 'email') return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground font-medium">Recipient email(s) * (comma-separated)</label>
+        <input type="text" className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" required
+          placeholder="oncall@acme.io, team@acme.io" value={config.to || ''} onChange={e => setConfig({ ...config, to: e.target.value })} />
+      </div>
+    )
+    if (channel === 'pagerduty') return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground font-medium">PagerDuty routing key *</label>
+        <input className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" required
+          placeholder="abc123..." value={config.routing_key || ''} onChange={e => setConfig({ ...config, routing_key: e.target.value })} />
+      </div>
+    )
+    if (channel === 'opsgenie') return (
+      <div className="flex flex-col gap-1">
+        <label className="text-xs text-muted-foreground font-medium">OpsGenie API key *</label>
+        <input className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" required
+          placeholder="abc123..." value={config.api_key || ''} onChange={e => setConfig({ ...config, api_key: e.target.value })} />
+      </div>
+    )
+    return null
+  }
+
+  const renderAlertRow = (a) => (
+    <div key={a.id} className="rounded-md border bg-muted/10 px-3 py-2.5 flex items-center gap-2 flex-wrap">
+      <Badge variant="outline">{CHANNEL_LABELS[a.channel] || a.channel}</Badge>
+      <span className="text-sm text-muted-foreground">≥ {a.min_severity}</span>
+      {!a.table_id && <Badge variant="secondary" className="text-xs">workspace</Badge>}
+      <div className="ml-auto flex gap-1">
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={testing === a.id} onClick={() => handleTest(a.id)}>
+          {testing === a.id ? <Loader2 className="size-3.5 animate-spin" /> : 'Test'}
+        </Button>
+        {a.table_id && (
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" disabled={deleting === a.id} onClick={() => handleDelete(a.id)}>
+            {deleting === a.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Bell className="size-4 text-primary" />
+          Alert Routing
+        </CardTitle>
+        {!showForm && availableChannels.length > 0 && (
+          <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
+            <PlusCircle className="size-3.5 mr-1" />
+            Add route
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {loading && <div className="h-10 animate-pulse rounded-lg border bg-muted/40" />}
+
+        {showForm && (
+          <form onSubmit={handleSave} className="rounded-lg border bg-muted/20 p-4 flex flex-col gap-3">
+            <p className="text-sm font-medium">New alert route for this table</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground font-medium">Channel</label>
+                <select className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                  value={channel} onChange={e => { setChannel(e.target.value); setConfig({}) }}>
+                  {availableChannels.map(c => <option key={c.id} value={c.id}>{c.label || CHANNEL_LABELS[c.id] || c.id}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground font-medium">Minimum severity</label>
+                <select className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
+                  value={minSeverity} onChange={e => setMinSeverity(e.target.value)}>
+                  <option value="P1">P1 only</option>
+                  <option value="P2">P2 and above</option>
+                  <option value="P3">All (P3+)</option>
+                </select>
+              </div>
+            </div>
+            {renderConfigFields()}
+            <div className="flex gap-2">
+              <Button type="submit" size="sm" disabled={saving}>{saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Save route'}</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={resetForm}>Cancel</Button>
+            </div>
+          </form>
+        )}
+
+        {!loading && tableAlerts.length === 0 && workspaceAlerts.length === 0 && !showForm && (
+          <p className="text-sm text-muted-foreground">
+            {availableChannels.length === 0
+              ? 'No alert channels available on your plan. Upgrade to enable Slack, email, or PagerDuty routing.'
+              : 'No alert routes configured for this table. Add one to get notified when incidents are created.'}
+          </p>
+        )}
+
+        {tableAlerts.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Table-specific routes</p>
+            {tableAlerts.map(renderAlertRow)}
+          </div>
+        )}
+
+        {workspaceAlerts.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Workspace-wide routes (inherited)</p>
+            {workspaceAlerts.map(renderAlertRow)}
           </div>
         )}
       </CardContent>
@@ -1181,7 +1459,11 @@ export default function TableDetail() {
       <AutopilotPanel
         table={table}
         onMonitorSaved={() => setCustomMonitorsRefreshKey((key) => key + 1)}
+        onRefreshTable={loadData}
       />
+
+      {/* ── Alert Routing ── */}
+      <AlertRoutingPanel tableId={id} />
 
       {/* ── AI: Monitor Recommender ── */}
       <AIMonitorRecommender

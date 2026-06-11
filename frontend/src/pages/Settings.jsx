@@ -309,8 +309,8 @@ function NotificationsTab() {
         {PREF_ROWS.map(({ key, label, desc }) => (
           <div key={key} className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-200">{label}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+              <p className="text-sm font-medium text-foreground">{label}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
             </div>
             <label className="flex items-center cursor-pointer shrink-0">
               <input
@@ -320,9 +320,9 @@ function NotificationsTab() {
                 onChange={e => update(key, e.target.checked)}
               />
               <div className={`relative w-9 h-5 rounded-full transition-colors ${
-                prefs?.[key] ? 'bg-blue-600' : 'bg-gray-700'
+                prefs?.[key] ? 'bg-blue-600' : 'bg-muted'
               }`}>
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-background rounded-full shadow transition-transform ${
                   prefs?.[key] ? 'translate-x-4' : ''
                 }`} />
               </div>
@@ -330,11 +330,11 @@ function NotificationsTab() {
           </div>
         ))}
 
-        <div className="border-t border-gray-800 pt-4">
+        <div className="border-t pt-4">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-200">Daily digest email</p>
-              <p className="text-xs text-gray-500 mt-0.5">Receive a morning summary of open incidents and resolved issues.</p>
+              <p className="text-sm font-medium text-foreground">Daily digest email</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Receive a morning summary of open incidents and resolved issues.</p>
             </div>
             <label className="flex items-center cursor-pointer shrink-0">
               <input
@@ -344,9 +344,9 @@ function NotificationsTab() {
                 onChange={e => update('daily_digest', e.target.checked)}
               />
               <div className={`relative w-9 h-5 rounded-full transition-colors ${
-                prefs?.daily_digest ? 'bg-blue-600' : 'bg-gray-700'
+                prefs?.daily_digest ? 'bg-blue-600' : 'bg-muted'
               }`}>
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-background rounded-full shadow transition-transform ${
                   prefs?.daily_digest ? 'translate-x-4' : ''
                 }`} />
               </div>
@@ -354,7 +354,7 @@ function NotificationsTab() {
           </div>
           {prefs?.daily_digest && (
             <div className="mt-3 flex items-center gap-3">
-              <label className="text-sm text-gray-500 shrink-0">Send at (UTC hour):</label>
+              <label className="text-sm text-muted-foreground shrink-0">Send at (UTC hour):</label>
               <select
                 className="input w-36"
                 value={String(prefs?.digest_hour ?? 8)}

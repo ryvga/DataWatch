@@ -142,6 +142,9 @@ def _staged_monitor(monitor: dict, index: int) -> dict:
 
 
 async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: DataSource, org: Organization) -> dict:
+    from sqlalchemy import select
+    from app.models.custom_monitor import CustomMonitor
+
     state = dict(table.autopilot or initial_autopilot_state())
     steps = dict(state.get("steps") or {})
     messages = list(state.get("messages") or [])
@@ -154,6 +157,19 @@ async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: D
         except Exception:
             messages.append({"level": "warning", "text": "Organization LLM key could not be decrypted; using global fallback if configured."})
 
+    # Collect already-active monitors to avoid duplicates in recommendations
+    existing_custom = (await db.scalars(
+        select(CustomMonitor).where(CustomMonitor.table_id == table.id, CustomMonitor.is_active == True)
+    )).all()
+    existing_monitors: list[dict] = [
+        {"monitor_type": "custom_sql", "name": m.name, "column_name": None}
+        for m in existing_custom
+    ]
+    prior_safe = list(state.get("safe_monitors") or [])
+    existing_monitors.extend(prior_safe)
+    prior_recs = [r for r in (state.get("recommendations") or []) if r.get("status") == "applied"]
+    existing_monitors.extend(prior_recs)
+
     try:
         recommendations = await recommend_monitors(
             table.table_name,
@@ -161,6 +177,7 @@ async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: D
             org_api_key,
             org.llm_model,
             db_type=source.type,
+            existing_monitors=existing_monitors,
         )
     except Exception as exc:
         logger.warning("Autopilot recommendations failed for table %s: %s", table.id, exc)
