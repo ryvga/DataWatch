@@ -193,30 +193,42 @@ def seed_source(conn, org_id, name, source_type, config) -> str:
     from app.services.crypto import encrypt_config
     encrypted = encrypt_config(config, str(org_id))
     sid = str(uuid.uuid4())
+    # Source was connected ~35 days ago
+    created = ago(days=35)
     with conn.cursor() as cur:
         cur.execute("""
             INSERT INTO data_sources
               (id, org_id, name, type, connection_config, status, last_connected_at, created_at)
-            VALUES (%s, %s, %s, %s, %s::jsonb, 'connected', NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s::jsonb, 'connected', NOW(), %s)
             ON CONFLICT DO NOTHING
-        """, (sid, org_id, name, source_type, json.dumps({"encrypted": encrypted})))
+        """, (sid, org_id, name, source_type, json.dumps({"encrypted": encrypted}), created))
+        cur.execute("SELECT id FROM data_sources WHERE org_id=%s AND name=%s", (org_id, name))
+        row = cur.fetchone()
     conn.commit()
-    return sid
+    return str(row[0]) if row else sid
 
 
 def seed_table(conn, source_id, schema, table, freshness_col="created_at", interval=5,
                owner_team_id=None, owner_user_id=None) -> str:
-    tid = str(uuid.uuid4())
+    # Tables were added ~31 days ago (matching start of profile history)
+    created = ago(days=31)
     with conn.cursor() as cur:
+        # Check if already exists (handles both PK and unique-constraint conflicts)
+        cur.execute(
+            "SELECT id FROM monitored_tables WHERE source_id=%s AND schema_name=%s AND table_name=%s",
+            (source_id, schema, table))
+        row = cur.fetchone()
+        if row:
+            return str(row[0])
+        tid = str(uuid.uuid4())
         cur.execute("""
             INSERT INTO monitored_tables
               (id, source_id, schema_name, table_name, freshness_column,
                check_interval_minutes, sensitivity, is_active,
                owner_team_id, owner_user_id, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, 3.0, true, %s, %s, NOW())
-            ON CONFLICT DO NOTHING
+            VALUES (%s, %s, %s, %s, %s, %s, 3.0, true, %s, %s, %s)
         """, (tid, source_id, schema, table, freshness_col, interval,
-              owner_team_id, owner_user_id))
+              owner_team_id, owner_user_id, created))
     conn.commit()
     return tid
 
@@ -677,6 +689,40 @@ def update_plan(conn, slug: str, plan: str):
     conn.commit()
 
 
+def backdate_workspace(conn, slug: str):
+    """Set org and user created_at to realistic past dates matching the profile history."""
+    with conn.cursor() as cur:
+        # Org was created ~45 days ago (before monitoring started)
+        cur.execute(
+            "UPDATE organizations SET created_at=%s WHERE slug=%s",
+            (ago(days=45), slug))
+        # Users joined ~43 days ago
+        cur.execute(
+            "UPDATE users SET created_at=%s WHERE org_id=(SELECT id FROM organizations WHERE slug=%s)",
+            (ago(days=43), slug))
+    conn.commit()
+
+
+def trigger_autopilot():
+    """Queue autopilot (AI monitor recommendations) for every seeded table via the API."""
+    print("\n  Triggering AI autopilot for all seeded tables...")
+    queued = 0
+    for ws in WORKSPACES:
+        if ws["slug"] not in _tokens and not login(ws["slug"]):
+            continue
+        r = api("GET", "/api/v1/tables", slug=ws["slug"])
+        if r.status_code != 200:
+            continue
+        for tbl in r.json():
+            resp = api("POST", f"/api/v1/tables/{tbl['id']}/retry-autopilot", slug=ws["slug"])
+            if resp.status_code in (200, 202):
+                queued += 1
+                print(f"    ↑ autopilot queued: {ws['slug']}: {tbl['schema_name']}.{tbl['table_name']}")
+            else:
+                print(f"    x autopilot failed: {ws['slug']}: {tbl['table_name']} → {resp.status_code}")
+    print(f"  + Autopilot queued for {queued} table(s)")
+
+
 # ── Anomaly injection ────────────────────────────────────────────────────────────
 
 def inject_anomalies(use_local: bool = False):
@@ -856,12 +902,13 @@ def run_full(use_local: bool = False):
     except Exception as e:
         print(f"  WARNING: {e}")
 
-    print("\n4. Setting plans...")
+    print("\n4. Setting plans + backdating timestamps...")
     for ws in WORKSPACES:
         try:
             update_plan(conn, ws["slug"], ws["plan"])
+            backdate_workspace(conn, ws["slug"])
         except Exception as e:
-            print(f"  WARNING plan for {ws['slug']}: {e}")
+            print(f"  WARNING plan/backdate for {ws['slug']}: {e}")
 
     print("\n5. Extra users...")
     for ws in WORKSPACES:
@@ -928,6 +975,13 @@ def run_full(use_local: bool = False):
     except Exception as e:
         print(f"  WARNING: wait failed: {e}")
 
+    print("\n13. Triggering AI autopilot (monitor recommendations for each table)...")
+    try:
+        trigger_autopilot()
+    except Exception as e:
+        print(f"  WARNING: autopilot trigger failed: {e}")
+        print("  (Use the Retry button in the table detail view, or wait for APScheduler)")
+
     _print_credentials()
 
 
@@ -951,6 +1005,7 @@ def run_reset(use_local: bool = False):
     conn = db_conn()
     slugs = [ws["slug"] for ws in WORKSPACES]
     with conn.cursor() as cur:
+        # Delete orgs (cascades to users, sources, tables, profiles, incidents, alerts)
         cur.execute("DELETE FROM organizations WHERE slug = ANY(%s)", (slugs,))
         cur.execute("DELETE FROM staff_users WHERE email=%s", (STAFF_EMAIL,))
     conn.commit()

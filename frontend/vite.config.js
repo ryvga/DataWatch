@@ -2,6 +2,9 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+// When running inside Docker Compose, set API_TARGET=http://api:8000
+const apiTarget = process.env.API_TARGET || 'http://localhost:8000'
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -28,10 +31,10 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api': { target: 'http://localhost:8000', changeOrigin: true },
-      '/auth': { target: 'http://localhost:8000', changeOrigin: true },
-      '/orgs': { target: 'http://localhost:8000', changeOrigin: true },
-      '/health': { target: 'http://localhost:8000', changeOrigin: true },
+      '/api':    { target: apiTarget, changeOrigin: true },
+      '/auth':   { target: apiTarget, changeOrigin: true },
+      '/orgs':   { target: apiTarget, changeOrigin: true },
+      '/health': { target: apiTarget, changeOrigin: true },
     },
   },
 })
