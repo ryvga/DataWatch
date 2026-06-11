@@ -135,7 +135,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A app.worker worker --loglevel=info --pool=solo
+    command: celery -A app.worker worker --loglevel=info --concurrency=4
     volumes:
       - ./backend:/app
     env_file:
