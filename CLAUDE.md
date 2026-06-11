@@ -281,6 +281,14 @@ Hub: https://app.notion.com/p/374cb96c4e1c81af9989e9fafb3e2f7a
 
 ---
 
+## Agent & Commit Rules
+
+**Always commit atomically and push after every meaningful unit of work.** Never leave staged changes uncommitted at end of session. Use `git push origin main` immediately after every commit.
+
+**Use parallel subagents (Claude Code agent tool) whenever a task has independent parts** — e.g. backend + frontend changes that don't depend on each other, or multiple file investigations. Spawn agents in parallel rather than doing them sequentially. Use `subagent_type: "Explore"` for codebase searches and `subagent_type: "claude"` for implementation tasks.
+
+---
+
 ## Recommended Skills (Claude Code)
 
 When working on this project with Claude Code, these skills are relevant:
