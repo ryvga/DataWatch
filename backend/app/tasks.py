@@ -290,22 +290,42 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         except Exception:
             pass
 
+        check_config = table.check_config or {}
+        disabled = set(check_config.get("disabled_checks", []))
+        disabled_cols = set(check_config.get("disabled_columns", []))
+
         all_checks = []
-        all_checks += run_z_score_checks(profile, list(history), table.sensitivity)
-        all_checks += run_rule_checks(profile, prev_profile, table)
-        all_checks += run_isolation_forest(profile, list(history), table_id, r_client)
-        all_checks += run_stl_check(profile, list(history))
-        all_checks += run_cardinality_checks(profile, list(history))
-        all_checks += run_row_growth_check(profile, list(history), table.sensitivity)
-        all_checks += run_enum_drift_check(profile, list(history))
-        all_checks += run_distribution_drift_check(profile, list(history))
-        all_checks += run_null_rate_trend_check(profile, list(history))
-        all_checks += run_freshness_check(profile, table)
-        all_checks += run_schema_change_check(profile, list(history))
-        all_checks += run_uniqueness_check(profile, list(history))
-        all_checks += run_cusum_check(profile, list(history))
-        all_checks += run_mann_kendall_check(profile, list(history))
-        all_checks += run_percentile_drift_check(profile, list(history))
+        if "z_score" not in disabled:
+            all_checks += run_z_score_checks(profile, list(history), table.sensitivity)
+        all_checks += run_rule_checks(profile, prev_profile, table)   # core P1/P2 checks always run
+        if "isolation_forest" not in disabled:
+            all_checks += run_isolation_forest(profile, list(history), table_id, r_client)
+        if "stl_seasonal" not in disabled:
+            all_checks += run_stl_check(profile, list(history))
+        if "cardinality_drop" not in disabled:
+            all_checks += run_cardinality_checks(profile, list(history))
+        if "row_growth" not in disabled:
+            all_checks += run_row_growth_check(profile, list(history), table.sensitivity)
+        if "enum_drift" not in disabled:
+            all_checks += run_enum_drift_check(profile, list(history))
+        if "distribution_drift" not in disabled:
+            all_checks += run_distribution_drift_check(profile, list(history))
+        if "null_rate_trend" not in disabled:
+            all_checks += run_null_rate_trend_check(profile, list(history))
+        all_checks += run_freshness_check(profile, table)             # freshness always runs
+        all_checks += run_schema_change_check(profile, list(history)) # schema always runs
+        if "uniqueness" not in disabled:
+            all_checks += run_uniqueness_check(profile, list(history))
+        if "cusum" not in disabled:
+            all_checks += run_cusum_check(profile, list(history))
+        if "mann_kendall" not in disabled:
+            all_checks += run_mann_kendall_check(profile, list(history))
+        if "percentile_drift" not in disabled:
+            all_checks += run_percentile_drift_check(profile, list(history))
+
+        # Filter out disabled columns
+        if disabled_cols:
+            all_checks = [c for c in all_checks if not (c.column_name and c.column_name in disabled_cols)]
 
         if r_client:
             r_client.close()

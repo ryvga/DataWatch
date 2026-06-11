@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, Bell, CheckCircle2, Code2, Edit3, Info, Loader2, Play, PlusCircle, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
-import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck, retryAutopilot, getAlerts, getAlertChannels, createAlert, deleteAlert, testAlert } from '../api/endpoints'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, Bell, CheckCircle2, Code2, Edit3, Info, Loader2, Play, PlusCircle, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Wand2 } from 'lucide-react'
+import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, updateTable, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck, retryAutopilot, getAlerts, getAlertChannels, createAlert, deleteAlert, testAlert } from '../api/endpoints'
 import { toast } from 'sonner'
 import HealthBadge from '../components/HealthBadge'
 import MetricChart from '../components/MetricChart'
@@ -14,6 +14,41 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+
+// ── Monitor type metadata ─────────────────────────────────────────────────────
+
+const MONITOR_DESCRIPTIONS = {
+  row_count: 'Detects when a table becomes completely empty — the most critical data quality signal.',
+  freshness: 'Monitors how recently data arrived using the freshness timestamp column. Fires when data stops flowing.',
+  schema_drift: 'Automatically detects column additions, removals, and type changes between profiling runs.',
+  null_spike: 'Fires when a column\'s null rate jumps by more than 20 percentage points in a single profile.',
+  z_score: 'Flags metrics that deviate more than N standard deviations from the 14-day rolling average.',
+  isolation_forest: 'ML-based multivariate detector. Spots unusual combinations of metrics. Needs 21+ profiles.',
+  stl_seasonal: 'Detects row count anomalies while accounting for weekly seasonality. Needs 21+ days of history.',
+  cardinality_drop: 'Alerts when a column\'s distinct value count drops significantly — signs of data truncation or load failure.',
+  row_growth: 'Flags unusual spikes or drops in how fast new rows are being added.',
+  enum_drift: 'Detects unexpected category values in text columns with a known set of valid values.',
+  distribution_drift: 'Monitors shifts in numeric column distributions — percentiles, mean, and spread.',
+  null_rate_trend: 'Detects a gradual, sustained increase in null rates over time — distinct from a sudden spike.',
+  uniqueness: 'Checks for duplicate values in columns that should be unique.',
+  cusum: 'CUSUM detects small but persistent deviations accumulating over time — catches slow data degradation.',
+  mann_kendall: 'Mann-Kendall test detects sustained directional trends (steadily increasing or decreasing values).',
+  percentile_drift: 'Monitors shifts in p25, p50, p75, p95 percentiles of numeric columns.',
+  custom_sql: 'A user-defined SQL query that counts violations. Fires when the count is greater than zero.',
+  value_range: 'Checks that numeric values stay within an expected minimum and maximum range.',
+}
+
+function MonitorTypeBadge({ type, className }) {
+  const description = MONITOR_DESCRIPTIONS[type] || type
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-mono cursor-help ${className || ''}`}
+      title={description}
+    >
+      {type}
+    </span>
+  )
+}
 
 // ── AI Monitor Recommender ────────────────────────────────────────────────────
 
@@ -363,62 +398,223 @@ function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMon
   if (dismissed && !recs && !loading) return null
 
   return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Let AI analyze your table schema and suggest monitors.</p>
+        <Button size="sm" variant="outline" onClick={run} disabled={loading}>
+          {loading ? <Loader2 className="size-3.5 animate-spin" /> : (recs ? 'Regenerate' : 'Generate')}
+        </Button>
+      </div>
+      {loading && (
+        <div className="flex flex-col gap-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 animate-pulse rounded-lg border bg-muted/40" />
+          ))}
+        </div>
+      )}
+      {!loading && error && (
+        <p className="text-sm text-muted-foreground">{error}</p>
+      )}
+      {!loading && !recs && !error && null}
+      {!loading && recs?.length === 0 && (
+        <p className="text-sm text-muted-foreground">No recommendations generated for this table.</p>
+      )}
+      {!loading && recs && recs.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {recs.map((r, i) => (
+            <div key={i} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold ${SEVERITY_COLORS[r.severity] || ''}`}>{r.severity}</span>
+                <span className="text-sm font-medium">{r.name}</span>
+                <MonitorTypeBadge type={r.monitor_type} />
+                <div className="ml-auto">
+                  {applied[i] ? (
+                    <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="size-3.5" /> Added
+                    </span>
+                  ) : (
+                    <Button size="sm" variant="outline" disabled={applying[i]} onClick={() => applyRec(r, i)}>
+                      {applying[i] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {r.rationale && <p className="text-xs text-muted-foreground">{r.rationale}</p>}
+              {r.column_name && <p className="text-xs text-muted-foreground">Column: <code className="text-primary">{r.column_name}</code></p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Built-in Monitors Panel ───────────────────────────────────────────────────
+
+const BUILTIN_CHECK_GROUPS = [
+  {
+    key: 'core',
+    label: 'Core monitors',
+    description: 'Always active — these checks power P1/P2 incident detection and cannot be disabled.',
+    checks: [
+      { id: 'row_count', label: 'Empty table detection', description: MONITOR_DESCRIPTIONS.row_count },
+      { id: 'freshness', label: 'Freshness monitoring', description: MONITOR_DESCRIPTIONS.freshness, requiresFreshnessColumn: true },
+      { id: 'schema_drift', label: 'Schema drift', description: MONITOR_DESCRIPTIONS.schema_drift },
+      { id: 'null_spike', label: 'Null rate spike', description: MONITOR_DESCRIPTIONS.null_spike },
+    ],
+    alwaysOn: true,
+  },
+  {
+    key: 'statistical',
+    label: 'Statistical checks',
+    checks: [
+      { id: 'z_score', label: 'Z-score anomaly detection', description: MONITOR_DESCRIPTIONS.z_score },
+      { id: 'row_growth', label: 'Row growth rate', description: MONITOR_DESCRIPTIONS.row_growth },
+    ],
+  },
+  {
+    key: 'ml',
+    label: 'ML-based detection',
+    checks: [
+      { id: 'isolation_forest', label: 'Isolation Forest', description: MONITOR_DESCRIPTIONS.isolation_forest },
+      { id: 'stl_seasonal', label: 'STL seasonal decomposition', description: MONITOR_DESCRIPTIONS.stl_seasonal },
+    ],
+  },
+  {
+    key: 'column',
+    label: 'Column-level checks',
+    checks: [
+      { id: 'cardinality_drop', label: 'Cardinality drop', description: MONITOR_DESCRIPTIONS.cardinality_drop },
+      { id: 'enum_drift', label: 'Enum / category drift', description: MONITOR_DESCRIPTIONS.enum_drift },
+      { id: 'distribution_drift', label: 'Distribution drift', description: MONITOR_DESCRIPTIONS.distribution_drift },
+      { id: 'null_rate_trend', label: 'Null rate trend', description: MONITOR_DESCRIPTIONS.null_rate_trend },
+      { id: 'uniqueness', label: 'Uniqueness checks', description: MONITOR_DESCRIPTIONS.uniqueness },
+    ],
+  },
+  {
+    key: 'advanced',
+    label: 'Advanced analytics',
+    checks: [
+      { id: 'cusum', label: 'CUSUM change detection', description: MONITOR_DESCRIPTIONS.cusum },
+      { id: 'mann_kendall', label: 'Mann-Kendall trend', description: MONITOR_DESCRIPTIONS.mann_kendall },
+      { id: 'percentile_drift', label: 'Percentile drift', description: MONITOR_DESCRIPTIONS.percentile_drift },
+    ],
+  },
+]
+
+function BuiltinMonitorsPanel({ table, onSave }) {
+  const checkConfig = table.check_config || {}
+  const [disabledChecks, setDisabledChecks] = useState(new Set(checkConfig.disabled_checks || []))
+  const [disabledColumns, setDisabledColumns] = useState(new Set(checkConfig.disabled_columns || []))
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+
+  const columns = Object.keys(table.latest_profile?.column_metrics || {})
+
+  const toggleCheck = (id) => {
+    setDisabledChecks(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+    setDirty(true)
+  }
+
+  const toggleColumn = (col) => {
+    setDisabledColumns(prev => {
+      const next = new Set(prev)
+      if (next.has(col)) next.delete(col); else next.add(col)
+      return next
+    })
+    setDirty(true)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await updateTable(table.id, {
+        check_config: {
+          disabled_checks: Array.from(disabledChecks),
+          disabled_columns: Array.from(disabledColumns),
+        }
+      })
+      setDirty(false)
+      onSave?.()
+      toast.success('Monitor configuration saved')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Sparkles className="size-4 text-primary" />
-          AI Monitor Recommendations
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="size-4 text-muted-foreground" />
+          Built-in monitors
         </CardTitle>
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={run} disabled={loading}>
-            {loading ? <Loader2 className="size-3.5 animate-spin" /> : (recs ? 'Regenerate' : 'Generate')}
+        {dirty && (
+          <Button size="sm" onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
+            Save changes
           </Button>
-          <Button size="icon" variant="ghost" onClick={dismiss} aria-label="Dismiss recommendations">
-            <X className="size-4" />
-          </Button>
-        </div>
+        )}
       </CardHeader>
-      <CardContent>
-        {loading && (
-          <div className="flex flex-col gap-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-lg border bg-muted/40" />
-            ))}
-          </div>
-        )}
-        {!loading && error && (
-          <p className="text-sm text-muted-foreground">{error}</p>
-        )}
-        {!loading && !recs && !error && (
-          <p className="text-sm text-muted-foreground">Click "Generate" to let AI analyze your table schema and suggest monitors.</p>
-        )}
-        {!loading && recs?.length === 0 && (
-          <p className="text-sm text-muted-foreground">No recommendations generated for this table.</p>
-        )}
-        {!loading && recs && recs.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {recs.map((r, i) => (
-              <div key={i} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs font-bold ${SEVERITY_COLORS[r.severity] || ''}`}>{r.severity}</span>
-                  <span className="text-sm font-medium">{r.name}</span>
-                  <span className="rounded-full border px-2 py-0.5 text-xs font-mono">{r.monitor_type}</span>
-                  <div className="ml-auto">
-                    {applied[i] ? (
-                      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="size-3.5" /> Added
-                      </span>
-                    ) : (
-                      <Button size="sm" variant="outline" disabled={applying[i]} onClick={() => applyRec(r, i)}>
-                        {applying[i] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
-                      </Button>
-                    )}
+      <CardContent className="flex flex-col gap-5">
+        {BUILTIN_CHECK_GROUPS.map(group => (
+          <div key={group.key} className="flex flex-col gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{group.label}</p>
+              {group.description && <p className="text-xs text-muted-foreground mt-0.5">{group.description}</p>}
+            </div>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {group.checks.map(check => {
+                if (check.requiresFreshnessColumn && !table.freshness_column) return null
+                const enabled = group.alwaysOn || !disabledChecks.has(check.id)
+                return (
+                  <div
+                    key={check.id}
+                    className={`flex items-start gap-3 rounded-md border px-3 py-2 ${group.alwaysOn ? 'bg-muted/10 opacity-75' : 'cursor-pointer hover:bg-muted/20'}`}
+                    onClick={group.alwaysOn ? undefined : () => toggleCheck(check.id)}
+                    title={check.description}
+                  >
+                    <div className={`mt-0.5 size-4 shrink-0 rounded-sm border-2 flex items-center justify-center ${enabled ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>
+                      {enabled && <span className="text-primary-foreground text-[10px] font-bold leading-none">✓</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium leading-snug">{check.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{check.description}</p>
+                    </div>
                   </div>
-                </div>
-                {r.rationale && <p className="text-xs text-muted-foreground">{r.rationale}</p>}
-                {r.column_name && <p className="text-xs text-muted-foreground">Column: <code className="text-primary">{r.column_name}</code></p>}
-              </div>
-            ))}
+                )
+              })}
+            </div>
+          </div>
+        ))}
+
+        {columns.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Column exclusions</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Columns checked here will be excluded from all column-level monitoring checks.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {columns.map(col => {
+                const excluded = disabledColumns.has(col)
+                return (
+                  <button
+                    key={col}
+                    type="button"
+                    onClick={() => toggleColumn(col)}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-mono transition-colors ${excluded ? 'bg-muted/60 text-muted-foreground line-through border-muted' : 'bg-background text-foreground border hover:bg-muted/40'}`}
+                  >
+                    {col}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </CardContent>
@@ -502,12 +698,12 @@ function NLRuleBuilder({ tableId, tableName, onMonitorSaved }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base flex items-center gap-2"><Wand2 className="size-4 text-primary" />Natural Language Rule Builder</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">Describe a business rule in plain English. AI converts it to a SQL check that counts violations.</p>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <Wand2 className="size-4 text-primary" />
+        <p className="text-sm font-medium">Natural language rule builder</p>
+      </div>
+      <p className="text-sm text-muted-foreground">Describe a business rule in plain English. AI converts it to a SQL check that counts violations.</p>
         <form onSubmit={generate} className="flex gap-2">
           <input
             className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
@@ -597,8 +793,7 @@ function NLRuleBuilder({ tableId, tableName, onMonitorSaved }) {
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }
 
@@ -978,18 +1173,17 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base flex items-center gap-2">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
           <Code2 className="size-4 text-primary" />
-          Custom SQL Monitors
-        </CardTitle>
+          <span className="text-sm font-medium">SQL monitors</span>
+        </div>
         <Button size="sm" variant="outline" onClick={() => { setShowAddForm((v) => !v); setEditingId(null) }}>
           <PlusCircle className="size-3.5 mr-1" />
           Add monitor
         </Button>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      </div>
         {showAddForm && (
           <form onSubmit={handleAdd} className="rounded-lg border bg-muted/20 p-4 flex flex-col gap-3">
             <p className="text-sm font-medium">New custom monitor</p>
@@ -1153,6 +1347,46 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
             ))}
           </div>
         )}
+    </div>
+  )
+}
+
+// ── Unified Custom Monitors Panel ────────────────────────────────────────────
+
+function CustomMonitorsPanel({ tableId, sourceId, tableName, hasMonitors, refreshKey, onMonitorSaved }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Sparkles className="size-4 text-primary" />
+          Custom monitors
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        {/* ── AI Assist section ── */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI recommendations</p>
+          <AIMonitorRecommender
+            tableId={tableId}
+            sourceId={sourceId}
+            tableName={tableName}
+            hasMonitors={hasMonitors}
+            onMonitorSaved={onMonitorSaved}
+          />
+          <div className="border-t pt-3">
+            <NLRuleBuilder
+              tableId={tableId}
+              tableName={tableName}
+              onMonitorSaved={onMonitorSaved}
+            />
+          </div>
+        </div>
+
+        {/* ── Custom SQL section ── */}
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground border-t pt-3">Custom SQL monitors</p>
+          <CustomMonitors tableId={tableId} refreshKey={refreshKey} />
+        </div>
       </CardContent>
     </Card>
   )
@@ -1486,27 +1720,20 @@ export default function TableDetail() {
         onRefreshTable={loadData}
       />
 
+      <BuiltinMonitorsPanel table={table} onSave={loadData} />
+
       {/* ── Alert Routing ── */}
       <AlertRoutingPanel tableId={id} />
 
-      {/* ── AI: Monitor Recommender ── */}
-      <AIMonitorRecommender
+      {/* ── Custom Monitors (AI assist + SQL monitors unified) ── */}
+      <CustomMonitorsPanel
         tableId={id}
         sourceId={table.source_id}
         tableName={`${table.schema_name}.${table.table_name}`}
         hasMonitors={checks.length > 0}
-        onMonitorSaved={() => setCustomMonitorsRefreshKey((key) => key + 1)}
+        refreshKey={customMonitorsRefreshKey}
+        onMonitorSaved={() => setCustomMonitorsRefreshKey((k) => k + 1)}
       />
-
-      {/* ── NL Rule Builder ── */}
-      <NLRuleBuilder
-        tableId={id}
-        tableName={`${table.schema_name}.${table.table_name}`}
-        onMonitorSaved={() => setCustomMonitorsRefreshKey((key) => key + 1)}
-      />
-
-      {/* ── Custom SQL Monitors ── */}
-      <CustomMonitors tableId={id} refreshKey={customMonitorsRefreshKey} />
 
       <Card>
         <CardHeader>

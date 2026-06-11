@@ -43,6 +43,7 @@ class TableUpdate(BaseModel):
     is_active: bool | None = None
     owner_team_id: str | None = None
     owner_user_id: str | None = None
+    check_config: dict | None = None
 
 
 class ProfileSummary(BaseModel):
@@ -69,6 +70,7 @@ class TableResponse(BaseModel):
     schema_snapshot: str | None = None
     latest_profile: ProfileSummary | None = None
     autopilot: dict | None = None
+    check_config: dict | None = None
 
 
 class RunResponse(BaseModel):
@@ -235,6 +237,7 @@ def _table_response(table: MonitoredTable, profile: ProfileSummary | None = None
         schema_snapshot=table.dbt_model_yaml,
         latest_profile=profile,
         autopilot=table.autopilot or not_started_autopilot_state(),
+        check_config=table.check_config,
     )
 
 
