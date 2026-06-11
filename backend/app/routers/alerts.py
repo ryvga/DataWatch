@@ -104,6 +104,27 @@ async def create_alert_config(
     db.add(cfg)
     await db.commit()
     await db.refresh(cfg)
+
+    # Flip autopilot alerts step to complete if table has it pending
+    if body.table_id:
+        table = await db.scalar(
+            select(MonitoredTable).where(
+                MonitoredTable.id == body.table_id, MonitoredTable.org_id == org.id
+            )
+        )
+        if table and isinstance(table.autopilot, dict):
+            state = dict(table.autopilot)
+            steps = dict(state.get("steps") or {})
+            if steps.get("alerts", {}).get("status") == "needs_review":
+                steps["alerts"] = {"status": "complete", "label": "Alert routing"}
+                state["steps"] = steps
+                from datetime import UTC, datetime
+                state["updated_at"] = datetime.now(UTC).isoformat()
+                table.autopilot = state
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(table, "autopilot")
+                await db.commit()
+
     return _resp(cfg)
 
 

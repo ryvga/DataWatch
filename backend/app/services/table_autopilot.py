@@ -143,6 +143,7 @@ def _staged_monitor(monitor: dict, index: int) -> dict:
 
 async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: DataSource, org: Organization) -> dict:
     from sqlalchemy import select
+    from app.models.alert_config import AlertConfig
     from app.models.custom_monitor import CustomMonitor
 
     state = dict(table.autopilot or initial_autopilot_state())
@@ -217,10 +218,17 @@ async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: D
         "label": "AI monitor recommendations",
         "staged_count": len(staged),
     }
+    has_alerts = bool((await db.scalars(
+        select(AlertConfig).where(
+            AlertConfig.org_id == org.id,
+            AlertConfig.table_id == table.id,
+            AlertConfig.is_active == True,
+        ).limit(1)
+    )).first())
     steps["alerts"] = {
-        "status": "needs_review",
+        "status": "complete" if has_alerts else "needs_review",
         "label": "Alert routing",
-        "message": "Choose where P1/P2 incidents should be sent.",
+        "message": "Choose where P1/P2 incidents should be sent." if not has_alerts else None,
     }
 
     state.update(

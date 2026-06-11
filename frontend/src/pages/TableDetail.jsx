@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, Bell, CheckCircle2, Code2, Edit3, Loader2, Play, PlusCircle, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, Bell, CheckCircle2, Code2, Edit3, Info, Loader2, Play, PlusCircle, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Wand2, X } from 'lucide-react'
 import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck, retryAutopilot, getAlerts, getAlertChannels, createAlert, deleteAlert, testAlert } from '../api/endpoints'
 import { toast } from 'sonner'
 import HealthBadge from '../components/HealthBadge'
@@ -76,15 +76,26 @@ function recommendationSql(rec, tableName) {
   }
   if (rec.monitor_type === 'value_range' && column) {
     const clauses = []
-    if (config.min_value != null && config.min_value !== '') clauses.push(`${column} < ${Number(config.min_value)}`)
-    if (config.max_value != null && config.max_value !== '' && String(config.max_value).toUpperCase() !== 'NOW()') clauses.push(`${column} > ${Number(config.max_value)}`)
-    if (String(config.max_value).toUpperCase() === 'NOW()') clauses.push(`${column} > NOW()`)
+    // LLM may use min/max OR min_value/max_value — support both
+    const minVal = config.min_value ?? config.min
+    const maxVal = config.max_value ?? config.max
+    if (minVal != null && minVal !== '') clauses.push(`${column} < ${Number(minVal)}`)
+    if (maxVal != null && maxVal !== '' && String(maxVal).toUpperCase() !== 'NOW()') clauses.push(`${column} > ${Number(maxVal)}`)
+    if (String(maxVal).toUpperCase() === 'NOW()') clauses.push(`${column} > NOW()`)
     if (clauses.length === 0) return ''
     return `SELECT COUNT(*) AS violations FROM ${table} WHERE ${clauses.join(' OR ')}`
+  }
+  if (rec.monitor_type === 'enum_drift' && column) {
+    const allowed = Array.isArray(config.allowed_values) && config.allowed_values.length > 0
+      ? config.allowed_values.map(v => `'${String(v).replace(/'/g, "''")}'`).join(', ')
+      : null
+    if (!allowed) return ''
+    return `SELECT COUNT(*) AS violations FROM ${table} WHERE ${column} IS NOT NULL AND ${column} NOT IN (${allowed})`
   }
   if (rec.monitor_type === 'custom_sql') {
     return String(config.sql || config.sql_query || rec.sql_query || '').trim()
   }
+  // schema_drift is managed by the profiler (fingerprint diff) — no SQL equivalent
   return ''
 }
 
@@ -99,10 +110,10 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
   const safeMonitors = state.safe_monitors || []
   const recommendations = state.recommendations || []
   const isFailed = state.status === 'failed'
-  // Stuck = overall status is not yet "ready" AND the recommendations step is still queued/pending
+  const isNotStarted = state.status === 'not_started'
+  // Only show Retry/Run button when truly failed or never started — NOT when queued/in-progress
   const recStatus = steps.recommendations?.status
-  const isQueued = state.status === 'queued' || state.status === 'not_started'
-    || (state.status === 'profiling_complete' && (recStatus === 'queued' || recStatus === 'pending'))
+  const isQueued = false // tasks run automatically; never prompt user to start them manually
   const stepEntries = [
     ['profile', 'First profile'],
     ['safe_baseline', 'Safe baseline monitors'],
@@ -186,7 +197,7 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
           <ShieldCheck className="size-4 text-primary" />
           Table Autopilot
         </CardTitle>
-        {(isFailed || isQueued) && (
+        {(isFailed || isNotStarted) && (
           <Button size="sm" variant="outline" onClick={handleRetry} disabled={retrying}>
             {retrying ? <Loader2 className="size-3.5 animate-spin mr-1" /> : <RefreshCw className="size-3.5 mr-1" />}
             {isFailed ? 'Retry' : 'Run AI analysis'}
@@ -205,19 +216,30 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
                 ) : step.status === 'queued' || step.status === 'pending' ? (
                   <Loader2 className="size-4 text-muted-foreground animate-spin" />
                 ) : step.status === 'needs_review' ? (
-                  <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
+                  <Info className="size-4 text-blue-500" />
                 ) : (
                   <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
                 )}
                 <span className="text-sm font-medium">{step.label}</span>
               </div>
-              <p className="mt-1 text-xs capitalize text-muted-foreground">{String(step.status || 'pending').replaceAll('_', ' ')}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {step.status === 'queued' ? 'working in background…'
+                  : step.status === 'pending' ? 'waiting…'
+                  : step.status === 'profiling_complete' ? 'profile done'
+                  : step.status === 'needs_review' ? 'action needed'
+                  : String(step.status || 'pending').replaceAll('_', ' ')}
+              </p>
             </div>
           ))}
         </div>
 
-        {state.recommended_next_action && (
+        {state.recommended_next_action && !isFailed && state.status !== 'not_started' && (
           <p className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">{state.recommended_next_action}</p>
+        )}
+        {(state.status === 'queued' || state.status === 'profiling_complete') && (
+          <p className="rounded-md border bg-blue-500/10 border-blue-500/20 px-3 py-2 text-sm text-blue-600 dark:text-blue-400">
+            AI analysis is running in the background — no action needed. This page will reflect progress automatically.
+          </p>
         )}
 
         {safeMonitors.length > 0 && (
@@ -232,10 +254,12 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
                       <Badge variant="outline" className={SEVERITY_BADGE_CLASSES[monitor.severity] || ''}>{monitor.severity || 'P2'}</Badge>
                       <span className="text-sm font-medium">{monitor.name || monitor.monitor_type}</span>
                       <Badge variant="secondary" className="font-mono text-xs">{monitor.monitor_type}</Badge>
-                      {sql && (
+                      {sql ? (
                         <Button size="sm" variant="outline" className="ml-auto" disabled={!!addingSafe[index]} onClick={() => addSafeMonitor(monitor, index)}>
                           {addingSafe[index] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add as monitor'}
                         </Button>
+                      ) : (
+                        <span className="ml-auto text-xs text-muted-foreground italic">Profiler-managed</span>
                       )}
                     </div>
                     {monitor.rationale && <p className="mt-1 text-xs text-muted-foreground">{monitor.rationale}</p>}

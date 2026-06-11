@@ -75,6 +75,7 @@ export const getHealth = () => api.get('/health')
 // Reports
 export const getWeeklyReport = (days = 7) => api.get(`/api/v1/reports/weekly?window_days=${days}`)
 export const getIncidentReport = (id) => api.get(`/api/v1/reports/incident/${id}`)
+export const generateWeeklySummary = () => api.post('/api/v1/reports/weekly/ai-summary')
 
 // AI features
 export const recommendMonitors = (sourceId, data) => api.post(`/api/v1/sources/${sourceId}/recommend-monitors`, data, { timeout: 180000 })

@@ -1,3 +1,5 @@
+import json
+import logging
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -15,6 +17,81 @@ from app.models import (
     TableProfile,
 )
 from app.services.health_score import compute_health_score
+
+logger = logging.getLogger(__name__)
+
+_SUMMARY_KEY = "report:weekly_summary:{org_id}"
+_SUMMARY_TTL = 8 * 24 * 3600  # 8 days — outlasts the weekly window slightly
+
+
+def _redis():
+    import redis
+    from app.config import settings
+    return redis.from_url(settings.REDIS_URL, decode_responses=True)
+
+
+def get_cached_weekly_summary(org_id: str) -> dict | None:
+    try:
+        r = _redis()
+        val = r.get(_SUMMARY_KEY.format(org_id=org_id))
+        r.close()
+        return json.loads(val) if val else None
+    except Exception:
+        return None
+
+
+def cache_weekly_summary(org_id: str, summary: str) -> dict:
+    payload = {"text": summary, "generated_at": datetime.now(UTC).isoformat()}
+    try:
+        r = _redis()
+        r.setex(_SUMMARY_KEY.format(org_id=org_id), _SUMMARY_TTL, json.dumps(payload))
+        r.close()
+    except Exception as e:
+        logger.warning("Failed to cache weekly summary: %s", e)
+    return payload
+
+
+def generate_ai_weekly_summary(report: dict, org_api_key: str | None = None, org_model: str | None = None) -> str:
+    from openai import OpenAI
+    from app.config import settings
+
+    api_key = org_api_key or settings.OPENROUTER_API_KEY
+    if not api_key:
+        return ""
+
+    top_checks = ", ".join(c["check_name"] for c in report.get("top_failing_checks", [])[:3]) or "none"
+    tables_hit = ", ".join(report.get("tables_with_incidents", [])[:5]) or "none"
+    sev = report.get("incidents_by_severity", {})
+
+    system = (
+        "You are a data reliability engineer. Your only job is to write executive summaries. "
+        "Output ONLY the summary text — no preamble, no 'Sentence 1:', no 'Here is', no meta-commentary. "
+        "Start directly with the first word of the summary."
+    )
+
+    user = (
+        f"Write a 3-sentence executive summary from this weekly data quality report.\n\n"
+        f"Health score: {report['health_score']:.0f}/100 (Grade {report['health_grade']})\n"
+        f"Incidents: {report['incidents_total']} total, {report['incidents_open']} open, {report['incidents_resolved']} resolved\n"
+        f"Severity: P1={sev.get('P1',0)}, P2={sev.get('P2',0)}, P3={sev.get('P3',0)}\n"
+        f"Checks: {report['checks_passed']} passed, {report['checks_failed']} failed\n"
+        f"Tables monitored: {report['tables_monitored']}\n"
+        f"Top failing checks: {top_checks}\n"
+        f"Tables with incidents: {tables_hit}\n\n"
+        f"Rules: flowing prose only, no bullet points, mention specific numbers, end with the single most important action for next week."
+    )
+
+    client = OpenAI(api_key=api_key, base_url=settings.LLM_BASE_URL)
+    response = client.chat.completions.create(
+        model=org_model or settings.LLM_MODEL,
+        max_tokens=256,
+        temperature=0,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    )
+    return response.choices[0].message.content.strip()
 
 
 class ReportService:
@@ -121,7 +198,7 @@ class ReportService:
                 {"check_name": check_name, "count": count}
                 for check_name, count in failing_check_counts.most_common(5)
             ],
-            "ai_summary": "AI summary pending",
+            "ai_summary": get_cached_weekly_summary(str(org_id)),
             "recommendations": _weekly_recommendations(
                 open_count=open_count,
                 checks_failed=checks_failed,

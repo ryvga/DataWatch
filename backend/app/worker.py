@@ -26,5 +26,9 @@ celery_app.conf.update(
             "task": "tasks.send_daily_digests",
             "schedule": crontab(minute=0),  # every hour at :00
         },
+        "generate-weekly-summaries": {
+            "task": "tasks.generate_weekly_summaries",
+            "schedule": crontab(hour=6, minute=0, day_of_week=1),  # Monday 6am UTC
+        },
     },
 )

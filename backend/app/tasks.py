@@ -567,6 +567,46 @@ async def _cleanup_old_profiles_async() -> dict:
     return {"deleted": deleted_total}
 
 
+@celery_app.task(name="tasks.generate_weekly_summaries")
+def generate_weekly_summaries():
+    """Weekly Celery beat task: generate AI summary for every org that has an LLM key."""
+    return _run(_generate_weekly_summaries_async())
+
+
+async def _generate_weekly_summaries_async() -> dict:
+    from app.database import AsyncSessionLocal
+    from app.models.organization import Organization
+    from app.services.reports import ReportService, generate_ai_weekly_summary, cache_weekly_summary
+    from app.services.crypto import CryptoService
+    from sqlalchemy import select
+
+    generated = 0
+    failed = 0
+    async with AsyncSessionLocal() as db:
+        orgs = (await db.scalars(select(Organization))).all()
+        for org in orgs:
+            try:
+                report = await ReportService.generate_weekly_report(org.id, db)
+                org_api_key = None
+                org_model = None
+                if org.llm_api_key_encrypted:
+                    try:
+                        org_api_key = CryptoService().decrypt_for_org(org.llm_api_key_encrypted, str(org.id))
+                        org_model = org.llm_model
+                    except Exception:
+                        pass
+                text = generate_ai_weekly_summary(report, org_api_key=org_api_key, org_model=org_model)
+                if text:
+                    cache_weekly_summary(str(org.id), text)
+                    generated += 1
+            except Exception as e:
+                logger.warning("Weekly summary failed for org %s: %s", org.id, e)
+                failed += 1
+
+    logger.info("Weekly summaries: generated=%d failed=%d", generated, failed)
+    return {"generated": generated, "failed": failed}
+
+
 @celery_app.task(name="tasks.send_alerts")
 def send_alerts(incident_id: str):
     """Dispatch alerts to all matching alert configs for this incident."""

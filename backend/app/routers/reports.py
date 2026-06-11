@@ -22,6 +22,37 @@ async def get_weekly_report(
     return await ReportService.generate_weekly_report(org.id, db, window_days=window_days)
 
 
+@router.post("/reports/weekly/ai-summary")
+async def generate_weekly_ai_summary(
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.reports import generate_ai_weekly_summary, cache_weekly_summary
+    from app.services.crypto import CryptoService
+
+    report = await ReportService.generate_weekly_report(org.id, db)
+
+    org_api_key = None
+    org_model = None
+    if org.llm_api_key_encrypted:
+        try:
+            org_api_key = CryptoService().decrypt_for_org(org.llm_api_key_encrypted, str(org.id))
+            org_model = org.llm_model
+        except Exception:
+            pass
+
+    try:
+        text = generate_ai_weekly_summary(report, org_api_key=org_api_key, org_model=org_model)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM call failed: {exc}")
+
+    if not text:
+        raise HTTPException(status_code=503, detail="No LLM API key configured")
+
+    payload = cache_weekly_summary(str(org.id), text)
+    return payload
+
+
 @router.get("/reports/incident/{incident_id}")
 async def get_incident_report(
     incident_id: str,
