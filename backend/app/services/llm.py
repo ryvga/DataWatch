@@ -28,15 +28,15 @@ class LikelyCause(BaseModel):
 
 class NarrationResult(BaseModel):
     summary: str
-    likely_causes: list[LikelyCause]
-    impact_assessment: str
-    recommended_actions: list[str]
+    likely_causes: list[LikelyCause] = []
+    impact_assessment: str = ""
+    recommended_actions: list[str] = []
     debug_queries: list[str] = []
     client_safe_summary: str = ""
     suggested_monitors: list[str] = []
     ownership_hint: str = ""
-    data_pattern_notes: str
-    confidence: Literal["high", "medium", "low"]
+    data_pattern_notes: str = ""
+    confidence: Literal["high", "medium", "low"] = "medium"
 
     @field_validator("summary")
     @classmethod
@@ -47,16 +47,12 @@ class NarrationResult(BaseModel):
 
     @field_validator("likely_causes")
     @classmethod
-    def causes_not_empty(cls, v: list) -> list:
-        if not v:
-            raise ValueError("likely_causes must have at least one entry")
+    def cap_causes(cls, v: list) -> list:
         return v[:5]
 
     @field_validator("recommended_actions")
     @classmethod
-    def actions_not_empty(cls, v: list) -> list:
-        if not v:
-            raise ValueError("recommended_actions must have at least one entry")
+    def cap_actions(cls, v: list) -> list:
         return v[:8]
 
 

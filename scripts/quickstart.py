@@ -9,8 +9,8 @@ pipeline fires: profiler → anomaly detection → LLM narration → incidents.
 
 Workspaces
 ----------
-  acme-corp   (growth)  mounir@acme.io / acme1234   — e-commerce, live acme-db
-  startup-io  (growth)  dev@startup.io / acme1234   — SaaS analytics, live analytics-db
+  acme-corp   (growth)  mounir@acme.io / demo1234   — e-commerce, live acme-db
+  startup-io  (growth)  dev@startup.io / demo1234   — SaaS analytics, live analytics-db
   Staff admin           admin@datawatch.io / admin1234
 
 Usage
@@ -61,7 +61,7 @@ WORKSPACES = [
         "name": "Acme Corp",
         "plan": "growth",
         "email": "mounir@acme.io",
-        "password": "acme1234",
+        "password": "demo1234",
         "db_host_docker": "acme-db",
         "db_host_local": "localhost",
         "db_port_docker": 5432,
@@ -75,7 +75,7 @@ WORKSPACES = [
         "name": "Startup.io",
         "plan": "growth",
         "email": "dev@startup.io",
-        "password": "acme1234",
+        "password": "demo1234",
         "db_host_docker": "analytics-db",
         "db_host_local": "localhost",
         "db_port_docker": 5432,
