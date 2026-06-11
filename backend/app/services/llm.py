@@ -48,6 +48,8 @@ class NarrationResult(BaseModel):
     @field_validator("likely_causes")
     @classmethod
     def cap_causes(cls, v: list) -> list:
+        if not v:
+            raise ValueError("likely_causes must include at least one cause")
         return v[:5]
 
     @field_validator("recommended_actions")

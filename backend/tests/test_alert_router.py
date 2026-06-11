@@ -1,4 +1,5 @@
 import uuid
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy import select
@@ -14,6 +15,39 @@ async def _auth_headers(client, slug: str, email: str, password: str) -> dict[st
     )
     assert resp.status_code == 200, resp.text
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
+async def _create_source_and_table(client, headers):
+    source = await client.post(
+        "/api/v1/sources",
+        headers=headers,
+        json={
+            "name": "Alert route source",
+            "type": "duckdb",
+            "connection_config": {"path": ":memory:"},
+        },
+    )
+    assert source.status_code == 201, source.text
+
+    with patch("app.scheduler.add_table_job"), \
+         patch("app.tasks.profile_table") as profile_task, \
+         patch("app.tasks.bootstrap_table_autopilot") as autopilot_task:
+        profile_task.delay = MagicMock()
+        autopilot_task.delay = MagicMock()
+        table = await client.post(
+            "/api/v1/tables",
+            headers=headers,
+            json={
+                "source_id": source.json()["id"],
+                "schema_name": "main",
+                "table_name": f"orders_{uuid.uuid4().hex[:8]}",
+                "check_interval_minutes": 60,
+                "sensitivity": 3.0,
+                "dbt_model_yaml": "CREATE TABLE main.orders (id integer NOT NULL);",
+            },
+        )
+    assert table.status_code == 201, table.text
+    return source.json(), table.json()
 
 
 @pytest.mark.asyncio
@@ -52,6 +86,41 @@ async def test_create_alert_commits_and_lists_immediately(client, db_session):
     listed_after_delete = await client.get("/api/v1/alerts", headers=headers)
     assert listed_after_delete.status_code == 200
     assert listed_after_delete.json() == []
+
+
+@pytest.mark.asyncio
+async def test_create_table_scoped_alert_updates_autopilot_without_false_failure(client, db_session):
+    slug = f"alerts-{uuid.uuid4().hex[:8]}"
+    email = f"owner@{slug}.example.com"
+    password = "testpassword123"
+    register = await client.post(
+        "/auth/register",
+        json={
+            "org_name": "Alert Table Org",
+            "org_slug": slug,
+            "email": email,
+            "password": password,
+        },
+    )
+    assert register.status_code == 201, register.text
+    headers = await _auth_headers(client, slug, email, password)
+    _, table = await _create_source_and_table(client, headers)
+    assert table["autopilot"]["steps"]["alerts"]["status"] == "pending"
+
+    created = await client.post(
+        "/api/v1/alerts",
+        headers=headers,
+        json={
+            "table_id": table["id"],
+            "channel": "email",
+            "config": {"to": ["table-ops@example.com"], "min_severity": "P2"},
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    refreshed_table = await client.get(f"/api/v1/tables/{table['id']}", headers=headers)
+    assert refreshed_table.status_code == 200
+    assert refreshed_table.json()["autopilot"]["steps"]["alerts"]["status"] == "complete"
 
 
 @pytest.mark.asyncio

@@ -63,9 +63,9 @@ async def _get_config_or_404(config_id: str, org: Organization, db: AsyncSession
     return cfg
 
 
-async def _validate_table_scope(table_id: str | None, org: Organization, db: AsyncSession) -> None:
+async def _validate_table_scope(table_id: str | None, org: Organization, db: AsyncSession) -> MonitoredTable | None:
     if not table_id:
-        return
+        return None
     table = await db.scalar(select(MonitoredTable).where(MonitoredTable.id == table_id))
     if not table:
         raise HTTPException(status_code=404, detail="Monitored table not found for this alert route.")
@@ -74,6 +74,7 @@ async def _validate_table_scope(table_id: str | None, org: Organization, db: Asy
     )
     if not source:
         raise HTTPException(status_code=404, detail="Monitored table not found for this workspace.")
+    return table
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -88,7 +89,7 @@ async def create_alert_config(
         raise HTTPException(status_code=400, detail=f"Alert channel must be one of: {', '.join(CHANNELS)}.")
     if not channel_available(org.plan, org.subscription_status, body.channel):
         raise HTTPException(status_code=402, detail=channel_upgrade_detail(org.plan, org.subscription_status, body.channel))
-    await _validate_table_scope(body.table_id, org, db)
+    table = await _validate_table_scope(body.table_id, org, db)
     try:
         config = validate_alert_config(body.channel, body.config)
     except ValueError as exc:
@@ -102,28 +103,24 @@ async def create_alert_config(
         is_active=True,
     )
     db.add(cfg)
-    await db.commit()
-    await db.refresh(cfg)
 
     # Flip autopilot alerts step to complete if table has it pending
-    if body.table_id:
-        table = await db.scalar(
-            select(MonitoredTable).where(
-                MonitoredTable.id == body.table_id, MonitoredTable.org_id == org.id
-            )
-        )
-        if table and isinstance(table.autopilot, dict):
-            state = dict(table.autopilot)
-            steps = dict(state.get("steps") or {})
-            if steps.get("alerts", {}).get("status") == "needs_review":
-                steps["alerts"] = {"status": "complete", "label": "Alert routing"}
-                state["steps"] = steps
-                from datetime import UTC, datetime
-                state["updated_at"] = datetime.now(UTC).isoformat()
-                table.autopilot = state
-                from sqlalchemy.orm.attributes import flag_modified
-                flag_modified(table, "autopilot")
-                await db.commit()
+    if table and isinstance(table.autopilot, dict):
+        state = dict(table.autopilot)
+        steps = dict(state.get("steps") or {})
+        if steps.get("alerts", {}).get("status") in {"needs_review", "pending"}:
+            steps["alerts"] = {"status": "complete", "label": "Alert routing"}
+            state["steps"] = steps
+            from datetime import UTC, datetime
+            state["updated_at"] = datetime.now(UTC).isoformat()
+            if state.get("recommended_next_action") == "Baseline monitoring is active. Configure alert routing next.":
+                state["recommended_next_action"] = "Alert routing is configured. Keep an eye on the first profile results."
+            table.autopilot = state
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(table, "autopilot")
+
+    await db.commit()
+    await db.refresh(cfg)
 
     return _resp(cfg)
 

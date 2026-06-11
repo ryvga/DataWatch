@@ -29,6 +29,7 @@ org_router = APIRouter(prefix="/api/v1", tags=["custom_monitors"])
 _BLOCKED_KEYWORDS = ("INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "GRANT", "TRUNCATE")
 _BLOCKED_RE = re.compile(r"\b(" + "|".join(_BLOCKED_KEYWORDS) + r")\b", re.IGNORECASE)
 _SEVERITIES = {"P1", "P2", "P3"}
+_SQL_WHITESPACE_RE = re.compile(r"\s+")
 
 
 def _strip_quoted(sql: str) -> str:
@@ -62,6 +63,36 @@ def _validate_sql(sql: str, severity: str) -> None:
     m = _BLOCKED_RE.search(clean)
     if m:
         raise HTTPException(status_code=422, detail=f"SQL contains prohibited keyword: {m.group(1).upper()}")
+
+
+def _canonical_sql(sql: str) -> str:
+    return _SQL_WHITESPACE_RE.sub(" ", sql.strip()).lower()
+
+
+async def _ensure_unique_active_sql(
+    table_id: str,
+    org_id,
+    sql_query: str,
+    db: AsyncSession,
+    *,
+    exclude_monitor_id: str | None = None,
+) -> None:
+    target = _canonical_sql(sql_query)
+    monitors = (await db.scalars(
+        select(CustomMonitor).where(
+            CustomMonitor.table_id == table_id,
+            CustomMonitor.org_id == org_id,
+            CustomMonitor.is_active == True,
+        )
+    )).all()
+    for monitor in monitors:
+        if exclude_monitor_id and str(monitor.id) == str(exclude_monitor_id):
+            continue
+        if _canonical_sql(monitor.sql_query) == target:
+            raise HTTPException(
+                status_code=409,
+                detail=f'A custom monitor with this SQL already exists for this table: "{monitor.name}".',
+            )
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -164,6 +195,7 @@ async def create_custom_monitor(
 ):
     await _get_table_or_404(table_id, org, db)
     _validate_sql(body.sql_query, body.severity)
+    await _ensure_unique_active_sql(table_id, org.id, body.sql_query, db)
 
     monitor = CustomMonitor(
         table_id=table_id,
@@ -205,6 +237,15 @@ async def update_custom_monitor(
         _validate_sql(
             update.get("sql_query", monitor.sql_query),
             update.get("severity", monitor.severity),
+        )
+    next_active = update.get("is_active", monitor.is_active)
+    if next_active:
+        await _ensure_unique_active_sql(
+            table_id,
+            org.id,
+            update.get("sql_query", monitor.sql_query),
+            db,
+            exclude_monitor_id=monitor_id,
         )
     for field, value in update.items():
         setattr(monitor, field, value)

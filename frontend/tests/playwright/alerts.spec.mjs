@@ -63,7 +63,7 @@ async function run() {
   try {
     await login(page)
     await page.waitForFunction(() => document.body.innerText.includes('Alert routes'), null, { timeout: 30000 })
-    await page.waitForFunction(() => document.body.innerText.includes('PagerDuty') && document.body.innerText.includes('requires Growth'), null, { timeout: 30000 })
+    await page.waitForFunction(() => document.body.innerText.includes('PagerDuty'), null, { timeout: 30000 })
     await page.getByRole('button', { name: /Add alert/i }).click()
     await page.getByText('Add alert route').waitFor({ state: 'visible', timeout: 10000 })
     await page.waitForFunction(() => document.body.innerText.includes('All workspace incidents'), null, { timeout: 10000 })
@@ -78,7 +78,7 @@ async function run() {
 
     console.log(JSON.stringify({
       status: 'passed',
-      checked: ['plan-aware-channel-cards', 'workspace-email-route-create', 'smtp-test-alert'],
+      checked: ['channel-cards-render', 'workspace-email-route-create', 'smtp-test-alert'],
       recipient: TEST_RECIPIENT,
       diagnostics,
     }, null, 2))

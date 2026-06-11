@@ -134,9 +134,33 @@ function recommendationSql(rec, tableName) {
   return ''
 }
 
+function recommendationKey(item, index, prefix = 'rec') {
+  return item.id || `${prefix}-${index}-${item.monitor_type || 'monitor'}-${item.column_name || ''}-${item.name || ''}`
+}
+
+function sqlWasTested(state, key, sql) {
+  const entry = state[key]
+  return Boolean(entry?.result && entry.sql === sql.trim())
+}
+
+function TestResultLabel({ result }) {
+  if (!result) return null
+  return (
+    <span className={`text-sm font-medium flex items-center gap-1 ${result.passed ? 'text-emerald-600 dark:text-emerald-400' : 'text-orange-600 dark:text-orange-400'}`}>
+      {result.passed
+        ? <><CheckCircle2 className="size-4" /> 0 violations</>
+        : <><AlertTriangle className="size-4" /> {result.violation_count} violation{result.violation_count !== 1 ? 's' : ''} found</>
+      }
+    </span>
+  )
+}
+
 function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
   const [applying, setApplying] = useState({})
   const [addingSafe, setAddingSafe] = useState({})
+  const [testing, setTesting] = useState({})
+  const [testState, setTestState] = useState({})
+  const [saved, setSaved] = useState({})
   const [retrying, setRetrying] = useState(false)
   const state = table?.autopilot
   if (!state) return null
@@ -169,14 +193,51 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
     }
   }
 
-  const applyRecommendation = async (rec, index) => {
-    setApplying((prev) => ({ ...prev, [rec.id || index]: true }))
+  const testRecommendation = async (item, index, prefix = 'rec') => {
+    const key = recommendationKey(item, index, prefix)
+    const sql = recommendationSql(item, `${table.schema_name}.${table.table_name}`)
+    if (!sql) {
+      notify.err('Cannot generate SQL for this monitor type.')
+      return
+    }
+    setTesting((prev) => ({ ...prev, [key]: true }))
     try {
-      const sql = recommendationSql(rec, `${table.schema_name}.${table.table_name}`)
-      if (!sql) {
-        notify.err('This recommendation needs review before it can become a SQL monitor.')
-        return
-      }
+      const r = await runCustomCheck(table.id, {
+        sql,
+        name: item.name || item.monitor_type || 'AI recommended monitor',
+        severity: item.severity || 'P3',
+      })
+      setTestState((prev) => ({ ...prev, [key]: { sql: sql.trim(), result: r.data } }))
+      notify.ok('SQL test completed')
+    } catch (e) {
+      setTestState((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+      notify.err(e?.response?.data?.detail || 'Test run failed')
+    } finally {
+      setTesting((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+    }
+  }
+
+  const applyRecommendation = async (rec, index) => {
+    const key = recommendationKey(rec, index, 'rec')
+    const sql = recommendationSql(rec, `${table.schema_name}.${table.table_name}`)
+    if (!sql) {
+      notify.err('This recommendation needs review before it can become a SQL monitor.')
+      return
+    }
+    if (!sqlWasTested(testState, key, sql)) {
+      notify.err('Test this SQL before adding it as a monitor.')
+      return
+    }
+    setApplying((prev) => ({ ...prev, [key]: true }))
+    try {
       await createCustomMonitor(table.id, {
         name: rec.name || 'AI recommended monitor',
         description: rec.rationale || 'Staged by table autopilot',
@@ -184,6 +245,7 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
         severity: rec.severity || 'P3',
         run_on_profile: true,
       })
+      setSaved((prev) => ({ ...prev, [key]: true }))
       notify.ok('Monitor added', rec.name)
       onMonitorSaved?.()
     } catch (e) {
@@ -191,20 +253,25 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
     } finally {
       setApplying((prev) => {
         const next = { ...prev }
-        delete next[rec.id || index]
+        delete next[key]
         return next
       })
     }
   }
 
   const addSafeMonitor = async (monitor, index) => {
-    setAddingSafe((prev) => ({ ...prev, [index]: true }))
+    const key = recommendationKey(monitor, index, 'safe')
+    const sql = recommendationSql(monitor, `${table.schema_name}.${table.table_name}`)
+    if (!sql) {
+      notify.err('Cannot generate SQL for this monitor type.')
+      return
+    }
+    if (!sqlWasTested(testState, key, sql)) {
+      notify.err('Test this SQL before adding it as a monitor.')
+      return
+    }
+    setAddingSafe((prev) => ({ ...prev, [key]: true }))
     try {
-      const sql = recommendationSql(monitor, `${table.schema_name}.${table.table_name}`)
-      if (!sql) {
-        notify.err('Cannot generate SQL for this monitor type.')
-        return
-      }
       await createCustomMonitor(table.id, {
         name: monitor.name || monitor.monitor_type,
         description: monitor.rationale || `Built-in ${monitor.monitor_type} monitor`,
@@ -212,6 +279,7 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
         severity: monitor.severity || 'P2',
         run_on_profile: true,
       })
+      setSaved((prev) => ({ ...prev, [key]: true }))
       notify.ok('Monitor added', monitor.name)
       onMonitorSaved?.()
     } catch (e) {
@@ -219,7 +287,7 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
     } finally {
       setAddingSafe((prev) => {
         const next = { ...prev }
-        delete next[index]
+        delete next[key]
         return next
       })
     }
@@ -282,17 +350,32 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
             <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Baseline monitors (auto-enabled by AI)</p>
             <div className="flex flex-col gap-2">
               {safeMonitors.map((monitor, index) => {
+                const key = recommendationKey(monitor, index, 'safe')
                 const sql = recommendationSql(monitor, `${table.schema_name}.${table.table_name}`)
+                const tested = sqlWasTested(testState, key, sql)
                 return (
-                  <div key={`${monitor.name}-${index}`} className="rounded-md border bg-muted/10 px-3 py-2.5">
+                  <div key={key} className="rounded-md border bg-muted/10 px-3 py-2.5">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="outline" className={SEVERITY_BADGE_CLASSES[monitor.severity] || ''}>{monitor.severity || 'P2'}</Badge>
                       <span className="text-sm font-medium">{monitor.name || monitor.monitor_type}</span>
                       <Badge variant="secondary" className="font-mono text-xs">{monitor.monitor_type}</Badge>
                       {sql ? (
-                        <Button size="sm" variant="outline" className="ml-auto" disabled={!!addingSafe[index]} onClick={() => addSafeMonitor(monitor, index)}>
-                          {addingSafe[index] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add as monitor'}
-                        </Button>
+                        <div className="ml-auto flex items-center gap-2">
+                          <TestResultLabel result={testState[key]?.result} />
+                          <Button size="sm" variant="outline" disabled={!!testing[key]} onClick={() => testRecommendation(monitor, index, 'safe')}>
+                            {testing[key] ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 mr-1" />}
+                            Test SQL
+                          </Button>
+                          {saved[key] ? (
+                            <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="size-3.5" /> Added
+                            </span>
+                          ) : (
+                            <Button size="sm" variant="outline" disabled={!!addingSafe[key] || !tested} onClick={() => addSafeMonitor(monitor, index)}>
+                              {addingSafe[key] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add as monitor'}
+                            </Button>
+                          )}
+                        </div>
                       ) : (
                         <span className="ml-auto text-xs text-muted-foreground italic">Profiler-managed</span>
                       )}
@@ -309,16 +392,37 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
           <div className="flex flex-col gap-2">
             <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">AI recommendations — staged for review</p>
             {recommendations.map((rec, index) => {
-              const key = rec.id || index
+              const key = recommendationKey(rec, index, 'rec')
+              const sql = recommendationSql(rec, `${table.schema_name}.${table.table_name}`)
+              const tested = sqlWasTested(testState, key, sql)
               return (
                 <div key={key} className="rounded-md border bg-muted/10 px-3 py-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline" className={SEVERITY_BADGE_CLASSES[rec.severity] || ''}>{rec.severity || 'P3'}</Badge>
                     <span className="text-sm font-medium">{rec.name}</span>
                     <Badge variant="secondary" className="font-mono text-xs">{rec.monitor_type}</Badge>
-                    <Button size="sm" variant="outline" className="ml-auto" disabled={applying[key]} onClick={() => applyRecommendation(rec, index)}>
-                      {applying[key] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
-                    </Button>
+                    <div className="ml-auto flex items-center gap-2">
+                      {sql ? (
+                        <>
+                          <TestResultLabel result={testState[key]?.result} />
+                          <Button size="sm" variant="outline" disabled={!!testing[key]} onClick={() => testRecommendation(rec, index, 'rec')}>
+                            {testing[key] ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 mr-1" />}
+                            Test SQL
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic">Needs manual setup</span>
+                      )}
+                      {saved[key] ? (
+                        <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="size-3.5" /> Added
+                        </span>
+                      ) : (
+                        <Button size="sm" variant="outline" disabled={applying[key] || !tested} onClick={() => applyRecommendation(rec, index)}>
+                          {applying[key] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   {rec.rationale && <p className="mt-1 text-xs text-muted-foreground">{rec.rationale}</p>}
                 </div>
@@ -338,6 +442,8 @@ function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMon
   const [dismissed, setDismissed] = useState(false)
   const [applying, setApplying] = useState({})
   const [applied, setApplied] = useState({})
+  const [testing, setTesting] = useState({})
+  const [testState, setTestState] = useState({})
   const dismissKey = `dw_rec_dismissed_${tableId}`
 
   // Auto-trigger when no monitors exist and not previously dismissed this session
@@ -369,14 +475,47 @@ function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMon
     sessionStorage.setItem(dismissKey, '1')
   }
 
-  const applyRec = async (rec, index) => {
-    setApplying((prev) => ({ ...prev, [index]: true }))
+  const testRec = async (rec, index) => {
+    const key = recommendationKey(rec, index, 'ai')
+    const sql = recommendationSql(rec, tableName)
+    if (!sql) {
+      notify.err('This recommendation needs manual setup before it can be saved as a SQL monitor.')
+      return
+    }
+    setTesting((prev) => ({ ...prev, [key]: true }))
     try {
-      const sql = recommendationSql(rec, tableName)
-      if (!sql) {
-        notify.err('This recommendation needs manual setup before it can be saved as a SQL monitor.')
-        return
-      }
+      const r = await runCustomCheck(tableId, {
+        sql,
+        name: rec.name || `${rec.monitor_type} monitor`,
+        severity: rec.severity || 'P3',
+      })
+      setTestState((prev) => ({ ...prev, [key]: { sql: sql.trim(), result: r.data } }))
+      notify.ok('SQL test completed')
+    } catch (e) {
+      setTestState((prev) => {
+        const next = { ...prev }
+        delete next[key]
+        return next
+      })
+      notify.err(e?.response?.data?.detail || 'Test run failed')
+    } finally {
+      setTesting((prev) => { const next = { ...prev }; delete next[key]; return next })
+    }
+  }
+
+  const applyRec = async (rec, index) => {
+    const key = recommendationKey(rec, index, 'ai')
+    const sql = recommendationSql(rec, tableName)
+    if (!sql) {
+      notify.err('This recommendation needs manual setup before it can be saved as a SQL monitor.')
+      return
+    }
+    if (!sqlWasTested(testState, key, sql)) {
+      notify.err('Test this SQL before adding it as a monitor.')
+      return
+    }
+    setApplying((prev) => ({ ...prev, [key]: true }))
+    try {
       await createCustomMonitor(tableId, {
         name: rec.name || `${rec.monitor_type} monitor`,
         description: rec.rationale || `AI recommended ${rec.monitor_type} monitor`,
@@ -384,14 +523,14 @@ function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMon
         severity: rec.severity || 'P3',
         run_on_profile: true,
       })
-      setApplied((prev) => ({ ...prev, [index]: true }))
+      setApplied((prev) => ({ ...prev, [key]: true }))
       onMonitorSaved?.()
       notify.ok('Monitor added', rec.name)
     } catch (e) {
       const msg = e?.response?.data?.detail || 'Failed to add monitor'
       notify.err(msg)
     } finally {
-      setApplying((prev) => { const next = { ...prev }; delete next[index]; return next })
+      setApplying((prev) => { const next = { ...prev }; delete next[key]; return next })
     }
   }
 
@@ -421,28 +560,46 @@ function AIMonitorRecommender({ tableId, sourceId, tableName, hasMonitors, onMon
       )}
       {!loading && recs && recs.length > 0 && (
         <div className="flex flex-col gap-2">
-          {recs.map((r, i) => (
-            <div key={i} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-bold ${SEVERITY_COLORS[r.severity] || ''}`}>{r.severity}</span>
-                <span className="text-sm font-medium">{r.name}</span>
-                <MonitorTypeBadge type={r.monitor_type} />
-                <div className="ml-auto">
-                  {applied[i] ? (
-                    <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="size-3.5" /> Added
-                    </span>
-                  ) : (
-                    <Button size="sm" variant="outline" disabled={applying[i]} onClick={() => applyRec(r, i)}>
-                      {applying[i] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
-                    </Button>
-                  )}
+          {recs.map((r, i) => {
+            const key = recommendationKey(r, i, 'ai')
+            const sql = recommendationSql(r, tableName)
+            const tested = sqlWasTested(testState, key, sql)
+            return (
+              <div key={key} className="rounded-lg border bg-muted/20 px-3 py-2.5 flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-xs font-bold ${SEVERITY_COLORS[r.severity] || ''}`}>{r.severity}</span>
+                  <span className="text-sm font-medium">{r.name}</span>
+                  <MonitorTypeBadge type={r.monitor_type} />
+                  <div className="ml-auto">
+                    {applied[key] ? (
+                      <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="size-3.5" /> Added
+                      </span>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {sql ? (
+                          <>
+                            <TestResultLabel result={testState[key]?.result} />
+                            <Button size="sm" variant="outline" disabled={!!testing[key]} onClick={() => testRec(r, i)}>
+                              {testing[key] ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 mr-1" />}
+                              Test SQL
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Needs manual setup</span>
+                        )}
+                        <Button size="sm" variant="outline" disabled={applying[key] || !tested} onClick={() => applyRec(r, i)}>
+                          {applying[key] ? <Loader2 className="size-3.5 animate-spin" /> : 'Add monitor'}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
+                {r.rationale && <p className="text-xs text-muted-foreground">{r.rationale}</p>}
+                {r.column_name && <p className="text-xs text-muted-foreground">Column: <code className="text-primary">{r.column_name}</code></p>}
               </div>
-              {r.rationale && <p className="text-xs text-muted-foreground">{r.rationale}</p>}
-              {r.column_name && <p className="text-xs text-muted-foreground">Column: <code className="text-primary">{r.column_name}</code></p>}
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
@@ -799,9 +956,37 @@ function NLRuleBuilder({ tableId, tableName, onMonitorSaved }) {
 
 // ── Alert Routing ─────────────────────────────────────────────────────────────
 
-const CHANNEL_LABELS = { slack: 'Slack', email: 'Email', pagerduty: 'PagerDuty' }
+const CHANNEL_LABELS = {
+  slack: 'Slack',
+  email: 'Email',
+  webhook: 'Webhook',
+  pagerduty: 'PagerDuty',
+  teams: 'Microsoft Teams',
+  discord: 'Discord',
+  opsgenie: 'OpsGenie',
+}
 
-function AlertRoutingPanel({ tableId }) {
+function alertRouteDestination(alert) {
+  const cfg = alert.config || {}
+  if (alert.channel === 'email') {
+    const recipients = Array.isArray(cfg.to) ? cfg.to : String(cfg.to || '').split(',').filter(Boolean)
+    return recipients.join(', ')
+  }
+  if (alert.channel === 'webhook') return cfg.url || 'Configured endpoint'
+  if (['slack', 'teams', 'discord'].includes(alert.channel)) return cfg.webhook_url || 'Configured webhook'
+  if (alert.channel === 'pagerduty') return cfg.routing_key ? 'Routing key configured' : 'PagerDuty route'
+  if (alert.channel === 'opsgenie') return cfg.api_key ? 'API key configured' : 'OpsGenie route'
+  return 'Configured route'
+}
+
+function alertErrorMessage(error, fallback) {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (detail?.message) return detail.message
+  return fallback
+}
+
+function AlertRoutingPanel({ tableId, onRouteSaved }) {
   const [alerts, setAlerts] = useState([])
   const [channels, setChannels] = useState([])
   const [loading, setLoading] = useState(true)
@@ -847,9 +1032,10 @@ function AlertRoutingPanel({ tableId }) {
       await createAlert({ table_id: tableId, channel, config: { ...config, min_severity: minSeverity } })
       notify.ok('Alert route added')
       resetForm()
-      load()
+      await load()
+      onRouteSaved?.()
     } catch (e) {
-      notify.err(e?.response?.data?.detail || 'Failed to create alert route')
+      notify.err(alertErrorMessage(e, 'Failed to create alert route'))
     } finally { setSaving(false) }
   }
 
@@ -859,7 +1045,7 @@ function AlertRoutingPanel({ tableId }) {
       const r = await testAlert(alertId)
       notify.ok(r.data?.message || 'Test alert sent')
     } catch (e) {
-      notify.err(e?.response?.data?.detail || 'Test failed')
+      notify.err(alertErrorMessage(e, 'Test failed'))
     } finally { setTesting(null) }
   }
 
@@ -869,7 +1055,7 @@ function AlertRoutingPanel({ tableId }) {
       await deleteAlert(alertId)
       load()
     } catch (e) {
-      notify.err(e?.response?.data?.detail || 'Failed to remove')
+      notify.err(alertErrorMessage(e, 'Failed to remove'))
     } finally { setDeleting(null) }
   }
 
@@ -917,6 +1103,7 @@ function AlertRoutingPanel({ tableId }) {
     <div key={a.id} className="rounded-md border bg-muted/10 px-3 py-2.5 flex items-center gap-2 flex-wrap">
       <Badge variant="outline">{CHANNEL_LABELS[a.channel] || a.channel}</Badge>
       <span className="text-sm text-muted-foreground">≥ {a.min_severity}</span>
+      <span className="min-w-0 truncate text-sm text-muted-foreground">{alertRouteDestination(a)}</span>
       {!a.table_id && <Badge variant="secondary" className="text-xs">workspace</Badge>}
       <div className="ml-auto flex gap-1">
         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={testing === a.id} onClick={() => handleTest(a.id)}>
@@ -1723,7 +1910,7 @@ export default function TableDetail() {
       <BuiltinMonitorsPanel table={table} onSave={loadData} />
 
       {/* ── Alert Routing ── */}
-      <AlertRoutingPanel tableId={id} />
+      <AlertRoutingPanel tableId={id} onRouteSaved={loadData} />
 
       {/* ── Custom Monitors (AI assist + SQL monitors unified) ── */}
       <CustomMonitorsPanel

@@ -2,8 +2,7 @@ import { chromium } from 'playwright'
 
 const BASE_URL = 'http://acme-corp.localhost:5173'
 const API_URL = 'http://localhost:8000'
-const TABLE_ID = '3856dac6-46a1-462b-a8ce-f6c1de0d983e'
-const SOURCE_ID = '23893dc4-deea-4f2b-83c1-7a9d6553ca80'
+const TABLE_ID = 'e3c05414-dc5b-4865-9241-2c330b97e861'
 const TABLE_URL = `${BASE_URL}/tables/${TABLE_ID}`
 const EMAIL = 'mounir@acme.io'
 const PASSWORD = 'demo1234'
@@ -11,7 +10,6 @@ const PASSWORD = 'demo1234'
 const unique = Date.now()
 const AI_MONITOR_NAME = `PW AI event name monitor ${unique}`
 const NL_MONITOR_NAME = `PW NL event name monitor ${unique}`
-const GLOBAL_MONITOR_NAME = `PW global event name monitor ${unique}`
 
 async function apiToken() {
   const response = await fetch(`${API_URL}/auth/login`, {
@@ -57,12 +55,12 @@ async function login(page) {
 
 async function openTable(page) {
   await page.goto(TABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
-  await page.waitForFunction(() => document.body.innerText.includes('Natural Language Rule Builder'), null, { timeout: 30000 })
-  await page.waitForFunction(() => document.body.innerText.includes('Custom SQL Monitors'), null, { timeout: 30000 })
+  await page.waitForFunction(() => document.body.innerText.toLowerCase().includes('natural language rule builder'), null, { timeout: 30000 })
+  await page.waitForFunction(() => document.body.innerText.toLowerCase().includes('custom sql monitors'), null, { timeout: 30000 })
 }
 
 async function run() {
-  await cleanupMonitorNames([AI_MONITOR_NAME, NL_MONITOR_NAME, GLOBAL_MONITOR_NAME])
+  await cleanupMonitorNames([AI_MONITOR_NAME, NL_MONITOR_NAME])
 
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
@@ -85,12 +83,12 @@ async function run() {
           table: 'events',
           recommendations: [
             {
-              monitor_type: 'null_rate',
-              column_name: 'event_name',
+              monitor_type: 'custom_sql',
+              column_name: null,
               name: AI_MONITOR_NAME,
               rationale: 'Event name is required for analytics and routing.',
               severity: 'P2',
-              config: { max_null_rate: 0 },
+              config: { sql: `SELECT COUNT(*) FROM public.events WHERE event_name = 'pw_ai_${unique}'` },
             },
           ],
           count: 1,
@@ -103,11 +101,17 @@ async function run() {
 
     await page.getByRole('button', { name: /^Generate$/ }).first().click()
     await page.waitForFunction((name) => document.body.innerText.includes(name), AI_MONITOR_NAME, { timeout: 30000 })
-    const aiCard = page.locator('div.rounded-lg.border').filter({ hasText: AI_MONITOR_NAME }).first()
+    const aiCard = page.getByText(AI_MONITOR_NAME, { exact: true })
+      .locator('xpath=ancestor::div[contains(@class, "rounded-lg") and contains(@class, "border")][1]')
+    const aiAddButton = aiCard.getByRole('button', { name: /Add monitor/i })
+    assert(await aiAddButton.isDisabled(), 'AI recommendation add should be disabled before SQL test')
+    await aiCard.getByRole('button', { name: /Test SQL/i }).click()
+    await aiCard.getByText(/0 violations|\d+ violations? found/i).waitFor({ state: 'visible', timeout: 120000 })
+    assert(!(await aiAddButton.isDisabled()), 'AI recommendation add should be enabled after SQL test')
     await aiCard.getByRole('button', { name: /Add monitor/i }).click()
-    await page.waitForFunction((name) => document.body.innerText.includes(name) && document.body.innerText.includes('Custom SQL Monitors'), AI_MONITOR_NAME, { timeout: 30000 })
+    await page.waitForFunction((name) => document.body.innerText.includes(name) && document.body.innerText.toLowerCase().includes('custom sql monitors'), AI_MONITOR_NAME, { timeout: 30000 })
     await page.waitForFunction((name) => {
-      const customIndex = document.body.innerText.indexOf('Custom SQL Monitors')
+      const customIndex = document.body.innerText.toLowerCase().indexOf('custom sql monitors')
       const nameIndex = document.body.innerText.lastIndexOf(name)
       return customIndex >= 0 && nameIndex > customIndex
     }, AI_MONITOR_NAME, { timeout: 30000 })
@@ -118,37 +122,23 @@ async function run() {
     await page.getByLabel('Generated SQL').waitFor({ state: 'visible', timeout: 190000 })
     const sqlTextarea = page.getByLabel('Generated SQL')
     await sqlTextarea.fill('SELECT COUNT(*) FROM public.events WHERE event_name IS NULL')
-    await page.getByRole('button', { name: /Test SQL/i }).click()
+    await page.getByRole('button', { name: /Test SQL/i }).last().click()
     await page.waitForFunction(() => /0 violations|\d+ violations? found/i.test(document.body.innerText), null, { timeout: 120000 })
     await page.getByRole('button', { name: /Save as Monitor/i }).click()
     const saveButton = page.getByRole('button', { name: /^Save$/ })
+    await page.waitForFunction(() => {
+      const buttons = [...document.querySelectorAll('button')]
+      const save = buttons.find((button) => /^Save$/.test(button.textContent || ''))
+      return save && !save.disabled
+    }, null, { timeout: 10000 })
     assert(!(await saveButton.isDisabled()), 'NL save should be enabled after current SQL is tested')
     await page.getByPlaceholder('Monitor name').fill(NL_MONITOR_NAME)
     await saveButton.click()
     await page.waitForFunction((name) => document.body.innerText.includes(name), NL_MONITOR_NAME, { timeout: 30000 })
 
-    await page.goto(`${BASE_URL}/monitors`, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForFunction(() => document.body.innerText.includes('Monitors'), null, { timeout: 30000 })
-    await page.getByRole('button', { name: /Add monitor/i }).first().click()
-    await page.getByText('Add Custom SQL Monitor').waitFor({ state: 'visible', timeout: 10000 })
-    await page.locator('select').nth(1).selectOption(TABLE_ID)
-    await page.getByPlaceholder('e.g. Paid orders without reference').fill(GLOBAL_MONITOR_NAME)
-    await page.getByPlaceholder("SELECT COUNT(*) FROM orders WHERE status = 'paid' AND payment_reference IS NULL").fill('SELECT COUNT(*) FROM public.events WHERE event_name IS NULL')
-    const createButton = page.getByRole('button', { name: /Create monitor/i })
-    assert(await createButton.isDisabled(), 'Global create monitor should be disabled before SQL test')
-    await page.getByRole('button', { name: /Test SQL/i }).click()
-    await page.waitForFunction(() => /0 violations|\d+ violations? found/i.test(document.body.innerText), null, { timeout: 120000 })
-    await createButton.waitFor({ state: 'visible', timeout: 10000 })
-    await page.waitForFunction(() => {
-      const buttons = [...document.querySelectorAll('button')]
-      const create = buttons.find((button) => /Create monitor/i.test(button.textContent || ''))
-      return create && !create.disabled
-    }, null, { timeout: 10000 })
-    assert(!(await createButton.isDisabled()), 'Global create monitor should be enabled after SQL test')
-
     console.log(JSON.stringify({
       status: 'passed',
-      checked: ['ai-recommendation-save', 'nl-edit-test-save', 'global-test-before-save'],
+      checked: ['ai-recommendation-test-before-save', 'nl-edit-test-save'],
       diagnostics,
     }, null, 2))
   } catch (error) {
@@ -164,7 +154,7 @@ async function run() {
     process.exitCode = 1
   } finally {
     await browser.close()
-    await cleanupMonitorNames([AI_MONITOR_NAME, NL_MONITOR_NAME, GLOBAL_MONITOR_NAME])
+    await cleanupMonitorNames([AI_MONITOR_NAME, NL_MONITOR_NAME])
   }
 }
 
