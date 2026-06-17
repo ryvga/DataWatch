@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate, Link } from 'react-router-dom'
 import { useState } from 'react'
 import {
+  Activity,
   AlertTriangle,
   BarChart3,
   Bell,
@@ -38,6 +39,7 @@ import { clearSession, storage } from '@/lib/storage'
 const links = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/tables', label: 'Tables', icon: Table2 },
+  { to: '/monitors', label: 'Monitors', icon: Activity },
   { to: '/teams', label: 'Teams', icon: Users },
   { to: '/incidents', label: 'Incidents', icon: AlertTriangle },
   { to: '/reports', label: 'Reports', icon: BarChart3 },
@@ -64,7 +66,7 @@ function NavItems({ onNavigate, collapsed = false }) {
                 'dw-nav-link group/nav',
                 collapsed ? 'w-10 justify-center px-0' : 'px-3',
                 isActive
-                  ? 'bg-primary/12 text-primary border border-primary/25 shadow-sm font-semibold'
+                  ? 'relative bg-primary/10 text-primary border border-primary/20 font-semibold before:absolute before:left-0 before:inset-y-1 before:w-0.5 before:rounded-full before:bg-primary'
                   : 'text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground border border-transparent font-medium'
               )
             }
@@ -116,7 +118,11 @@ export default function Layout() {
           )}
           aria-label="Workspace menu"
         >
-          <div className={cn('flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary text-xs font-bold', compact && 'size-8')}>
+          <div className={cn(
+            'flex shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white',
+            'bg-gradient-to-br from-primary to-primary/70',
+            compact ? 'size-8' : 'size-7'
+          )}>
             {orgName.charAt(0).toUpperCase()}
           </div>
           {!compact && (
@@ -215,6 +221,15 @@ export default function Layout() {
 
         {/* Nav */}
         <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">
+          {!collapsed && (
+            <div className="mx-2 mb-2 flex items-center gap-2 rounded-md bg-emerald-500/10 px-2.5 py-1.5">
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">All systems live</span>
+            </div>
+          )}
           {collapsed && (
             <Button
               type="button"
