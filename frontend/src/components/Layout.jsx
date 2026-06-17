@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Bell,
   BookOpen,
   Building2,
   ChevronUp,
@@ -33,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { BrandMark } from './app-ui'
+import NotificationPanel from './NotificationPanel'
 import { cn } from '@/lib/utils'
 import { clearSession, storage } from '@/lib/storage'
 
@@ -247,18 +247,7 @@ export default function Layout() {
 
         {/* Bottom workspace menu */}
         <div className="border-t border-sidebar-border px-2 py-3">
-          {!collapsed && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start gap-2 mb-1 text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              onClick={() => nav('/incidents?assigned_to_me=true')}
-              title="My assigned incidents"
-            >
-              <Bell className="size-4" />
-              My Incidents
-            </Button>
-          )}
+          <NotificationPanel collapsed={collapsed} />
           {renderWorkspaceMenu(collapsed)}
         </div>
       </aside>
