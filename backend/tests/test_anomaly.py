@@ -1,6 +1,9 @@
 """Unit tests for AnomalyService — no DB required."""
 import pytest
 from unittest.mock import MagicMock
+import pickle
+
+import numpy as np
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -206,6 +209,51 @@ def test_schema_change_check_reports_fingerprint_and_column_count_changes():
     assert count.status == "failed"
     assert count.observed_value == 3.0
     assert count.expected_range == {"previous": 2, "current": 3}
+
+
+def test_isolation_forest_retrains_cached_model_on_feature_mismatch():
+    from sklearn.ensemble import IsolationForest
+
+    from app.services.anomaly import run_isolation_forest
+
+    table_id = "orders"
+    history = [
+        make_profile(
+            row_count=500 + i,
+            freshness_seconds=3600.0 + i,
+            column_metrics={"amount": {"mean": 100.0 + i}},
+        )
+        for i in range(21)
+    ]
+    current = make_profile(
+        row_count=540,
+        freshness_seconds=3610.0,
+        column_metrics={"amount": {"mean": 120.0}},
+    )
+    stale_model = IsolationForest(contamination=0.05, random_state=42)
+    stale_model.fit(np.array([[float(i)] for i in range(21)]))
+
+    class FakeRedis:
+        def __init__(self):
+            self.deleted_keys = []
+            self.set_keys = []
+
+        def get(self, key):
+            return pickle.dumps(stale_model)
+
+        def delete(self, key):
+            self.deleted_keys.append(key)
+
+        def setex(self, key, ttl, value):
+            self.set_keys.append(key)
+
+    redis_client = FakeRedis()
+
+    results = run_isolation_forest(current, history, table_id, redis_client)
+
+    assert len(results) == 1
+    assert redis_client.deleted_keys == [f"isoforest:{table_id}:3"]
+    assert redis_client.set_keys == [f"isoforest:{table_id}:3"]
 
 
 # ── IncidentService tests ──────────────────────────────────────────────────────

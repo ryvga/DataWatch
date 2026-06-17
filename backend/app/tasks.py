@@ -3,6 +3,7 @@ Celery tasks for Panopta.
 Tasks are synchronous entry points; async logic is wrapped with asyncio.run().
 """
 import asyncio
+import inspect
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -10,6 +11,26 @@ from datetime import UTC, datetime
 from app.worker import celery_app
 
 logger = logging.getLogger(__name__)
+
+
+async def _rollback_connector_transaction(connector) -> None:
+    """Best-effort rollback for connectors that keep a transaction-bearing connection."""
+    rollback = getattr(connector, "rollback", None)
+    if not callable(rollback):
+        conn = getattr(connector, "_conn", None)
+        if conn is None or getattr(conn, "closed", False):
+            return
+        rollback = getattr(conn, "rollback", None)
+
+    if not callable(rollback):
+        return
+
+    try:
+        result = rollback()
+        if inspect.isawaitable(result):
+            await result
+    except Exception as exc:
+        logger.warning("Custom monitors: rollback after SQL error failed: %s", exc)
 
 
 async def _dispose_engine():
@@ -530,6 +551,7 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
                         failed += 1
                 except Exception as exc:
                     logger.warning("Custom monitor %s failed: %s", m.id, exc)
+                    await _rollback_connector_transaction(connector)
                     m.last_run_at = now
                     m.last_result = {"error": str(exc), "executed_at": now.isoformat()}
         finally:

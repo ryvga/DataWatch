@@ -175,12 +175,6 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 _INVALID = HTTPException(status_code=401, detail="Invalid email or password")
 
-class InviteAcceptRequest(BaseModel):
-    token: str
-    full_name: str
-    password: str
-
-
 @router.post("/invites/{token}/accept", response_model=TokenResponse)
 async def accept_invite(
     token: str,

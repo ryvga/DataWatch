@@ -214,27 +214,48 @@ def run_isolation_forest(
         X = np.array([_vec(m) for m in all_metrics[-30:]])
         x_curr = np.array([_vec(current_metrics)])
 
-        # Try to load cached model
+        def _cache_model(trained_model) -> None:
+            if redis_client:
+                try:
+                    redis_client.setex(model_key, 7 * 24 * 3600, pickle.dumps(trained_model))
+                except Exception:
+                    pass
+
+        def _clear_cached_model() -> None:
+            if redis_client:
+                try:
+                    redis_client.delete(model_key)
+                except Exception:
+                    pass
+
+        def _train_model():
+            trained_model = IsolationForest(contamination=0.05, random_state=42)
+            trained_model.fit(X)
+            _cache_model(trained_model)
+            return trained_model
+
+        # Try to load cached model. The feature count is part of the key so schema
+        # changes cannot reuse a model trained on a different vector width.
         model = None
-        model_key = f"isoforest:{table_id}"
+        model_key = f"isoforest:{table_id}:{len(all_keys)}"
         if redis_client:
             try:
                 cached = redis_client.get(model_key)
                 if cached:
                     model = pickle.loads(cached)
             except Exception:
+                _clear_cached_model()
                 pass
 
         if model is None:
-            model = IsolationForest(contamination=0.05, random_state=42)
-            model.fit(X)
-            if redis_client:
-                try:
-                    redis_client.setex(model_key, 7 * 24 * 3600, pickle.dumps(model))
-                except Exception:
-                    pass
+            model = _train_model()
 
-        score = float(model.decision_function(x_curr)[0])
+        try:
+            score = float(model.decision_function(x_curr)[0])
+        except ValueError:
+            _clear_cached_model()
+            model = _train_model()
+            score = float(model.decision_function(x_curr)[0])
         failed = score < ISO_ANOMALY_THRESHOLD
 
         return [AnomalyResult(
