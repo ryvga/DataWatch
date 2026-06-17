@@ -289,6 +289,98 @@ Hub: https://app.notion.com/p/374cb96c4e1c81af9989e9fafb3e2f7a
 
 ---
 
+## Codex CLI Workflow (Orchestrator + Coder Loop)
+
+Claude Code acts as **orchestrator**: it investigates, diagnoses, writes precise specs, and verifies output.  
+Codex CLI acts as **coder**: it receives a spec, implements the change, runs tests, and reports back.
+
+### Step-by-step flow
+
+```
+1. INVESTIGATE
+   Claude reads code, checks logs/tests, identifies the problem.
+   ↓
+2. SPEC
+   Claude writes a tight, file+line-precise prompt describing:
+     - Exactly what to change and where (file path + line numbers)
+     - The root cause (so Codex can judge edge cases)
+     - What verification to run (e.g. pytest command, syntax check)
+   ↓
+3. CODEX IMPLEMENTS
+   codex exec --sandbox workspace-write -C /path/to/project "<spec prompt>"
+   Codex writes the code, runs verification, reports what it did.
+   ↓
+4. CLAUDE VERIFIES
+   - Read the diff (git diff HEAD <file>)
+   - Run tests: pytest <relevant tests> -v
+   - Check live system if needed (curl, docker-compose logs)
+   ↓
+5. COMMIT & PUSH  ← do this immediately, not at end of session
+   git add <specific files>
+   git commit -m "type(scope): message"
+   git push origin main
+   ↓
+6. REPEAT for next unit of work
+```
+
+### Codex exec command
+
+```bash
+codex exec \
+  --sandbox workspace-write \
+  -C /Users/mounir/Documents/Claude/Projects/DataWatch \
+  "<spec prompt>"
+```
+
+- `--sandbox workspace-write` — allows file writes inside the project dir, blocks network/system calls
+- `-C <dir>` — sets the working root so relative paths in the spec match
+- Pipe stdin for long specs: `echo "$SPEC" | codex exec --sandbox workspace-write -C <dir> -`
+
+### What makes a good spec prompt
+
+| Must include | Why |
+|---|---|
+| File path + line numbers | Codex starts cold — no context from previous turns |
+| Root cause, not just symptoms | Lets Codex handle edge cases the spec didn't enumerate |
+| Exact verification command | Codex should self-verify before reporting done |
+| What NOT to change | Prevents scope creep (tests, unrelated files) |
+
+### What Claude handles vs. what Codex handles
+
+| Claude (orchestrator) | Codex (coder) |
+|---|---|
+| Reading logs, checking DB state | Writing and editing source files |
+| Diagnosing root causes | Running tests and syntax checks |
+| Writing specs | Applying fixes from specs |
+| Verifying Codex output | — |
+| Committing and pushing | — |
+| Spawning Explore subagents | — |
+
+### Atomic commit rule
+
+Commit after **each** of these units — not at end of session:
+
+- Bug spec written (if non-trivial, worth capturing)
+- Bug fix implemented + tests passing
+- New test file added
+- New feature or endpoint
+- Migration added
+- Seed/script updated
+
+Never batch multiple unrelated changes into one commit. If Codex touches files beyond the spec scope, revert the extras before committing.
+
+### Feedback loop between Claude and Codex
+
+If Codex output is wrong or incomplete:
+1. Claude reads the diff and identifies what's off
+2. Claude writes a correction spec (smaller, scoped to the delta)
+3. Re-run `codex exec` with the correction
+4. Verify again before committing
+
+Do not send Codex back a vague "fix this" — always be explicit about what the correct output should look like.
+
+---
+
 ## Recommended Skills (Claude Code)
 
 When working on this project with Claude Code, these skills are relevant:
