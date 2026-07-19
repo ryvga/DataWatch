@@ -8,12 +8,19 @@ import numpy as np
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def make_profile(row_count=500, freshness_seconds=3600.0, fingerprint="fp_a", column_metrics=None):
+def make_profile(
+    row_count=500,
+    freshness_seconds=3600.0,
+    fingerprint="fp_a",
+    column_metrics=None,
+    profile_provenance=None,
+):
     p = MagicMock()
     p.row_count = row_count
     p.freshness_seconds = freshness_seconds
     p.schema_fingerprint = fingerprint
     p.column_metrics = column_metrics or {"amount": {"null_rate": 0.01, "mean": 150.0, "stddev": 50.0}}
+    p.profile_provenance = profile_provenance or {}
     return p
 
 
@@ -107,6 +114,34 @@ def test_rule_schema_drift():
     check = next((r for r in results if r.check_name == "schema_drift"), None)
     assert check is not None
     assert check.status == "failed"
+
+
+def test_estimated_counts_do_not_trigger_exact_zero_or_growth_rules():
+    from app.services.anomaly import run_row_growth_check, run_rule_checks
+
+    provenance = {"count_mode": "estimated", "schema_mode": "sampled"}
+    current = make_profile(row_count=0, profile_provenance=provenance)
+    history = [
+        make_profile(row_count=100 + i, profile_provenance=provenance)
+        for i in range(10)
+    ]
+
+    rules = run_rule_checks(current, history[-1], make_table())
+    assert all(result.check_name != "row_count_zero" for result in rules)
+    assert run_row_growth_check(current, history) == []
+
+
+def test_sampled_schema_fingerprint_does_not_open_one_run_drift():
+    from app.services.anomaly import run_rule_checks, run_schema_change_check
+
+    provenance = {"count_mode": "estimated", "schema_mode": "sampled"}
+    current = make_profile(fingerprint="sample-new", profile_provenance=provenance)
+    previous = make_profile(fingerprint="sample-old", profile_provenance=provenance)
+
+    results = run_rule_checks(current, previous, make_table())
+
+    assert all(result.check_name != "schema_drift" for result in results)
+    assert run_schema_change_check(current, [previous]) == []
 
 
 def test_rule_null_rate_spike():
@@ -254,6 +289,32 @@ def test_isolation_forest_retrains_cached_model_on_feature_mismatch():
     assert len(results) == 1
     assert redis_client.deleted_keys == [f"isoforest:{table_id}:3"]
     assert redis_client.set_keys == [f"isoforest:{table_id}:3"]
+
+
+def test_sampled_native_profiles_only_expose_freshness_to_metric_detectors():
+    from app.services.anomaly import _extract_flat_metrics, run_rule_checks
+
+    provenance = {
+        "profile_mode": "sampled_native",
+        "count_mode": "estimated",
+        "schema_mode": "sampled",
+    }
+    previous = make_profile(
+        row_count=1000,
+        freshness_seconds=60,
+        column_metrics={"amount": {"null_rate": 0.0, "numeric_mean": 10}},
+        profile_provenance=provenance,
+    )
+    current = make_profile(
+        row_count=10,
+        freshness_seconds=120,
+        column_metrics={"amount": {"null_rate": 0.9, "numeric_mean": 1000}},
+        profile_provenance=provenance,
+    )
+
+    assert _extract_flat_metrics(current) == {"freshness_seconds": 120.0}
+    checks = run_rule_checks(current, previous, make_table())
+    assert {check.check_name for check in checks} == {"freshness_sla_breach"}
 
 
 # ── IncidentService tests ──────────────────────────────────────────────────────

@@ -139,6 +139,16 @@ tests skip explicitly when those services are unavailable. The local MySQL test 
 `tls_mode=disabled` because that isolated container has no certificate; application
 connections default to certificate and hostname verification and accept an optional
 `ssl_ca` PEM bundle.
+The local MongoDB service likewise requires explicit `tls_mode=disabled`; remote MongoDB
+connections default to verified TLS. MongoDB uses PyMongo `AsyncMongoClient` (not Motor),
+requires one configured database, bounds `profile_sample_size` to 25–1,000, and never persists
+sample values. Sampling additionally caps each returned document at 128 KiB, total sampled
+document memory at 8 MiB, arrays at 100 inspected items, nesting at eight levels, and fields
+at 500. Sampled document metrics currently drive indexed freshness only; repeated-sample
+confirmation is required before enabling drift algorithms. Cassandra remote connections
+also require verified TLS by default and pass an explicit `tls_server_name` (defaulting to
+the first contact point) to the driver. Keep all caller-provided aggregation pipelines and
+CQL outside connector execution paths until typed native planners exist.
 
 **Org isolation is mandatory.** Every query on `data_sources`, `monitored_tables`, `monitors`, `monitor_runs`, `incidents`, `check_results`, and `alert_configs` must include or derive a verified `org_id` filter. Return 404 (not 403) when not found — don't leak existence.
 

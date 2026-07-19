@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import re
+import ssl
 from typing import Any
 
 from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
@@ -15,19 +15,6 @@ _SYSTEM_KEYSPACES = {
     "system_schema",
     "system_virtual_schema",
 }
-
-_COUNT_STAR_RE = re.compile(
-    r"\bselect\s+count\s*\(\s*\*\s*\)\s+from\b",
-    re.IGNORECASE | re.DOTALL,
-)
-_IDENTIFIER_RE = r'(?:[a-zA-Z_][\w]*|"[^"]+")'
-_COUNT_QUERY_RE = re.compile(
-    r"\bselect\s+count\s*\(\s*\*\s*\)\s+from\s+"
-    rf"(?P<table>{_IDENTIFIER_RE}(?:\.{_IDENTIFIER_RE})?)"
-    r"(?P<rest>.*)",
-    re.IGNORECASE | re.DOTALL,
-)
-
 
 class CassandraConnector(BaseConnector):
     """
@@ -58,6 +45,8 @@ class CassandraConnector(BaseConnector):
 
         c = self._config
         hosts = self._parse_hosts(c["hosts"])
+        if not hosts:
+            raise ValueError("Cassandra requires at least one contact point")
         auth_provider = None
         username = c.get("username") or c.get("user")
         password = c.get("password")
@@ -67,16 +56,37 @@ class CassandraConnector(BaseConnector):
                 password=password or "",
             )
 
+        ssl_context = self._ssl_context()
+        cluster_options = {
+            "contact_points": hosts,
+            "port": int(c.get("port", 9042)),
+            "auth_provider": auth_provider,
+            "ssl_context": ssl_context,
+        }
+        if ssl_context is not None:
+            cluster_options["ssl_options"] = {
+                "server_hostname": c.get("tls_server_name") or hosts[0],
+            }
+
         self._cluster = Cluster(
-            contact_points=hosts,
-            port=int(c.get("port", 9042)),
-            auth_provider=auth_provider,
+            **cluster_options,
         )
         keyspace = c.get("keyspace")
         self._session = (
             self._cluster.connect(keyspace) if keyspace else self._cluster.connect()
         )
         return self._session
+
+    def _ssl_context(self) -> ssl.SSLContext | None:
+        mode = str(self._config.get("tls_mode", "verify_identity")).lower()
+        if mode == "disabled":
+            return None
+        if mode != "verify_identity":
+            raise ValueError("tls_mode must be 'verify_identity' or 'disabled'")
+        context = ssl.create_default_context(cadata=self._config.get("ssl_ca") or None)
+        context.check_hostname = True
+        context.verify_mode = ssl.CERT_REQUIRED
+        return context
 
     async def _get_session(self):
         if self._session is not None:
@@ -119,19 +129,9 @@ class CassandraConnector(BaseConnector):
         return await asyncio.to_thread(_discover)
 
     async def execute_profile_query(self, query: str) -> dict:
-        session = await self._get_session()
-        await self._validate_count_query(query)
-
-        def _execute() -> dict:
-            result = session.execute(query, timeout=10)
-            row = result.one()
-            if row is None:
-                return {}
-            if hasattr(row, "_asdict"):
-                return dict(row._asdict())
-            return dict(zip(result.column_names, row))
-
-        return await asyncio.to_thread(_execute)
+        raise NotImplementedError(
+            "Cassandra does not execute caller-provided CQL; a typed partition plan is required"
+        )
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
         await self._get_session()
@@ -182,57 +182,3 @@ class CassandraConnector(BaseConnector):
         if table_meta is None:
             raise ValueError(f"Cassandra table not found: {schema}.{table}")
         return table_meta
-
-    async def _validate_count_query(self, query: str) -> None:
-        normalized_query = query.strip().rstrip(";")
-        if _COUNT_STAR_RE.search(normalized_query) is None:
-            return
-
-        match = _COUNT_QUERY_RE.search(normalized_query)
-        if match is None:
-            raise ValueError(
-                "Cassandra COUNT(*) queries must be parseable for partition key "
-                "safety validation."
-            )
-
-        table_ref = match.group("table")
-        rest = match.group("rest")
-        if "." in table_ref:
-            schema, table = table_ref.split(".", 1)
-        else:
-            schema = self._config.get("keyspace")
-            table = table_ref
-        schema = _normalize_identifier(schema) if schema else schema
-        table = _normalize_identifier(table)
-
-        if not schema:
-            raise ValueError(
-                "Cassandra COUNT(*) queries require an explicit keyspace and full "
-                "partition key filter."
-            )
-        if not re.search(r"\bwhere\b", rest, re.IGNORECASE):
-            raise ValueError(
-                "Cassandra COUNT(*) without a partition key filter is not allowed."
-            )
-
-        def _partition_keys() -> set[str]:
-            table_meta = self._get_table_metadata(schema, table)
-            return {column.name.lower() for column in table_meta.partition_key}
-
-        partition_keys = await asyncio.to_thread(_partition_keys)
-        filtered_columns = {
-            _normalize_identifier(column).lower()
-            for column in re.findall(
-                rf"\b({_IDENTIFIER_RE})\b\s*(?:=|in\b)", rest, re.IGNORECASE
-            )
-        }
-        if not partition_keys.issubset(filtered_columns):
-            raise ValueError(
-                "Cassandra COUNT(*) requires filters for every partition key column."
-            )
-
-
-def _normalize_identifier(identifier: str) -> str:
-    if identifier.startswith('"') and identifier.endswith('"'):
-        return identifier[1:-1]
-    return identifier

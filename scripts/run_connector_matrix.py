@@ -33,6 +33,7 @@ TARGET_TABLE_ID = os.environ.get(
 class MatrixContext:
     token: str
     created_sources: list[str]
+    created_tables: list[str]
     created_monitors: list[tuple[str, str]]
 
 
@@ -145,7 +146,15 @@ def preview_all_connections(token: str) -> None:
         token,
         "NoSQL MongoDB",
         "mongodb",
-        {"uri": "mongodb://test-mongo:27017", "database": "datawatch_nosql"},
+        {
+            "uri": (
+                "mongodb://datawatch-root:datawatch-root@test-mongo:27017/"
+                "?authSource=admin"
+            ),
+            "database": "datawatch_nosql",
+            "tls_mode": "disabled",
+            "profile_sample_size": 250,
+        },
     )
 
 
@@ -219,8 +228,13 @@ def create_mongo_source(ctx: MatrixContext) -> str:
             "name": f"Matrix MongoDB {suffix}",
             "type": "mongodb",
             "connection_config": {
-                "uri": "mongodb://test-mongo:27017",
+                "uri": (
+                    "mongodb://datawatch-root:datawatch-root@test-mongo:27017/"
+                    "?authSource=admin"
+                ),
                 "database": "datawatch_nosql",
+                "tls_mode": "disabled",
+                "profile_sample_size": 250,
             },
         },
         timeout=60,
@@ -230,6 +244,38 @@ def create_mongo_source(ctx: MatrixContext) -> str:
     ctx.created_sources.append(source_id)
     assert_discovery_has(ctx.token, source_id, "datawatch_nosql", "events")
     assert_schema_ddl_contains(ctx.token, source_id, "datawatch_nosql", "events", "metadata.browser")
+
+    step("onboard and profile MongoDB collection")
+    table = request_json(
+        "POST",
+        "/api/v1/tables",
+        token=ctx.token,
+        body={
+            "source_id": source_id,
+            "schema_name": "datawatch_nosql",
+            "table_name": "events",
+            "freshness_column": "occurred_at",
+            "check_interval_minutes": 60,
+        },
+        timeout=90,
+        expected=(201,),
+    )
+    table_id = table["id"]
+    ctx.created_tables.append(table_id)
+
+    deadline = time.time() + 90
+    latest_profile = None
+    while time.time() < deadline:
+        table = request_json("GET", f"/api/v1/tables/{table_id}", token=ctx.token)
+        latest_profile = table.get("latest_profile")
+        if latest_profile:
+            break
+        time.sleep(2)
+    assert_true(bool(latest_profile), "MongoDB profile was not persisted within 90 seconds")
+    assert_true(latest_profile.get("error") is None, f"MongoDB profile failed: {latest_profile}")
+    provenance = latest_profile.get("profile_provenance") or {}
+    assert_true(provenance.get("profile_mode") == "sampled_native", f"MongoDB provenance missing: {latest_profile}")
+    assert_true(provenance.get("sample_size") == 250, f"MongoDB sample provenance incorrect: {latest_profile}")
     return source_id
 
 
@@ -273,6 +319,17 @@ def cleanup(ctx: MatrixContext) -> None:
         except MatrixFailure as exc:
             print(f"cleanup warning: monitor {monitor_id}: {exc}", file=sys.stderr)
 
+    for table_id in reversed(ctx.created_tables):
+        try:
+            request_json(
+                "DELETE",
+                f"/api/v1/tables/{table_id}",
+                token=ctx.token,
+                expected=(204, 404),
+            )
+        except MatrixFailure as exc:
+            print(f"cleanup warning: table {table_id}: {exc}", file=sys.stderr)
+
     for source_id in reversed(ctx.created_sources):
         try:
             request_json(
@@ -289,7 +346,12 @@ def main() -> int:
     ctx: MatrixContext | None = None
     try:
         token = login()
-        ctx = MatrixContext(token=token, created_sources=[], created_monitors=[])
+        ctx = MatrixContext(
+            token=token,
+            created_sources=[],
+            created_tables=[],
+            created_monitors=[],
+        )
         check_connector_metadata(token)
         preview_all_connections(token)
         check_existing_sources(token)

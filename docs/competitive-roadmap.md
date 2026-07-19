@@ -42,6 +42,7 @@ Primary references:
 | Schema changes | Profile fingerprint and drift detector | Typed schema-change policy and allow/deny lists |
 | Row validations | Typed violations measurement and predicate compiler | Incident bridge plus bounded failed-row evidence |
 | Numeric/quality metrics | Typed aggregate compiler for PostgreSQL, DuckDB, SQLite, MySQL, and SQL Server core | Warehouse compiled adapters and live version conformance |
+| Document metrics | MongoDB bounded native sampling with provenance, field presence/null/type and numeric/text summaries | Repeated-sample schema confirmation and document predicate DSL |
 | Compound conditions | Bounded `all`/`any`/`not` predicate tree | UI builder and YAML import/export |
 | Consecutive breach/recovery/cooldown | Deterministic evaluator and persisted state | Public lifecycle and incident transitions |
 | Custom SQL escape hatch | AST-restricted single scalar for selected local/PostgreSQL paths | Explicit advanced-mode UX, query budgets, audit labels |

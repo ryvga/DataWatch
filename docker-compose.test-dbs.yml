@@ -18,12 +18,15 @@ services:
 
   test-mongo:
     image: mongo:7
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: datawatch-root
+      MONGO_INITDB_ROOT_PASSWORD: datawatch-root
     ports:
       - "27018:27017"
     volumes:
       - ./scripts/test_dbs/mongo_seed.js:/docker-entrypoint-initdb.d/seed.js:ro
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD", "mongosh", "--quiet", "--username", "datawatch-root", "--password", "datawatch-root", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 5s
       retries: 20

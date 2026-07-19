@@ -299,6 +299,14 @@ List all monitored tables with latest profile summary.
 ### `GET /api/v1/tables/{id}`
 Table details + latest profile.
 
+Profile responses include `profile_provenance` when the connector uses sampling or an
+estimated population. For MongoDB this records `profile_mode=sampled_native`,
+`count_mode=estimated`, `population_estimate`, `sample_strategy`, `sample_size`,
+`sample_limit`, `sampled_bytes`, `sample_byte_budget`, `document_byte_limit`,
+`oversized_sampled_count`, truncation flags, and `schema_mode=sampled`. Consumers must
+present the population as an estimate and the field metrics as sampled observations,
+not exact SQL counts or deterministic full-population schemas.
+
 ---
 
 ### `PATCH /api/v1/tables/{id}`

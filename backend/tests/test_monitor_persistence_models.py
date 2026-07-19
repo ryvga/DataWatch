@@ -1,7 +1,10 @@
 import importlib.util
 from pathlib import Path
 
+from sqlalchemy import BigInteger
+
 from app.models.monitor import Monitor, MonitorEvaluationState, MonitorRevision, MonitorRun
+from app.models.table_profile import TableProfile
 
 
 def _constraint_names(table):
@@ -133,3 +136,24 @@ def test_monitor_runtime_migration_is_single_successor_of_persistence_head():
     assert "trg_monitor_revisions_append_only" in source
     assert "trg_monitor_runs_terminal_immutable" in source
     assert "pg_trigger_depth() > 1" in source
+
+
+def test_profile_provenance_metadata_and_migration_follow_runtime_head():
+    profile = TableProfile.__table__
+    assert isinstance(profile.c.row_count.type, BigInteger)
+    assert profile.c.profile_provenance.nullable is True
+
+    migration_path = (
+        Path(__file__).parents[1]
+        / "alembic"
+        / "versions"
+        / "013_profile_provenance.py"
+    )
+    spec = importlib.util.spec_from_file_location("profile_provenance_013", migration_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    assert module.revision == "013"
+    assert module.down_revision == "012"
+    assert "2147483647" in migration_path.read_text()

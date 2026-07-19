@@ -59,10 +59,11 @@ class ColumnInfo:
 
 @dataclass
 class ProfileResult:
-    row_count: int = 0
+    row_count: int | None = 0
     freshness_seconds: float | None = None
     schema_fingerprint: str = ""
     column_metrics: dict[str, Any] = field(default_factory=dict)
+    profile_provenance: dict[str, Any] = field(default_factory=dict)
     profiling_duration_ms: int = 0
     error: str | None = None
 
@@ -462,6 +463,28 @@ class ProfilerService:
     ) -> ProfileResult:
         start = time.monotonic()
         try:
+            native_profile_kind = getattr(connector, "native_profile_kind", None)
+            if native_profile_kind is not None:
+                payload = await connector.collect_native_profile(
+                    schema,
+                    table,
+                    freshness_column,
+                )
+                duration_ms = int((time.monotonic() - start) * 1000)
+                return ProfileResult(
+                    row_count=(
+                        int(payload["row_count"])
+                        if payload.get("row_count") is not None
+                        else None
+                    ),
+                    freshness_seconds=payload.get("freshness_seconds"),
+                    schema_fingerprint=str(payload.get("schema_fingerprint") or ""),
+                    column_metrics=dict(payload.get("column_metrics") or {}),
+                    profile_provenance=dict(payload.get("profile_provenance") or {}),
+                    profiling_duration_ms=duration_ms,
+                    error=payload.get("error"),
+                )
+
             dialect = getattr(connector, "profile_dialect", None)
             if dialect is None:
                 return ProfileResult(

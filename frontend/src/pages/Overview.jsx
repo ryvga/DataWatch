@@ -10,6 +10,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const HEALTH_RING_COLOR = { green: '#10b981', yellow: '#f59e0b', red: '#ef4444' }
 
+function profileCountLabel(profile) {
+  if (profile?.profile_provenance?.count_mode === 'estimated') {
+    return `≈${formatNumber(profile.row_count)} documents`
+  }
+  return `${formatNumber(profile?.row_count)} rows`
+}
+
 function HealthRing({ score = 0, color = 'red', grade = '?' }) {
   const r = 38, c = 2 * Math.PI * r
   const offset = c - (Math.min(100, Math.max(0, score)) / 100) * c
@@ -310,7 +317,7 @@ export default function Overview() {
                         {table.schema_name}.{table.table_name}
                       </p>
                       <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
-                        {formatNumber(table.latest_profile?.row_count)} rows
+                        {profileCountLabel(table.latest_profile)}
                       </p>
                     </div>
                     {status === 'incident' && <AlertTriangle className="size-3.5 text-orange-500 shrink-0" />}

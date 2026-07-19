@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.connectors.base import ConnectorConfigurationError
 from app.connectors.factory import ConnectorFactory
 from app.database import get_db
 from app.models.check_result import CheckResult
@@ -60,6 +61,7 @@ class ProfileSummary(BaseModel):
     profiling_duration_ms: int | None
     error: str | None
     column_metrics: dict | None = None  # only populated on latest_profile, not in list
+    profile_provenance: dict | None = None
 
 
 class TableResponse(BaseModel):
@@ -150,6 +152,7 @@ async def _latest_profile(table_id, db: AsyncSession) -> ProfileSummary | None:
         profiling_duration_ms=p.profiling_duration_ms,
         error=p.error,
         column_metrics=p.column_metrics,
+        profile_provenance=getattr(p, "profile_provenance", None),
     )
 
 
@@ -176,13 +179,32 @@ async def _verified_schema_snapshot(
     org_id: str,
     schema_name: str,
     table_name: str,
+    freshness_column: str | None,
 ) -> tuple[str, set[str]]:
     """Fetch the server-owned DDL snapshot used to bind monitors and freshness."""
     connector = None
+    native_column_names = None
     try:
         config = decrypt_config(source.connection_config["encrypted"], org_id)
         connector = ConnectorFactory.create(source.type, config)
-        snapshot = await connector.get_table_ddl(schema_name, table_name)
+        get_table_schema = getattr(connector, "get_table_schema", None)
+        if callable(get_table_schema):
+            snapshot, native_column_names = await get_table_schema(
+                schema_name,
+                table_name,
+            )
+        else:
+            snapshot = await connector.get_table_ddl(schema_name, table_name)
+        validate_profile_config = getattr(connector, "validate_profile_config", None)
+        if callable(validate_profile_config):
+            await validate_profile_config(
+                schema_name,
+                table_name,
+                freshness_column,
+            )
+    except ConnectorConfigurationError as e:
+        logger.warning("Table profile configuration rejected: %s", type(e).__name__)
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         logger.warning("Table schema snapshot failed: %s", type(e).__name__)
         raise HTTPException(
@@ -199,13 +221,23 @@ async def _verified_schema_snapshot(
             except Exception as e:
                 logger.warning("Table schema connector close failed: %s", type(e).__name__)
 
-    columns = parse_ddl_columns(snapshot)
-    if not columns:
+    columns = parse_ddl_columns(snapshot) if native_column_names is None else ()
+    column_names = (
+        {column.name for column in columns}
+        if native_column_names is None
+        else set(native_column_names)
+    )
+    is_native_profile = bool(
+        connector is not None and getattr(connector, "native_profile_kind", None)
+    )
+    if freshness_column and is_native_profile:
+        column_names.add(freshness_column)
+    if not column_names and not is_native_profile:
         raise HTTPException(
             status_code=422,
             detail="The connector did not return a structured schema with any columns.",
         )
-    return snapshot, {column.name for column in columns}
+    return snapshot, column_names
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -255,6 +287,7 @@ async def create_table(
         str(org.id),
         body.schema_name,
         body.table_name,
+        body.freshness_column,
     )
     if body.freshness_column and body.freshness_column not in column_names:
         raise HTTPException(
@@ -353,6 +386,7 @@ async def update_table(
             str(org.id),
             table.schema_name,
             table.table_name,
+            freshness_column,
         )
         if freshness_column not in column_names:
             raise HTTPException(
@@ -513,6 +547,7 @@ async def list_profiles(
             schema_fingerprint=p.schema_fingerprint,
             profiling_duration_ms=p.profiling_duration_ms,
             error=p.error,
+            profile_provenance=getattr(p, "profile_provenance", None),
         )
         for p in profiles
     ]
@@ -542,6 +577,7 @@ async def get_profile(
         "freshness_seconds": p.freshness_seconds,
         "schema_fingerprint": p.schema_fingerprint,
         "column_metrics": p.column_metrics,
+        "profile_provenance": getattr(p, "profile_provenance", None),
         "profiling_duration_ms": p.profiling_duration_ms,
         "error": p.error,
     }

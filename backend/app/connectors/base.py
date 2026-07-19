@@ -2,6 +2,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 
+class ConnectorConfigurationError(ValueError):
+    """A stable, secret-free connector configuration error safe for API responses."""
+
+
 @dataclass
 class TableInfo:
     name: str
@@ -21,6 +25,7 @@ class BaseConnector(ABC):
     # connect, discover assets, and execute a scalar query without supporting
     # the aggregate SQL emitted by ProfilerService.
     profile_dialect: str | None = None
+    native_profile_kind: str | None = None
 
     @abstractmethod
     async def test_connection(self) -> bool:
@@ -62,6 +67,33 @@ class BaseConnector(ABC):
     @abstractmethod
     async def get_table_ddl(self, schema: str, table: str) -> str:
         """Return a DDL-like string describing the table columns and types."""
+
+    async def get_table_schema(
+        self,
+        schema: str,
+        table: str,
+    ) -> tuple[str, set[str] | None]:
+        """Return a snapshot plus native column/field names when available."""
+        return await self.get_table_ddl(schema, table), None
+
+    async def validate_profile_config(
+        self,
+        schema: str,
+        table: str,
+        freshness_column: str | None,
+    ) -> None:
+        """Fail closed when connector-specific profile settings are unsafe."""
+
+    async def collect_native_profile(
+        self,
+        schema: str,
+        table: str,
+        freshness_column: str | None,
+    ) -> dict:
+        """Return a bounded native profile for non-relational connectors."""
+        raise NotImplementedError(
+            f"{type(self).__name__} has no native profiling path"
+        )
 
     async def close(self) -> None:
         """Release any held connections/pools. Override if needed."""

@@ -44,7 +44,14 @@ async def test_connector_types_include_registry_fields_and_versions():
     }
     assert mysql_fields["tls_mode"]["default"] == "verify_identity"
     assert mysql_fields["tls_mode"]["options"] == ["verify_identity", "disabled"]
-    assert by_type["mongodb"]["capabilities"]["profiling"] == "none"
+    assert by_type["mongodb"]["capabilities"]["profiling"] == "core"
+    assert by_type["mongodb"]["capabilities"]["sampling"] is True
+    assert "database" in by_type["mongodb"]["required"]
+    cassandra_fields = {
+        field["name"]: field for field in by_type["cassandra"]["fields"]
+    }
+    assert cassandra_fields["tls_mode"]["default"] == "verify_identity"
+    assert "Astra DB" not in by_type["cassandra"]["versions"]
     assert by_type["snowflake"]["readiness"] == "planned"
 
 
@@ -230,9 +237,9 @@ async def test_discovery_cache_invalidation_is_tenant_scoped_and_closes(monkeypa
 
 
 @pytest.mark.asyncio
-async def test_create_table_rejects_connector_without_profile_capability(monkeypatch):
+async def test_create_table_rejects_cassandra_without_profile_capability(monkeypatch):
     async def fake_resolve(source_id, org, db):
-        return SimpleNamespace(id=source_id, type="mongodb")
+        return SimpleNamespace(id=source_id, type="cassandra")
 
     monkeypatch.setattr(tables, "_resolve_org_from_source", fake_resolve)
 
@@ -429,6 +436,82 @@ async def test_update_table_cannot_replace_or_bypass_live_schema(monkeypatch):
         )
     assert exc_info.value.status_code == 422
     assert "freshness_column" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_verified_schema_uses_native_document_field_binding(monkeypatch):
+    source = SimpleNamespace(
+        type="mongodb",
+        connection_config={"encrypted": "ciphertext"},
+    )
+    validated = []
+
+    class Connector:
+        async def get_table_schema(self, schema, table):
+            return "NATIVE SNAPSHOT (not relational DDL)", {"nested.event_at"}
+
+        async def validate_profile_config(self, schema, table, freshness_column):
+            validated.append((schema, table, freshness_column))
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr(tables, "decrypt_config", lambda encrypted, org_id: {})
+    monkeypatch.setattr(
+        tables.ConnectorFactory,
+        "create",
+        lambda source_type, config: Connector(),
+    )
+
+    snapshot, columns = await tables._verified_schema_snapshot(
+        source,
+        "org-1",
+        "analytics",
+        "events",
+        "nested.event_at",
+    )
+
+    assert snapshot == "NATIVE SNAPSHOT (not relational DDL)"
+    assert columns == {"nested.event_at"}
+    assert validated == [("analytics", "events", "nested.event_at")]
+
+
+@pytest.mark.asyncio
+async def test_verified_schema_allows_empty_native_collection(monkeypatch):
+    source = SimpleNamespace(
+        type="mongodb",
+        connection_config={"encrypted": "ciphertext"},
+    )
+
+    class Connector:
+        native_profile_kind = "document"
+
+        async def get_table_schema(self, schema, table):
+            return 'CREATE COLLECTION "analytics"."empty" (\n\n);', set()
+
+        async def validate_profile_config(self, schema, table, freshness_column):
+            return None
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr(tables, "decrypt_config", lambda encrypted, org_id: {})
+    monkeypatch.setattr(
+        tables.ConnectorFactory,
+        "create",
+        lambda source_type, config: Connector(),
+    )
+
+    snapshot, columns = await tables._verified_schema_snapshot(
+        source,
+        "org-1",
+        "analytics",
+        "empty",
+        None,
+    )
+
+    assert snapshot.startswith("CREATE COLLECTION")
+    assert columns == set()
 
 
 @pytest.mark.asyncio

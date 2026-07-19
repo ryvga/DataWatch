@@ -224,6 +224,9 @@ class BaseConnector(ABC):
     async def discover_schemas(self) -> list[SchemaInfo]
     async def execute_profile_query(self, query: str) -> dict
     async def get_table_ddl(self, schema: str, table: str) -> str
+    async def get_table_schema(self, schema: str, table: str) -> tuple[str, set[str] | None]
+    async def validate_profile_config(self, schema: str, table: str, freshness_column: str | None) -> None
+    async def collect_native_profile(self, schema: str, table: str, freshness_column: str | None) -> dict
     async def close(self) -> None
 ```
 
@@ -235,14 +238,15 @@ the UI and API documentation from presenting experimental adapters as complete.
 | Profile tier | Meaning |
 |---|---|
 | `full` | Standard metrics plus stddev and percentiles; sampling is a separate capability |
-| `core` | Row count, freshness, null/distinct/uniqueness, min/max/mean and basic text/range metrics |
+| `core` | A connector-native bounded metric set with explicit provenance; relational cores include row count, freshness, null/distinct/uniqueness, min/max/mean and text/range metrics |
 | `none` | Connection/discovery may work, but scheduled profiling fails explicitly before SQL execution |
 
 The currently exercised local vertical slices are PostgreSQL, DuckDB, and SQLite core.
 MySQL has a parsed-query and mocked-driver core contract, but remains experimental until
 the container-backed connection/discovery/schema/profile path passes.
-MongoDB and Cassandra require native planners because document and partition models
-must not be forced through relational full-table SQL semantics.
+MongoDB uses a native sampled document profiler. Cassandra remains discovery/schema-only
+until a typed partition planner exists; arbitrary CQL is rejected before a driver call,
+and Cassandra transport defaults to certificate and hostname verification.
 
 ---
 
@@ -269,6 +273,34 @@ Profiling does not run a preliminary exact `COUNT(*)`: that would double full-sc
 before the aggregate and could corrupt row-count anomalies if a sampled count replaced
 the true count. Sampling remains disabled until a connector supplies a non-scanning row
 estimate and the persisted profile records explicit sampling provenance.
+
+### MongoDB native profile
+
+MongoDB uses PyMongo's `AsyncMongoClient`, replacing deprecated Motor. Connections are
+restricted to one configured database, default to certificate and hostname verification,
+and have bounded server-selection/connect/socket timeouts and pool size. The profile:
+
+- reads an estimated document population without an exact collection scan;
+- samples at most 1,000 documents with `maxTimeMS`, `allowDiskUse=false`, a 16-document
+  cursor batch, a 128 KiB per-document envelope, and an 8 MiB total in-process budget;
+- records missing/null ratios, BSON type distributions, numeric summaries, and Unicode
+  string lengths without retaining raw sample values;
+- permits freshness only when the field leads a non-partial index and a bounded probe
+  observes an actual scalar BSON date;
+- persists `profile_provenance` (`count_mode`, sampling strategy/size/limit,
+  population estimate, byte/field/array limits, truncation state, and schema mode)
+  alongside every profile.
+
+Sampled document metrics currently feed only indexed freshness detection; estimated
+counts do not feed exact zero/growth/seasonal or multivariate rules. A one-run sampled
+fingerprint change does not open a schema incident; a future confirmation policy must
+observe compatible repeated samples before promoting sampled schema drift. The design
+follows the official [PyMongo async migration guidance](https://www.mongodb.com/docs/languages/python/pymongo-driver/current/reference/migration/)
+and accounts for the documented [`$sample` execution threshold](https://www.mongodb.com/docs/v8.0/reference/operator/aggregation/sample/).
+The MongoDB byte envelope uses the server-side [`$bsonSize` expression](https://www.mongodb.com/docs/manual/reference/operator/aggregation/bsonsize/).
+Cassandra follows the [driver security guidance](https://docs.datastax.com/en/developer/python-driver/3.20/security/index.html)
+by combining a certificate-required `SSLContext` with `ssl_options.server_hostname`
+for identity verification.
 
 ```sql
 SELECT

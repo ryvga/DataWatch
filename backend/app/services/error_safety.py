@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.connectors.base import ConnectorConfigurationError
+
 
 def safe_connection_error(error: Exception) -> str:
     """Classify common connection failures without returning the driver message."""
@@ -32,4 +34,6 @@ def safe_connection_error(error: Exception) -> str:
 
 def safe_profile_error(error: Exception) -> str:
     """Return an auditable error category without persisting query/driver secrets."""
+    if isinstance(error, ConnectorConfigurationError):
+        return str(error)
     return f"Profiling failed ({type(error).__name__})."

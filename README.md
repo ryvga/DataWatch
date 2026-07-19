@@ -49,8 +49,8 @@ connector is not described as fully supported merely because it can connect.
 | Databricks | Experimental | Connect, discover, schema | Scheduled profile dialect pending |
 | Trino / Presto | Experimental | Connect, discover, schema | Auth and profile conformance pending |
 | SQL Server / Azure SQL | Experimental | Connect, discover, schema, core scheduled profile; production images package ODBC Driver 18 and enforce verified-TLS DSN defaults | Live TLS/container conformance and percentile metrics pending |
-| MongoDB | Experimental | Connect, discover, inferred document schema | Document profiler/DSL compiler not wired to scheduler |
-| Cassandra | Experimental | Connect, discover, schema | Partition-bounded native monitor planner pending; generic scans are intentionally unsupported |
+| MongoDB | Experimental | Connect, discover, inferred schema, byte/document/field-bounded native profile, indexed scalar-date freshness; verified TLS and explicit sampling provenance | Live TLS container conformance, repeated-sample anomaly confirmation, and document DSL pending |
+| Cassandra | Experimental | Connect, discover, schema with verified-TLS and explicit server-name defaults; arbitrary CQL fails closed | Live TLS conformance, typed partition-bounded planner, and secure Astra bundle support pending |
 | Snowflake | Planned | Registry metadata only | Connector is a 501 stub |
 | Redis | Planned | Not yet a monitored source | Keyspace/TTL/stream adapter pending |
 

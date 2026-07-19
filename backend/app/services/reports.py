@@ -328,12 +328,32 @@ def _profile_snapshot(profile: TableProfile) -> dict:
         "freshness_seconds": profile.freshness_seconds,
         "schema_fingerprint": profile.schema_fingerprint,
         "column_metrics": profile.column_metrics,
+        "profile_provenance": getattr(profile, "profile_provenance", None),
         "profiling_duration_ms": profile.profiling_duration_ms,
         "error": profile.error,
     }
 
 
 def _debug_queries(table: MonitoredTable) -> list[str]:
+    if (table.dbt_model_yaml or "").lstrip().startswith("CREATE COLLECTION"):
+        database = json.dumps(table.schema_name)
+        collection = json.dumps(table.table_name)
+        handle = f"db.getSiblingDB({database}).getCollection({collection})"
+        queries = [
+            f"{handle}.estimatedDocumentCount();",
+            (
+                f"{handle}.aggregate([{{ $sample: {{ size: 100 }} }}], "
+                "{ maxTimeMS: 10000, allowDiskUse: false });"
+            ),
+        ]
+        if table.freshness_column:
+            freshness = json.dumps(table.freshness_column)
+            queries.append(
+                f"{handle}.find({{ {freshness}: {{ $type: 'date' }} }}, "
+                f"{{ {freshness}: 1, _id: 0 }}).sort({{ {freshness}: -1 }}).limit(1);"
+            )
+        return queries
+
     qualified_name = f"{table.schema_name}.{table.table_name}"
     queries = [
         f"SELECT COUNT(*) AS row_count FROM {qualified_name};",

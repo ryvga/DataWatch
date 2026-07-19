@@ -48,6 +48,7 @@ for (let i = 1; i <= 250; i += 1) {
 
 database.events.insertMany(documents);
 database.events.createIndex({ tenant_id: 1, occurred_at: -1 });
+database.events.createIndex({ occurred_at: -1 });
 database.events.createIndex({ event_name: 1 });
 
 database.audit_logs.drop();

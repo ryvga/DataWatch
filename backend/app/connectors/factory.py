@@ -20,6 +20,7 @@ FIELD_METADATA = {
     "keyspace": {"label": "Keyspace", "input_type": "text"},
     "driver": {"label": "ODBC driver", "input_type": "text"},
     "server_hostname": {"label": "Server hostname", "input_type": "text"},
+    "tls_server_name": {"label": "TLS server name", "input_type": "text"},
     "http_path": {"label": "HTTP path", "input_type": "text"},
     "access_token": {"label": "Access token", "input_type": "password", "secret": True},
     "catalog": {"label": "Catalog", "input_type": "text"},
@@ -30,6 +31,10 @@ FIELD_METADATA = {
         "options": ["verify_identity", "disabled"],
     },
     "ssl_ca": {"label": "TLS CA certificate (PEM)", "input_type": "textarea"},
+    "profile_sample_size": {
+        "label": "Profile sample size",
+        "input_type": "number",
+    },
 }
 
 
@@ -44,7 +49,7 @@ VERSION_OPTIONS = {
     "trino": ["Auto-detect", "Trino", "PrestoDB"],
     "duckdb": ["Auto-detect", "0.10+", "1.x"],
     "sqlite": ["Auto-detect", "SQLite 3"],
-    "cassandra": ["Auto-detect", "Apache Cassandra 4", "Apache Cassandra 5", "Astra DB"],
+    "cassandra": ["Auto-detect", "Apache Cassandra 4", "Apache Cassandra 5"],
     "mongodb": ["Auto-detect", "MongoDB 6", "MongoDB 7", "MongoDB Atlas"],
     "sqlserver": ["Auto-detect", "SQL Server 2022", "SQL Server 2019", "Azure SQL"],
 }
@@ -212,9 +217,17 @@ CONNECTOR_REGISTRY = {
         "module": "app.connectors.cassandra",
         "class": "CassandraConnector",
         "required": ["hosts"],
-        "optional": {"port": 9042, "keyspace": None, "username": None, "password": None},
+        "optional": {
+            "port": 9042,
+            "keyspace": None,
+            "username": None,
+            "password": None,
+            "tls_mode": "verify_identity",
+            "tls_server_name": None,
+            "ssl_ca": None,
+        },
         "label": "Cassandra",
-        "description": "Apache Cassandra (safe monitors — no full-table scans)",
+        "description": "Apache Cassandra discovery/schema adapter; typed partition plans pending",
         "tier": 2,
         "readiness": "experimental",
         "capabilities": _capabilities(),
@@ -222,13 +235,16 @@ CONNECTOR_REGISTRY = {
     "mongodb": {
         "module": "app.connectors.mongodb",
         "class": "MongoDBConnector",
-        "required": ["uri"],
-        "optional": {"database": None},
+        "required": ["uri", "database"],
+        "optional": {
+            "tls_mode": "verify_identity",
+            "profile_sample_size": 1000,
+        },
         "label": "MongoDB",
         "description": "MongoDB document database (Tier 1 — field drift detection)",
         "tier": 1,
         "readiness": "experimental",
-        "capabilities": _capabilities(),
+        "capabilities": _capabilities(profiling="core", sampling=True),
     },
     "sqlserver": {
         "module": "app.connectors.sqlserver",

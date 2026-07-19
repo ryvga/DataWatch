@@ -4,7 +4,25 @@ import uuid
 import pytest
 
 from app.models import CheckResult, DataSource, Incident, MonitoredTable, Organization, TableProfile
-from app.services.reports import ReportService
+from app.services.reports import ReportService, _debug_queries
+
+
+def test_mongodb_debug_queries_are_connector_native_and_bounded():
+    table = MonitoredTable(
+        schema_name="analytics",
+        table_name="events",
+        freshness_column="occurred_at",
+        dbt_model_yaml='CREATE COLLECTION "analytics"."events" (\n);',
+    )
+
+    queries = _debug_queries(table)
+
+    assert len(queries) == 3
+    assert all("SELECT" not in query for query in queries)
+    assert "estimatedDocumentCount" in queries[0]
+    assert "$sample" in queries[1]
+    assert "allowDiskUse: false" in queries[1]
+    assert "maxTimeMS: 10000" in queries[1]
 
 
 @pytest.mark.asyncio

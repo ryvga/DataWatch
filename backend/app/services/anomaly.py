@@ -36,15 +36,32 @@ class AnomalyResult:
 
 # ── Metric extraction helpers ─────────────────────────────────────────────────
 
+def _has_exact_row_count(profile) -> bool:
+    provenance = getattr(profile, "profile_provenance", None) or {}
+    return profile.row_count is not None and provenance.get("count_mode") != "estimated"
+
+
+def _has_sampled_schema(profile) -> bool:
+    provenance = getattr(profile, "profile_provenance", None) or {}
+    return provenance.get("schema_mode") == "sampled"
+
+
+def _is_sampled_native(profile) -> bool:
+    provenance = getattr(profile, "profile_provenance", None) or {}
+    return provenance.get("profile_mode") == "sampled_native"
+
 def _extract_flat_metrics(profile) -> dict[str, float]:
     """Flatten a TableProfile into a {metric_key: value} dict for Z-score / IsoForest."""
     flat: dict[str, float] = {}
-    if profile.row_count is not None:
+    sampled_native = _is_sampled_native(profile)
+    if _has_exact_row_count(profile) and not sampled_native:
         flat["row_count"] = float(profile.row_count)
+    elif profile.row_count is not None and not sampled_native:
+        flat["estimated_row_count"] = float(profile.row_count)
     if profile.freshness_seconds is not None:
         flat["freshness_seconds"] = float(profile.freshness_seconds)
 
-    if profile.column_metrics:
+    if profile.column_metrics and not sampled_native:
         for col_name, metrics in profile.column_metrics.items():
             if not isinstance(metrics, dict):
                 continue
@@ -119,7 +136,7 @@ def run_rule_checks(
     results: list[AnomalyResult] = []
 
     # Row count = 0
-    if current_profile.row_count is not None:
+    if _has_exact_row_count(current_profile):
         failed = current_profile.row_count == 0
         results.append(AnomalyResult(
             check_type="rule",
@@ -146,7 +163,12 @@ def run_rule_checks(
         ))
 
     # Schema drift
-    if prev_profile and current_profile.schema_fingerprint:
+    if (
+        prev_profile
+        and current_profile.schema_fingerprint
+        and not _has_sampled_schema(current_profile)
+        and not _has_sampled_schema(prev_profile)
+    ):
         drifted = current_profile.schema_fingerprint != prev_profile.schema_fingerprint
         results.append(AnomalyResult(
             check_type="rule",
@@ -159,7 +181,13 @@ def run_rule_checks(
         ))
 
     # Null rate spike (>20pp change per column)
-    if prev_profile and current_profile.column_metrics and prev_profile.column_metrics:
+    if (
+        prev_profile
+        and not _is_sampled_native(current_profile)
+        and not _is_sampled_native(prev_profile)
+        and current_profile.column_metrics
+        and prev_profile.column_metrics
+    ):
         for col_name, metrics in current_profile.column_metrics.items():
             if not isinstance(metrics, dict):
                 continue
@@ -276,7 +304,9 @@ def run_isolation_forest(
 # ── 4. STL Seasonal Decomposition ────────────────────────────────────────────
 
 def run_stl_check(current_profile, history: list) -> list[AnomalyResult]:
-    row_counts = [p.row_count for p in history if p.row_count is not None]
+    if not _has_exact_row_count(current_profile):
+        return []
+    row_counts = [p.row_count for p in history if _has_exact_row_count(p)]
     if len(row_counts) < STL_MIN_POINTS:
         return []
 
@@ -375,7 +405,10 @@ def run_row_growth_check(
     if len(history) < Z_SCORE_MIN_POINTS:
         return []
 
-    counts = [p.row_count for p in history if p.row_count is not None]
+    if not _has_exact_row_count(current_profile):
+        return []
+    exact_history = [p for p in history if _has_exact_row_count(p)]
+    counts = [p.row_count for p in exact_history]
     if len(counts) < 2:
         return []
 
@@ -392,7 +425,7 @@ def run_row_growth_check(
     if std == 0:
         return []
 
-    current_delta = (current_profile.row_count or 0) - (history[-1].row_count or 0)
+    current_delta = (current_profile.row_count or 0) - (exact_history[-1].row_count or 0)
     z = (current_delta - mean) / std
 
     return [AnomalyResult(
@@ -643,6 +676,8 @@ def run_schema_change_check(current_profile, history) -> list[AnomalyResult]:
         return results
 
     prev_profile = history[-1]
+    if _has_sampled_schema(current_profile) or _has_sampled_schema(prev_profile):
+        return results
     curr_fp = getattr(current_profile, "schema_fingerprint", None)
     prev_fp = getattr(prev_profile, "schema_fingerprint", None)
     if curr_fp is not None and prev_fp is not None:
@@ -692,8 +727,10 @@ def run_cusum_check(
     k = allowance parameter (half the shift we want to detect, in stddev units)
     h = decision threshold (alert when cumulative sum exceeds h stddevs)
     """
-    row_counts = [p.row_count for p in history if p.row_count is not None]
-    if len(row_counts) < CUSUM_MIN_POINTS or current_profile.row_count is None:
+    if not _has_exact_row_count(current_profile):
+        return []
+    row_counts = [p.row_count for p in history if _has_exact_row_count(p)]
+    if len(row_counts) < CUSUM_MIN_POINTS:
         return []
 
     try:
@@ -750,8 +787,10 @@ def run_mann_kendall_check(
     Mann-Kendall non-parametric trend test for monotonic trends in row count.
     Uses scipy.stats.kendalltau for the test statistic.
     """
-    row_counts = [p.row_count for p in history if p.row_count is not None]
-    if len(row_counts) < MANN_KENDALL_MIN_POINTS or current_profile.row_count is None:
+    if not _has_exact_row_count(current_profile):
+        return []
+    row_counts = [p.row_count for p in history if _has_exact_row_count(p)]
+    if len(row_counts) < MANN_KENDALL_MIN_POINTS:
         return []
 
     try:

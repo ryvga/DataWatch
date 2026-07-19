@@ -1726,6 +1726,8 @@ export default function TableDetail() {
   if (!table) return <div className="dw-page text-destructive">Table not found</div>
 
   const latestProfile = table.latest_profile
+  const estimatedDocumentCount = latestProfile?.profile_provenance?.count_mode === 'estimated'
+  const sampleSize = latestProfile?.profile_provenance?.sample_size
   const source = sources.find((item) => item.id === table.source_id)
   const sourceName = table.source_name || table.source?.name || source?.name || table.source_id
   const columnMetrics = latestProfile?.column_metrics || {}
@@ -1738,7 +1740,7 @@ export default function TableDetail() {
   const anomalousProfileIds = new Set(checks.filter((check) => check.status === 'failed').map((check) => check.profile_id))
   const anomalousDots = profileSeries.filter((profile) => anomalousProfileIds.has(profile.id))
   const previousProfile = profilesDesc.find((profile) => profile.id !== latestProfile?.id && profile.row_count != null)
-  const rowDelta = latestProfile?.row_count != null && previousProfile?.row_count != null ? latestProfile.row_count - previousProfile.row_count : null
+  const rowDelta = !estimatedDocumentCount && latestProfile?.row_count != null && previousProfile?.row_count != null && previousProfile?.profile_provenance?.count_mode !== 'estimated' ? latestProfile.row_count - previousProfile.row_count : null
   const rowDeltaPct = rowDelta != null && previousProfile.row_count !== 0 ? rowDelta / previousProfile.row_count : null
   const latestChecks = checks
     .filter((check) => !latestProfile?.id || check.profile_id === latestProfile.id)
@@ -1782,19 +1784,24 @@ export default function TableDetail() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Row Count" value={formatNumber(latestProfile?.row_count)} detail="Latest profile" trend={rowTrend} />
+        <StatCard
+          label={estimatedDocumentCount ? 'Estimated Documents' : 'Row Count'}
+          value={estimatedDocumentCount ? `≈${formatNumber(latestProfile?.row_count)}` : formatNumber(latestProfile?.row_count)}
+          detail={estimatedDocumentCount ? `Random sample of ${formatNumber(sampleSize)} documents` : 'Latest profile'}
+          trend={rowTrend}
+        />
         <StatCard label="Freshness" value={formatDateTime(table.last_profiled_at || latestProfile?.collected_at)} detail="Last profiled at" />
-        <StatCard label="Null Rate" value={formatPercent(avgNullRate)} detail={`Average across ${formatNumber(columnRows.length)} columns`} />
+        <StatCard label={estimatedDocumentCount ? 'Sample Null Rate' : 'Null Rate'} value={formatPercent(avgNullRate)} detail={`Average across ${formatNumber(columnRows.length)} fields`} />
         <StatCard label="Active Incidents" value={formatNumber(activeIncidents.length)} detail={`${formatNumber(incidents.length)} total incidents`} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Row count, 30 profiles</CardTitle>
+            <CardTitle className="text-base">{estimatedDocumentCount ? 'Estimated document count' : 'Row count'}, 30 profiles</CardTitle>
           </CardHeader>
           <CardContent>
-            <MetricChart data={profileSeries} dataKey="row_count" anomalies={anomalousDots} label="rows" />
+            <MetricChart data={profileSeries} dataKey="row_count" anomalies={anomalousDots} label={estimatedDocumentCount ? 'estimated documents' : 'rows'} />
           </CardContent>
         </Card>
         <Card>

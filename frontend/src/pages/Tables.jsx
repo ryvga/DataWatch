@@ -57,6 +57,11 @@ function formatCompactNumber(value) {
   }).format(Number(value)).toLowerCase()
 }
 
+function profileCountLabel(profile) {
+  const value = formatCompactNumber(profile?.row_count)
+  return profile?.profile_provenance?.count_mode === 'estimated' ? `≈${value}` : value
+}
+
 function formatTimeAgo(value) {
   if (!value) return 'Never'
 
@@ -363,8 +368,10 @@ export default function Tables() {
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div>
-                      <div className="text-muted-foreground">Rows</div>
-                      <div className="mt-1 tabular-nums">{formatCompactNumber(table.latest_profile?.row_count)}</div>
+                      <div className="text-muted-foreground">
+                        {table.latest_profile?.profile_provenance?.count_mode === 'estimated' ? 'Documents (est.)' : 'Rows'}
+                      </div>
+                      <div className="mt-1 tabular-nums">{profileCountLabel(table.latest_profile)}</div>
                     </div>
                     <div>
                       <div className="text-muted-foreground">Profile</div>
@@ -424,7 +431,12 @@ export default function Tables() {
                         </button>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{table.sourceName}</TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">{formatCompactNumber(table.latest_profile?.row_count)}</TableCell>
+                      <TableCell
+                        className="tabular-nums text-muted-foreground"
+                        title={table.latest_profile?.profile_provenance?.count_mode === 'estimated' ? 'Estimated document count' : 'Exact row count'}
+                      >
+                        {profileCountLabel(table.latest_profile)}
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground" title={table.profiledAt ? formatDateTime(table.profiledAt) : undefined}>
                         {formatTimeAgo(table.profiledAt)}
                       </TableCell>
