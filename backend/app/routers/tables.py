@@ -1,7 +1,5 @@
 import logging
-import re
 from datetime import datetime, timezone
-from numbers import Number
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -17,6 +15,12 @@ from app.models.organization import Organization
 from app.models.table_profile import TableProfile
 from app.routers.auth import get_current_org_from_jwt
 from app.services.crypto import decrypt_config
+from app.services.legacy_sql_monitor import (
+    LegacySqlPolicyError,
+    LegacySqlResultError,
+    execute_legacy_monitor,
+    validate_legacy_sql,
+)
 from app.services.table_autopilot import initial_autopilot_state, not_started_autopilot_state
 
 logger = logging.getLogger(__name__)
@@ -102,81 +106,6 @@ class CustomCheckResponse(BaseModel):
     violation_count: int
     passed: bool
     executed_at: datetime
-
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-_BLOCKED_SQL_KEYWORDS = (
-    "INSERT",
-    "UPDATE",
-    "DELETE",
-    "DROP",
-    "CREATE",
-    "ALTER",
-    "GRANT",
-    "TRUNCATE",
-)
-_BLOCKED_SQL_RE = re.compile(
-    r"\b(" + "|".join(_BLOCKED_SQL_KEYWORDS) + r")\b",
-    re.IGNORECASE,
-)
-
-
-def _sql_without_quoted_content(sql: str) -> str:
-    chars: list[str] = []
-    quote: str | None = None
-    i = 0
-
-    while i < len(sql):
-        ch = sql[i]
-        if quote:
-            if ch == quote:
-                next_ch = sql[i + 1] if i + 1 < len(sql) else ""
-                if next_ch == quote:
-                    chars.extend("  ")
-                    i += 2
-                    continue
-                quote = None
-            chars.append(" ")
-            i += 1
-            continue
-
-        if ch in {"'", '"', "`"}:
-            quote = ch
-            chars.append(" ")
-        else:
-            chars.append(ch)
-        i += 1
-
-    return "".join(chars)
-
-
-def _validate_custom_check_sql(sql: str, severity: str) -> None:
-    stripped = sql.strip()
-    if not re.match(r"^SELECT\b", stripped, re.IGNORECASE):
-        raise HTTPException(status_code=422, detail="SQL must start with SELECT")
-
-    if severity not in {"P1", "P2", "P3"}:
-        raise HTTPException(status_code=422, detail="Severity must be one of P1, P2, or P3")
-
-    sql_for_checks = _sql_without_quoted_content(stripped)
-    if ";" in sql_for_checks:
-        raise HTTPException(status_code=422, detail="SQL must not contain semicolons")
-
-    blocked_match = _BLOCKED_SQL_RE.search(sql_for_checks)
-    if blocked_match:
-        keyword = blocked_match.group(1).upper()
-        raise HTTPException(status_code=422, detail=f"SQL contains prohibited keyword: {keyword}")
-
-
-def _violation_count_from_result(result: dict) -> int:
-    if not result:
-        return 0
-
-    first_value = next(iter(result.values()))
-    if isinstance(first_value, Number) and not isinstance(first_value, bool):
-        return int(first_value)
-    return 0
 
 
 async def _resolve_org_from_source(source_id: str, org: Organization, db: AsyncSession) -> DataSource:
@@ -436,22 +365,36 @@ async def run_custom_check(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        _validate_custom_check_sql(body.sql, body.severity)
         table = await _get_table_or_404(table_id, org, db)
         source = await db.scalar(
             select(DataSource).where(DataSource.id == table.source_id, DataSource.org_id == org.id)
         )
         if not source:
             raise HTTPException(status_code=422, detail="Table data source not found")
+        if (
+            ConnectorFactory.capabilities_for(source.type)["custom_monitors"]
+            != "legacy_sql_scalar"
+        ):
+            raise HTTPException(
+                status_code=422,
+                detail=f"{source.type} has no restricted custom monitor execution path",
+            )
+
+        query = validate_legacy_sql(
+            body.sql,
+            body.severity,
+            source_type=source.type,
+            target_schema=table.schema_name,
+            target_table=table.table_name,
+        )
 
         config = decrypt_config(source.connection_config["encrypted"], str(org.id))
         connector = ConnectorFactory.create(source.type, config)
         try:
-            result = await connector.execute_profile_query(body.sql.strip())
+            result, violation_count = await execute_legacy_monitor(connector, query)
         finally:
             await connector.close()
 
-        violation_count = _violation_count_from_result(result)
         return CustomCheckResponse(
             result=result,
             violation_count=violation_count,
@@ -462,6 +405,8 @@ async def run_custom_check(
         if e.status_code == 422:
             raise
         raise HTTPException(status_code=422, detail=str(e.detail)) from e
+    except (LegacySqlPolicyError, LegacySqlResultError) as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         logger.warning("Custom check failed: %s", type(e).__name__)
         raise HTTPException(status_code=422, detail=f"Custom check failed: {e}") from e

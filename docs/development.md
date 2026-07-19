@@ -233,6 +233,11 @@ Connector conformance tests must cover quoted identifiers, cleanup, failure beha
 and any source-specific cost/scan limit. A registry entry by itself is not feature
 completion.
 
+`custom_monitors=legacy_sql_scalar` requires a separate `execute_monitor_query` path,
+database-enforced read-only access where supported, driver and application timeouts,
+zero/multi-row detection, and the attack corpus in `test_legacy_sql_monitor.py`. Do not
+advertise this capability by reusing the general profile query method.
+
 ---
 
 ## Adding a New Detection Method

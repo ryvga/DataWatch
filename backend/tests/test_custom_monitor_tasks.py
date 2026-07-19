@@ -14,7 +14,12 @@ async def test_custom_monitors_roll_back_after_sql_error(monkeypatch):
     org_id = uuid.uuid4()
     table_id = uuid.uuid4()
     source_id = uuid.uuid4()
-    table = SimpleNamespace(id=table_id, source_id=source_id)
+    table = SimpleNamespace(
+        id=table_id,
+        source_id=source_id,
+        schema_name="public",
+        table_name="events",
+    )
     source = SimpleNamespace(
         id=source_id,
         org_id=org_id,
@@ -25,7 +30,7 @@ async def test_custom_monitors_roll_back_after_sql_error(monkeypatch):
         SimpleNamespace(
             id=uuid.uuid4(),
             name="Broken query",
-            sql_query="SELECT missing_column FROM events",
+            sql_query="SELECT missing_column FROM public.events",
             severity="P3",
             last_run_at=None,
             last_result=None,
@@ -33,7 +38,21 @@ async def test_custom_monitors_roll_back_after_sql_error(monkeypatch):
         SimpleNamespace(
             id=uuid.uuid4(),
             name="Valid query",
-            sql_query="SELECT 0 AS violation_count",
+            sql_query=(
+                "SELECT COUNT(*) AS violation_count "
+                "FROM public.events WHERE false"
+            ),
+            severity="P3",
+            last_run_at=None,
+            last_result=None,
+        ),
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Empty result",
+            sql_query=(
+                "SELECT COUNT(*) AS violation_count "
+                "FROM public.events WHERE status = 'empty-result'"
+            ),
             severity="P3",
             last_run_at=None,
             last_result=None,
@@ -87,12 +106,14 @@ async def test_custom_monitors_roll_back_after_sql_error(monkeypatch):
             self.closed = False
             self._conn = FakeConnection(self)
 
-        async def execute_profile_query(self, query):
+        async def execute_monitor_query(self, query, *, timeout_seconds):
             if "missing_column" in query:
                 self.aborted = True
                 raise RuntimeError("column missing_column does not exist")
             if self.aborted:
                 raise RuntimeError("current transaction is aborted")
+            if "empty-result" in query:
+                return {}
             return {"violation_count": 0}
 
         async def close(self):
@@ -115,7 +136,8 @@ async def test_custom_monitors_roll_back_after_sql_error(monkeypatch):
     result = await _run_custom_monitors_async(str(table_id))
 
     assert result == {"status": "ok", "run": 1, "failed": 0}
-    assert connector._conn.rollback_calls == 1
+    assert connector._conn.rollback_calls == 2
     assert monitors[0].last_result["error"] == "column missing_column does not exist"
     assert monitors[1].last_result["passed"] is True
+    assert "exactly one row" in monitors[2].last_result["error"]
     assert fake_session.committed is True

@@ -222,6 +222,13 @@ ownership is checked before any cache read to prevent cross-workspace metadata l
 See `docs/monitor-dsl.md` for the connector-neutral monitoring plan and the security
 boundary between typed DSL monitors and the legacy custom SQL escape hatch.
 
+Legacy SQL definitions pass through `LegacySqlMonitorPolicy`: SQLGlot must parse exactly
+one `SELECT`, every base-table reference must resolve to the monitored schema/table, and
+file/network/session-side-effect functions are rejected. Execution uses a connector's
+separate monitor method, with database read-only mode where available, a statement/app
+timeout, exact-one-row detection, and an exact one-numeric-column non-negative integer
+contract. Empty or malformed results are execution errors and cannot resolve incidents.
+
 ---
 
 ## Anomaly Detection Detail

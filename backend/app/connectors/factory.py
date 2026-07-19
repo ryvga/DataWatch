@@ -89,7 +89,7 @@ CONNECTOR_REGISTRY = {
         "description": "PostgreSQL / Aurora Postgres",
         "readiness": "stable",
         "capabilities": _capabilities(
-            profiling="full", custom_monitors="sql_scalar"
+            profiling="full", custom_monitors="legacy_sql_scalar"
         ),
     },
     "mysql": {
@@ -100,7 +100,7 @@ CONNECTOR_REGISTRY = {
         "label": "MySQL / MariaDB",
         "description": "MySQL 5.7+, MariaDB 10+",
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="sql_scalar"),
+        "capabilities": _capabilities(),
     },
     "redshift": {
         "module": "app.connectors.redshift",
@@ -110,7 +110,7 @@ CONNECTOR_REGISTRY = {
         "label": "Amazon Redshift",
         "description": "AWS Redshift (Postgres-compatible)",
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="sql_scalar"),
+        "capabilities": _capabilities(),
     },
     "bigquery": {
         "module": "app.connectors.bigquery",
@@ -120,7 +120,7 @@ CONNECTOR_REGISTRY = {
         "label": "Google BigQuery",
         "description": "Google Cloud BigQuery",
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="sql_scalar"),
+        "capabilities": _capabilities(),
     },
     "snowflake": {
         "module": "app.connectors.snowflake",
@@ -142,7 +142,7 @@ CONNECTOR_REGISTRY = {
         "label": "ClickHouse",
         "description": "ClickHouse OLAP database",
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="sql_scalar"),
+        "capabilities": _capabilities(),
     },
     "databricks": {
         "module": "app.connectors.databricks",
@@ -152,7 +152,7 @@ CONNECTOR_REGISTRY = {
         "label": "Databricks",
         "description": "Databricks Lakehouse SQL",
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="sql_scalar"),
+        "capabilities": _capabilities(),
     },
     "trino": {
         "module": "app.connectors.trino",
@@ -162,7 +162,7 @@ CONNECTOR_REGISTRY = {
         "label": "Trino / Presto",
         "description": "Trino or PrestoDB federated query",
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="sql_scalar"),
+        "capabilities": _capabilities(),
     },
     "duckdb": {
         "module": "app.connectors.duckdb",
@@ -173,7 +173,7 @@ CONNECTOR_REGISTRY = {
         "description": "DuckDB in-process OLAP",
         "readiness": "beta",
         "capabilities": _capabilities(
-            profiling="full", custom_monitors="sql_scalar"
+            profiling="full", custom_monitors="legacy_sql_scalar"
         ),
     },
     "sqlite": {
@@ -185,7 +185,7 @@ CONNECTOR_REGISTRY = {
         "description": "SQLite file database",
         "readiness": "beta",
         "capabilities": _capabilities(
-            profiling="core", custom_monitors="sql_scalar"
+            profiling="core", custom_monitors="legacy_sql_scalar"
         ),
     },
     "cassandra": {
@@ -197,7 +197,7 @@ CONNECTOR_REGISTRY = {
         "description": "Apache Cassandra (safe monitors — no full-table scans)",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="partition_count"),
+        "capabilities": _capabilities(),
     },
     "mongodb": {
         "module": "app.connectors.mongodb",
@@ -219,7 +219,7 @@ CONNECTOR_REGISTRY = {
         "description": "Microsoft SQL Server / Azure SQL",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(custom_monitors="sql_scalar"),
+        "capabilities": _capabilities(),
     },
 }
 

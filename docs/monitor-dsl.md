@@ -12,8 +12,9 @@ arbitrary database functions, or user-authored query plans. YAML is an authoring
 DataWatch validates it and stores canonical JSON plus a definition hash.
 
 Legacy custom SQL remains a separately labelled advanced escape hatch during migration.
-Its keyword blocklist is not a security boundary and must not be treated as equivalent to
-the typed DSL.
+It is restricted by AST validation, single-asset scope, read-only connector execution,
+timeouts, and an exact scalar result contract, but it is still not equivalent to the
+typed DSL and must not be described as a general-purpose security sandbox.
 
 ## Example
 
@@ -131,9 +132,10 @@ Planned endpoints:
 
 Simple `COUNT(*) ... WHERE ...` checks may be translated only when an AST parser proves
 they map to a typed violation predicate. Other definitions become `legacy_sql`, run under
-read-only/time/cost/result controls, and require review. Cross-object or function-bearing
-definitions are disabled. Existing IDs and history are preserved. The LLM recommendation
-layer must return DSL JSON, never executable SQL.
+read-only/time/result controls, and require review. Cross-object and side-effect-function
+definitions are disabled. Cost budgets remain required before legacy SQL can be enabled
+on cloud warehouses. Existing IDs and history are preserved. The LLM recommendation layer
+must return DSL JSON, never executable SQL.
 
 ## Acceptance Tests
 

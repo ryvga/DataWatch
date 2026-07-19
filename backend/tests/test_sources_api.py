@@ -22,8 +22,7 @@ async def test_connector_types_include_registry_fields_and_versions():
         assert item["capabilities"]["profiling"] in {"none", "core", "full"}
         assert item["capabilities"]["custom_monitors"] in {
             "none",
-            "sql_scalar",
-            "partition_count",
+            "legacy_sql_scalar",
         }
         field_names = {field["name"] for field in item["fields"]}
         assert set(item["required"]).issubset(field_names)

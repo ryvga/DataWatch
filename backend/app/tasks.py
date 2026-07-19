@@ -492,10 +492,13 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
     from app.models.data_source import DataSource
     from app.models.monitored_table import MonitoredTable
     from app.connectors.factory import ConnectorFactory
-    from app.routers.tables import _violation_count_from_result
     from app.services.anomaly import AnomalyResult
     from app.services.crypto import decrypt_config
     from app.services.incident import IncidentService
+    from app.services.legacy_sql_monitor import (
+        execute_legacy_monitor,
+        validate_legacy_sql,
+    )
 
     async with AsyncSessionLocal() as db:
         table = await db.get(MonitoredTable, table_id)
@@ -531,8 +534,14 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
         try:
             for m in monitors:
                 try:
-                    result = await connector.execute_profile_query(m.sql_query.strip())
-                    violation_count = _violation_count_from_result(result)
+                    query = validate_legacy_sql(
+                        m.sql_query,
+                        m.severity,
+                        source_type=source.type,
+                        target_schema=table.schema_name,
+                        target_table=table.table_name,
+                    )
+                    _, violation_count = await execute_legacy_monitor(connector, query)
                     passed = violation_count == 0
                     m.last_run_at = now
                     m.last_result = {

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.connectors.factory import ConnectorFactory
 from app.database import get_db
 from app.models.check_result import CheckResult
 from app.models.custom_monitor import CustomMonitor
@@ -15,54 +16,21 @@ from app.models.data_source import DataSource
 from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
 from app.routers.auth import get_current_org_from_jwt
-from app.routers.tables import _violation_count_from_result
 from app.services.anomaly import AnomalyResult
 from app.services.crypto import decrypt_config
 from app.services.incident import IncidentService
+from app.services.legacy_sql_monitor import (
+    LegacySqlPolicyError,
+    LegacySqlResultError,
+    execute_legacy_monitor,
+    validate_legacy_sql,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/tables", tags=["custom_monitors"])
 org_router = APIRouter(prefix="/api/v1", tags=["custom_monitors"])
 
-# ── SQL safety ────────────────────────────────────────────────────────────────
-
-_BLOCKED_KEYWORDS = ("INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER", "GRANT", "TRUNCATE")
-_BLOCKED_RE = re.compile(r"\b(" + "|".join(_BLOCKED_KEYWORDS) + r")\b", re.IGNORECASE)
-_SEVERITIES = {"P1", "P2", "P3"}
 _SQL_WHITESPACE_RE = re.compile(r"\s+")
-
-
-def _strip_quoted(sql: str) -> str:
-    out, quote, i = [], None, 0
-    while i < len(sql):
-        ch = sql[i]
-        if quote:
-            if ch == quote and i + 1 < len(sql) and sql[i + 1] == quote:
-                out.extend("  "); i += 2; continue
-            if ch == quote:
-                quote = None
-            out.append(" ")
-        else:
-            if ch in {"'", '"', "`"}:
-                quote = ch; out.append(" ")
-            else:
-                out.append(ch)
-        i += 1
-    return "".join(out)
-
-
-def _validate_sql(sql: str, severity: str) -> None:
-    s = sql.strip()
-    if not re.match(r"^SELECT\b", s, re.IGNORECASE):
-        raise HTTPException(status_code=422, detail="SQL must start with SELECT")
-    if severity not in _SEVERITIES:
-        raise HTTPException(status_code=422, detail="Severity must be P1, P2, or P3")
-    clean = _strip_quoted(s)
-    if ";" in clean:
-        raise HTTPException(status_code=422, detail="SQL must not contain semicolons")
-    m = _BLOCKED_RE.search(clean)
-    if m:
-        raise HTTPException(status_code=422, detail=f"SQL contains prohibited keyword: {m.group(1).upper()}")
 
 
 def _canonical_sql(sql: str) -> str:
@@ -165,8 +133,52 @@ async def _get_table_or_404(table_id: str, org: Organization, db: AsyncSession) 
     return table
 
 
-async def _get_monitor_or_404(monitor_id: str, table_id: str, org_id) -> CustomMonitor:
-    raise HTTPException(status_code=404, detail="Monitor not found")
+async def _get_source_or_404(
+    table: MonitoredTable, org: Organization, db: AsyncSession
+) -> DataSource:
+    source = await db.scalar(
+        select(DataSource).where(
+            DataSource.id == table.source_id,
+            DataSource.org_id == org.id,
+        )
+    )
+    if not source:
+        raise HTTPException(status_code=404, detail="Table not found")
+    return source
+
+
+def _validate_monitor_sql(
+    sql: str,
+    severity: str,
+    *,
+    source: DataSource,
+    table: MonitoredTable,
+) -> str:
+    capability = ConnectorFactory.capabilities_for(source.type)["custom_monitors"]
+    if capability != "legacy_sql_scalar":
+        raise HTTPException(
+            status_code=422,
+            detail=f"{source.type} has no restricted custom monitor execution path",
+        )
+    try:
+        return validate_legacy_sql(
+            sql,
+            severity,
+            source_type=source.type,
+            target_schema=table.schema_name,
+            target_table=table.table_name,
+        )
+    except LegacySqlPolicyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+async def _record_run_error(
+    monitor: CustomMonitor, db: AsyncSession, error: Exception
+) -> None:
+    now = datetime.now(timezone.utc)
+    monitor.last_run_at = now
+    monitor.last_result = {"error": str(error), "executed_at": now.isoformat()}
+    await db.commit()
 
 
 # ── CRUD ─────────────────────────────────────────────────────────────────────
@@ -193,8 +205,14 @@ async def create_custom_monitor(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
-    await _get_table_or_404(table_id, org, db)
-    _validate_sql(body.sql_query, body.severity)
+    table = await _get_table_or_404(table_id, org, db)
+    source = await _get_source_or_404(table, org, db)
+    query = _validate_monitor_sql(
+        body.sql_query,
+        body.severity,
+        source=source,
+        table=table,
+    )
     await _ensure_unique_active_sql(table_id, org.id, body.sql_query, db)
 
     monitor = CustomMonitor(
@@ -202,7 +220,7 @@ async def create_custom_monitor(
         org_id=org.id,
         name=body.name,
         description=body.description,
-        sql_query=body.sql_query,
+        sql_query=query,
         severity=body.severity,
         is_active=True,
         run_on_profile=body.run_on_profile,
@@ -221,7 +239,8 @@ async def update_custom_monitor(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
-    await _get_table_or_404(table_id, org, db)
+    table = await _get_table_or_404(table_id, org, db)
+    source = await _get_source_or_404(table, org, db)
     monitor = await db.scalar(
         select(CustomMonitor).where(
             CustomMonitor.id == monitor_id,
@@ -234,9 +253,11 @@ async def update_custom_monitor(
 
     update = body.model_dump(exclude_none=True)
     if "sql_query" in update or "severity" in update:
-        _validate_sql(
+        update["sql_query"] = _validate_monitor_sql(
             update.get("sql_query", monitor.sql_query),
             update.get("severity", monitor.severity),
+            source=source,
+            table=table,
         )
     next_active = update.get("is_active", monitor.is_active)
     if next_active:
@@ -295,21 +316,25 @@ async def run_custom_monitor(
     )
     if not monitor:
         raise HTTPException(status_code=404, detail="Custom monitor not found")
+    if not monitor.is_active:
+        raise HTTPException(status_code=409, detail="Custom monitor is inactive")
 
-    src = await db.scalar(
-        select(DataSource).where(DataSource.id == table.source_id, DataSource.org_id == org.id)
-    )
+    src = await _get_source_or_404(table, org, db)
 
     try:
+        query = _validate_monitor_sql(
+            monitor.sql_query,
+            monitor.severity,
+            source=src,
+            table=table,
+        )
         config = decrypt_config(src.connection_config["encrypted"], str(org.id))
-        from app.connectors.factory import ConnectorFactory
         connector = ConnectorFactory.create(src.type, config)
         try:
-            result = await connector.execute_profile_query(monitor.sql_query.strip())
+            _, violation_count = await execute_legacy_monitor(connector, query)
         finally:
             await connector.close()
 
-        violation_count = _violation_count_from_result(result)
         passed = violation_count == 0
         now = datetime.now(timezone.utc)
 
@@ -355,8 +380,13 @@ async def run_custom_monitor(
         return RunResult(violation_count=violation_count, passed=passed, executed_at=now)
     except HTTPException:
         raise
+    except (LegacySqlPolicyError, LegacySqlResultError) as e:
+        logger.warning("Custom monitor policy/result error: %s", e)
+        await _record_run_error(monitor, db, e)
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         logger.warning("Custom monitor run failed: %s", e)
+        await _record_run_error(monitor, db, e)
         raise HTTPException(status_code=422, detail=f"Custom monitor run failed: {e}") from e
 
 

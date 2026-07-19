@@ -22,18 +22,22 @@ class PostgresConnector(BaseConnector):
         self._config = config
         self._conn: psycopg.AsyncConnection | None = None
 
-    def _dsn(self) -> str:
+    def _connect_kwargs(self) -> dict:
+        """Keep credentials as driver parameters, never interpolate a libpq DSN."""
         c = self._config
-        user = c.get('username') or c.get('user', '')
-        return (
-            f"host={c['host']} port={c.get('port', 5432)} "
-            f"dbname={c['database']} user={user} password={c['password']}"
-        )
+        return {
+            "host": c["host"],
+            "port": int(c.get("port", 5432)),
+            "dbname": c["database"],
+            "user": c.get("username") or c.get("user", ""),
+            "password": c.get("password", ""),
+        }
 
     async def _get_conn(self) -> psycopg.AsyncConnection:
         if self._conn is None or self._conn.closed:
             self._conn = await psycopg.AsyncConnection.connect(
-                self._dsn(), row_factory=dict_row
+                row_factory=dict_row,
+                **self._connect_kwargs(),
             )
         return self._conn
 
@@ -76,6 +80,26 @@ class PostgresConnector(BaseConnector):
         result = await conn.execute(query)
         row = await result.fetchone()
         return dict(row) if row else {}
+
+    async def execute_monitor_query(
+        self, query: str, *, timeout_seconds: int = 30
+    ) -> dict:
+        """Run a scalar query in a read-only transaction with server-side timeout."""
+        conn = await self._get_conn()
+        timeout_ms = timeout_seconds * 1000
+        try:
+            await conn.execute("SET TRANSACTION READ ONLY")
+            await conn.execute(
+                "SELECT set_config('statement_timeout', %s, true)",
+                (str(timeout_ms),),
+            )
+            cursor = await conn.execute(query)
+            rows = await cursor.fetchmany(2)
+            if len(rows) != 1:
+                raise ValueError("Monitor SQL must return exactly one row")
+            return dict(rows[0])
+        finally:
+            await conn.rollback()
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
         conn = await self._get_conn()

@@ -63,13 +63,17 @@ async def test_duplicate_custom_monitor_sql_is_rejected(client, db_session):
     assert register.status_code == 201, register.text
     headers = await _auth_headers(client, slug, email, password)
     table = await _register_table(client, headers)
+    monitor_sql = (
+        f"SELECT COUNT(*) FROM main.{table['table_name']} "
+        "WHERE event_name IS NULL"
+    )
 
     first = await client.post(
         f"/api/v1/tables/{table['id']}/custom-monitors",
         headers=headers,
         json={
             "name": "Event name required",
-            "sql_query": "SELECT COUNT(*) FROM main.events WHERE event_name IS NULL",
+            "sql_query": monitor_sql,
             "severity": "P2",
         },
     )
@@ -80,7 +84,7 @@ async def test_duplicate_custom_monitor_sql_is_rejected(client, db_session):
         headers=headers,
         json={
             "name": "AI duplicate event name required",
-            "sql_query": " select   count(*)   from main.events where event_name is null ",
+            "sql_query": f"  {monitor_sql.replace(' ', '   ')}  ",
             "severity": "P2",
         },
     )

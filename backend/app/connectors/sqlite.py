@@ -1,4 +1,7 @@
+import asyncio
 import logging
+from pathlib import Path
+from urllib.parse import quote
 
 import aiosqlite
 
@@ -21,7 +24,14 @@ class SQLiteConnector(BaseConnector):
 
     async def _get_conn(self) -> aiosqlite.Connection:
         if self._conn is None:
-            self._conn = await aiosqlite.connect(self._path)
+            if self._path == ":memory:":
+                self._conn = await aiosqlite.connect(self._path)
+                await self._conn.execute("PRAGMA query_only = ON")
+            else:
+                encoded_path = quote(str(Path(self._path).resolve()), safe="/")
+                self._conn = await aiosqlite.connect(
+                    f"file:{encoded_path}?mode=ro", uri=True
+                )
             self._conn.row_factory = aiosqlite.Row
         return self._conn
 
@@ -52,6 +62,30 @@ class SQLiteConnector(BaseConnector):
             if row:
                 return dict(row)
         return {}
+
+    async def execute_monitor_query(
+        self, query: str, *, timeout_seconds: int = 30
+    ) -> dict:
+        """Run one scalar query on a query-only/read-only SQLite connection."""
+        conn = await self._get_conn()
+
+        async def run_query() -> dict:
+            async with conn.execute(query) as cursor:
+                rows = await cursor.fetchmany(2)
+                if len(rows) != 1:
+                    raise ValueError("Monitor SQL must return exactly one row")
+                return dict(rows[0])
+
+        task = asyncio.create_task(run_query())
+        done, _ = await asyncio.wait({task}, timeout=timeout_seconds)
+        if not done:
+            await conn.interrupt()
+            try:
+                await task
+            except Exception:
+                pass
+            raise TimeoutError
+        return task.result()
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
         conn = await self._get_conn()

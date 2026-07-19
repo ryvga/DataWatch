@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 
@@ -22,7 +23,7 @@ class DuckDBConnector(BaseConnector):
         if self._conn is None:
             import duckdb
             path = self._config.get("path", ":memory:")
-            self._conn = duckdb.connect(path)
+            self._conn = duckdb.connect(path, read_only=path != ":memory:")
         return self._conn
 
     async def test_connection(self) -> bool:
@@ -56,6 +57,28 @@ class DuckDBConnector(BaseConnector):
         if result.empty:
             return {}
         return result.iloc[0].to_dict()
+
+    async def execute_monitor_query(
+        self, query: str, *, timeout_seconds: int = 30
+    ) -> dict:
+        """Run one bounded scalar query; persistent databases are opened read-only."""
+        conn = self._get_conn()
+
+        def run_query() -> dict:
+            cursor = conn.execute(query)
+            names = [column[0] for column in cursor.description]
+            rows = cursor.fetchmany(2)
+            if len(rows) != 1:
+                raise ValueError("Monitor SQL must return exactly one row")
+            return dict(zip(names, rows[0], strict=True))
+
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(run_query), timeout=timeout_seconds
+            )
+        except TimeoutError:
+            conn.interrupt()
+            raise
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
         conn = self._get_conn()

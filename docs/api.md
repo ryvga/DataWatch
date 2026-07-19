@@ -163,7 +163,9 @@ provider labels, version choices, field input hints, readiness, and capabilities
 
 `readiness` is one of `stable | beta | experimental | planned`. `capabilities`
 separately reports `connection_test`, `discovery`, `schema`, `profiling`
-(`none | core | full`), `custom_monitors`, and `sampling`.
+(`none | core | full`), `custom_monitors` (`none | legacy_sql_scalar`), and
+`sampling`. Only PostgreSQL, DuckDB, and SQLite currently expose the restricted legacy
+SQL monitor path.
 
 ---
 
@@ -322,6 +324,25 @@ Trigger immediate profile run. Returns Celery task ID.
 // Response 200
 { "task_id": "celery-uuid", "queued_at": "2026-06-04T10:00:00Z" }
 ```
+
+---
+
+### Legacy custom SQL monitors
+
+`GET|POST /api/v1/tables/{id}/custom-monitors`,
+`PATCH|DELETE /api/v1/tables/{id}/custom-monitors/{monitor_id}`, and
+`POST /api/v1/tables/{id}/custom-monitors/{monitor_id}/run` manage the transitional
+SQL monitor path. Only connectors reporting `custom_monitors=legacy_sql_scalar` accept
+definitions.
+
+The SQL must parse as exactly one `SELECT`, reference only the monitored table (CTEs are
+allowed when their base tables stay in scope), avoid blocked side-effect functions, and
+return exactly one row containing exactly one non-negative integer column. Empty,
+multi-row, multi-column, boolean, string, fractional, negative, NaN, infinite, and
+overflow results are execution errors rather than passing checks. Execution errors do
+not auto-resolve incidents.
+
+`POST /api/v1/tables/{id}/custom-check` applies the same contract for an ad hoc preview.
 
 ---
 
