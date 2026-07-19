@@ -85,6 +85,16 @@ runtime revision are separate pointers, preventing unactivated edits from changi
 Public competitor capabilities and the independent feature-parity backlog are tracked in
 [`docs/competitive-roadmap.md`](docs/competitive-roadmap.md).
 
+## AI governance roadmap
+
+DataWatch's next product layer is a database-native AI governance control plane. It will
+connect AI-system inventory and immutable release versions to the exact training, RAG,
+inference, evaluation, and logging assets they use; continuously evaluate data and
+operational controls; preserve evidence, approvals, exceptions, and incidents; and export
+explainable framework mappings. The design avoids automated legal-certification claims and
+raw prompt/training-data collection by default. See
+[`docs/ai-governance.md`](docs/ai-governance.md).
+
 ## Quick Start (local)
 
 **Prerequisites:** Docker, Docker Compose

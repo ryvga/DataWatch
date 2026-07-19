@@ -1,5 +1,19 @@
 # DataWatch — Architecture
 
+## Planned AI governance control plane
+
+The next product evolution is a database-native AI governance layer: an inventory of AI
+systems and immutable versions, explicit mappings from each version to its training, RAG,
+inference, evaluation, and logging data, versioned governance policies, continuous evidence,
+review/exception workflows, and governance incidents. It will reuse connector profiles,
+schema bindings, typed monitors, ordered run audits, teams, incidents, and alerts.
+
+The implementation remains evidence-oriented and fail-closed: it distinguishes machine
+observations, customer assertions, human approvals, and framework mappings; it does not
+claim legal certification or let an LLM decide mandatory controls. See
+[`docs/ai-governance.md`](ai-governance.md) for the domain model, policy DSL, enforcement
+ladder, standards mapping, PFE evaluation plan, and first vertical slice.
+
 ## System Overview
 
 DataWatch is a multi-tenant data quality monitoring platform. It is structured as a classic async Python microservice with one API process, one Celery worker process, and a React SPA served by nginx.
