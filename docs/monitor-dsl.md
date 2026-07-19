@@ -1,6 +1,6 @@
 # Safe Monitor DSL Specification
 
-Status: Validation, draft persistence, immutable revision history, schema-bound compiled previews, and preview attestations implemented; execution/activation pending (`datawatch.io/v1alpha1`)
+Status: Validation, immutable revisions, schema-bound previews, attestations, and internal read-only relational execution adapters implemented; run orchestration/activation pending (`datawatch.io/v1alpha1`)
 
 Tracking: Linear MOU-15 (parent), MOU-19 (runtime)
 Implementation plan: Notion “DataWatch Connector & Safe Monitor DSL Overhaul”
@@ -24,16 +24,19 @@ parses the asset's connector DDL snapshot into a typed relation, checks field ex
 and operation/type compatibility, and reports structured compiler issues. Preview emits
 the deterministic plan only when compilation succeeds.
 
-Execution remains deliberately disabled: `activationSupported=false` and
-`dsl_execution_runtime_not_implemented` remain explicit until connector parameter
-adapters and the run orchestrator are implemented. The run table exists for that audit
-trail but no DSL runs are created yet.
+Public execution remains deliberately disabled: `activationSupported=false` reports
+`dsl_run_persistence_not_implemented` and `dsl_policy_evaluation_not_implemented`.
+The PostgreSQL, DuckDB, and SQLite parameter adapters now exist behind an internal-only
+service boundary, but the run table is not populated and no lifecycle transition can
+invoke them yet.
 
 The first pure relational compiler constructs SQLGlot AST nodes programmatically for
 PostgreSQL, DuckDB, and SQLite. It emits one aggregate `SELECT`, short deterministic
 output aliases, ordered named placeholders, typed parameter metadata, output bindings,
-and a stable plan hash. Its rendered SQL is preview-only: each connector still needs a
-driver-specific binding adapter and execution controls before it can run.
+and a stable plan hash. API payloads remain preview-only. Internally,
+`monitor_runtime.py` re-parses the statement as exactly one `SELECT`, verifies the
+placeholder/output contract, calls a connector-specific named-parameter adapter, and
+accepts only one exact row of finite numeric-or-allowed-null results.
 
 The schema-bound subset includes row/null/distinct metrics; numeric min/max/mean/sum;
 PostgreSQL/DuckDB stddev; timestamp/date freshness; typed equality and ordered
@@ -158,7 +161,7 @@ creates a new `monitor_revisions` row containing canonical `definition`,
 `definition_version`, `definition_hash`, revision number, validation status, and the
 schema fingerprint observed during validation. The application exposes no revision
 mutation or deletion path. `monitor_runs` is the append-only execution audit schema with
-tenant-scoped idempotency; the compiler/runtime will populate it in the next phase.
+tenant-scoped idempotency; the run orchestrator will populate it in the next phase.
 
 Implemented endpoints:
 
@@ -172,7 +175,7 @@ Implemented endpoints:
 - `GET /api/v2/monitors/{id}/revisions/{revision}`
 - `GET /api/v2/monitors/{id}/runs`
 - `POST /api/v2/monitors/{id}/activate` verifies preview context, then returns the
-  explicit execution-runtime-not-implemented guard
+  explicit run-persistence-not-implemented guard
 
 Planned endpoints and formats:
 

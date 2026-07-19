@@ -24,11 +24,18 @@ async def test_connector_types_include_registry_fields_and_versions():
             "none",
             "legacy_sql_scalar",
         }
+        assert item["capabilities"]["compiled_monitors"] in {
+            "none",
+            "internal_read_only",
+        }
         field_names = {field["name"] for field in item["fields"]}
         assert set(item["required"]).issubset(field_names)
 
     by_type = {item["type"]: item for item in metadata}
     assert by_type["postgres"]["capabilities"]["profiling"] == "full"
+    assert by_type["postgres"]["capabilities"]["compiled_monitors"] == (
+        "internal_read_only"
+    )
     assert by_type["sqlite"]["capabilities"]["profiling"] == "core"
     assert by_type["mongodb"]["capabilities"]["profiling"] == "none"
     assert by_type["snowflake"]["readiness"] == "planned"

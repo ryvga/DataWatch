@@ -202,6 +202,7 @@ async def test_postgres_monitor_path_sets_read_only_timeout_and_rolls_back():
 
     assert result == {"violations": 3}
     assert calls == [
+        ("ROLLBACK", None),
         ("SET TRANSACTION READ ONLY", None),
         (
             "SELECT set_config('statement_timeout', %s, true)",

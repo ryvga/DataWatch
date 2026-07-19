@@ -39,9 +39,9 @@ connector is not described as fully supported merely because it can connect.
 
 | Source | Readiness | Current application path | Current limit |
 |---|---|---|---|
-| PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, restricted legacy scalar SQL monitor | Discovery row estimates still need cost optimization |
-| DuckDB | Beta | Connect, discover, schema, full profile, restricted legacy scalar SQL monitor | Local/in-process deployment model |
-| SQLite | Beta | Connect, discover, schema, core profile, restricted legacy scalar SQL monitor | No native stddev/percentiles or table sampling |
+| PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, restricted legacy SQL, internal typed-plan execution | DSL run persistence/policy orchestration pending |
+| DuckDB | Beta | Connect, discover, schema, full profile, restricted legacy SQL, verified internal typed-plan execution | Local/in-process deployment model; DSL activation pending |
+| SQLite | Beta | Connect, discover, schema, core profile, restricted legacy SQL, verified internal typed-plan execution | No native stddev/percentiles or table sampling; DSL activation pending |
 | MySQL / MariaDB | Experimental | Connect, discover, schema | Scheduled profile and restricted monitor execution pending |
 | Redshift | Experimental | Connect, discover, schema | Scheduled profile conformance pending |
 | BigQuery | Experimental | Connect, discover, schema | Async/cost-bounded profile planner pending |
@@ -69,9 +69,12 @@ resolution, canonical hashing, bounded predicates, capability planning, draft cr
 append-only revision history, and short-lived preview attestations under `/api/v2`.
 Preview now parses connector DDL into a typed, asset-bound schema and produces
 deterministic parameterized PostgreSQL/DuckDB/SQLite aggregate plans only when every
-referenced field and operation is compatible. Execution and activation remain explicitly
-disabled until connector-specific parameter/read-only runtime adapters are ready; the run
-audit schema and read API are present but do not yet record DSL runs.
+referenced field and operation is compatible. Internal PostgreSQL, DuckDB, and SQLite
+adapters now bind those parameters, enforce read-only/timeout controls, and validate the
+exact typed result contract; real DuckDB/SQLite file executions are covered by tests.
+Public execution and activation remain explicitly disabled until idempotent run
+persistence and deterministic policy evaluation are wired. The run audit schema and read
+API are present but do not yet record DSL runs.
 
 ## Quick Start (local)
 

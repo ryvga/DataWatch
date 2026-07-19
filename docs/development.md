@@ -149,8 +149,9 @@ except Exception as e:
   revision before activation can be enabled.
 - Safe monitor SQL is built only from programmatic SQLGlot AST nodes. Keep SQLGlot pinned
   while snapshots depend on its renderer; never interpolate a user literal or parse a
-  user-authored fragment in the typed compiler. Rendered placeholders are preview-only
-  until a connector-specific parameter adapter is tested.
+  user-authored fragment in the typed compiler. API plans remain preview-only; internal
+  execution must use the tested connector-specific named-parameter adapter and the
+  fail-closed `monitor_runtime` result contract, never a generic query method.
 - Compilers require a `RelationBinding` from the connector DDL snapshot. Resolve fields
   by exact name, reject missing fields and incompatible logical types, and bind plans to
   the latest schema fingerprint. Never infer compatibility from a field name alone.

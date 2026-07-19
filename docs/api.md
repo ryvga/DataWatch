@@ -359,7 +359,8 @@ Validation does not persist or execute the definition. It returns separate
 grammar can therefore report structured schema/compiler issues such as
 `field_not_found`, `field_type_not_supported`, or `schema_snapshot_missing` without
 being treated as malformed. Unknown grammar fields return 422, while an asset outside
-the tenant returns 404. Activation always remains false until the execution runtime lands.
+the tenant returns 404. Activation remains false until run persistence and policy
+evaluation land.
 
 ### `POST /api/v2/monitors/preview`
 
@@ -399,14 +400,15 @@ definitions return 409.
 - `GET /api/v2/monitors/{monitor_id}/runs`
 
 Revision history is newest first. Runs are capped at the latest 250 and remain empty
-until the typed compiler/runtime begins recording execution audit rows.
+until the run orchestrator begins recording execution audit rows.
 
 ### `POST /api/v2/monitors/{monitor_id}/activate`
 
 Requires `expectedRevision` and the matching `previewAttestation`. It verifies the
 current tenant, asset, definition, schema, and planner context, then currently returns
-409 `activation_not_supported` with reason `dsl_execution_runtime_not_implemented`.
-This is an intentional hard gate; no valid DSL definition is executed yet.
+409 `activation_not_supported` with reason `dsl_run_persistence_not_implemented`.
+This is an intentional hard gate: the internal relational adapters are not exposed until
+every attempt can be idempotently audited and evaluated against the revision's policy.
 
 ---
 

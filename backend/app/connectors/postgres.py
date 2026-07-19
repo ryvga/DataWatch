@@ -88,6 +88,7 @@ class PostgresConnector(BaseConnector):
         conn = await self._get_conn()
         timeout_ms = timeout_seconds * 1000
         try:
+            await conn.rollback()
             await conn.execute("SET TRANSACTION READ ONLY")
             await conn.execute(
                 "SELECT set_config('statement_timeout', %s, true)",
@@ -97,6 +98,31 @@ class PostgresConnector(BaseConnector):
             rows = await cursor.fetchmany(2)
             if len(rows) != 1:
                 raise ValueError("Monitor SQL must return exactly one row")
+            return dict(rows[0])
+        finally:
+            await conn.rollback()
+
+    async def execute_compiled_monitor(
+        self,
+        statement: str,
+        parameters: dict,
+        *,
+        timeout_seconds: int = 30,
+    ) -> dict:
+        """Execute a compiler-produced aggregate with psycopg named bindings."""
+        conn = await self._get_conn()
+        timeout_ms = timeout_seconds * 1000
+        try:
+            await conn.rollback()
+            await conn.execute("SET TRANSACTION READ ONLY")
+            await conn.execute(
+                "SELECT set_config('statement_timeout', %s, true)",
+                (str(timeout_ms),),
+            )
+            cursor = await conn.execute(statement, parameters)
+            rows = await cursor.fetchmany(2)
+            if len(rows) != 1:
+                raise ValueError("Compiled monitor must return exactly one row")
             return dict(rows[0])
         finally:
             await conn.rollback()

@@ -87,6 +87,34 @@ class SQLiteConnector(BaseConnector):
             raise TimeoutError
         return task.result()
 
+    async def execute_compiled_monitor(
+        self,
+        statement: str,
+        parameters: dict,
+        *,
+        timeout_seconds: int = 30,
+    ) -> dict:
+        """Execute a compiler-produced aggregate with SQLite named bindings."""
+        conn = await self._get_conn()
+
+        async def run_query() -> dict:
+            async with conn.execute(statement, parameters) as cursor:
+                rows = await cursor.fetchmany(2)
+                if len(rows) != 1:
+                    raise ValueError("Compiled monitor must return exactly one row")
+                return dict(rows[0])
+
+        task = asyncio.create_task(run_query())
+        done, _ = await asyncio.wait({task}, timeout=timeout_seconds)
+        if not done:
+            await conn.interrupt()
+            try:
+                await task
+            except Exception:
+                pass
+            raise TimeoutError
+        return task.result()
+
     async def get_table_ddl(self, schema: str, table: str) -> str:
         conn = await self._get_conn()
         async with conn.execute(

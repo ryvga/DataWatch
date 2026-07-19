@@ -51,6 +51,7 @@ def _capabilities(
     schema: bool = True,
     profiling: str = "none",
     custom_monitors: str = "none",
+    compiled_monitors: str = "none",
     sampling: bool = False,
 ) -> dict:
     """Public capability contract; readiness tells callers how much is verified."""
@@ -60,6 +61,7 @@ def _capabilities(
         "schema": schema,
         "profiling": profiling,
         "custom_monitors": custom_monitors,
+        "compiled_monitors": compiled_monitors,
         "sampling": sampling,
     }
 
@@ -89,7 +91,9 @@ CONNECTOR_REGISTRY = {
         "description": "PostgreSQL / Aurora Postgres",
         "readiness": "stable",
         "capabilities": _capabilities(
-            profiling="full", custom_monitors="legacy_sql_scalar"
+            profiling="full",
+            custom_monitors="legacy_sql_scalar",
+            compiled_monitors="internal_read_only",
         ),
     },
     "mysql": {
@@ -173,7 +177,9 @@ CONNECTOR_REGISTRY = {
         "description": "DuckDB in-process OLAP",
         "readiness": "beta",
         "capabilities": _capabilities(
-            profiling="full", custom_monitors="legacy_sql_scalar"
+            profiling="full",
+            custom_monitors="legacy_sql_scalar",
+            compiled_monitors="internal_read_only",
         ),
     },
     "sqlite": {
@@ -185,7 +191,9 @@ CONNECTOR_REGISTRY = {
         "description": "SQLite file database",
         "readiness": "beta",
         "capabilities": _capabilities(
-            profiling="core", custom_monitors="legacy_sql_scalar"
+            profiling="core",
+            custom_monitors="legacy_sql_scalar",
+            compiled_monitors="internal_read_only",
         ),
     },
     "cassandra": {

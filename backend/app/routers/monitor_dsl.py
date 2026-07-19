@@ -27,6 +27,10 @@ from app.services.schema_binding import SchemaBindingError, build_relation_bindi
 
 router = APIRouter(prefix="/api/v2/monitors", tags=["monitor_dsl"])
 asset_router = APIRouter(prefix="/api/v2/assets", tags=["monitor_dsl"])
+ACTIVATION_BLOCKERS = (
+    "dsl_run_persistence_not_implemented",
+    "dsl_policy_evaluation_not_implemented",
+)
 
 
 class RevisionRequest(BaseModel):
@@ -115,7 +119,7 @@ def _planning_result(
         "unsupported": unsupported,
         "issues": issues,
         "activationSupported": False,
-        "activationBlockers": ["dsl_execution_runtime_not_implemented"],
+        "activationBlockers": list(ACTIVATION_BLOCKERS),
     }
     return payload, plan, binding_fingerprint
 
@@ -530,6 +534,6 @@ async def activate_monitor(
         status_code=409,
         detail={
             "error": "activation_not_supported",
-            "reason": "dsl_execution_runtime_not_implemented",
+            "reason": ACTIVATION_BLOCKERS[0],
         },
     )

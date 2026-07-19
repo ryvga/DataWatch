@@ -47,6 +47,18 @@ class BaseConnector(ABC):
             f"{type(self).__name__} has no restricted monitor execution path"
         )
 
+    async def execute_compiled_monitor(
+        self,
+        statement: str,
+        parameters: dict,
+        *,
+        timeout_seconds: int = 30,
+    ) -> dict:
+        """Execute an internally compiled aggregate plan with driver-bound values."""
+        raise NotImplementedError(
+            f"{type(self).__name__} has no compiled monitor execution path"
+        )
+
     @abstractmethod
     async def get_table_ddl(self, schema: str, table: str) -> str:
         """Return a DDL-like string describing the table columns and types."""

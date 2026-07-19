@@ -272,7 +272,7 @@ the target through the tenant's data source and returns an explicit capability p
 Draft definitions are stored as immutable revisions. Preview attestations use HMAC-SHA256
 with a five-minute TTL and bind organization, asset, definition hash, latest successful
 schema fingerprint, and planner version. Activation verifies that context but remains
-hard-disabled until typed connector compilers and the run orchestrator land.
+hard-disabled until the run orchestrator and policy evaluator land.
 
 `services/schema_binding.py` parses generated connector DDL into an asset-scoped relation
 of exact field names, normalized physical types, logical types, nullability, and a schema
@@ -284,9 +284,19 @@ every schema/table/field identifier as one identifier, and places every user lit
 an ordered parameter bag. PostgreSQL, DuckDB, and SQLite render deterministic preview SQL
 for schema-compatible aggregate plans. Short ordinal aliases avoid database identifier
 truncation collisions. Preview exposes the plan and structured support analysis, but the
-rendered placeholder syntax is not a driver execution contract; connector parameter
-adaptation, read-only execution, timeout/cost controls, and run persistence must land
-before activation.
+rendered placeholder syntax is never sent through a generic query API.
+
+`services/monitor_runtime.py` is the internal execution boundary. It independently
+re-parses a plan as one read-only `SELECT`, verifies unique parameters and output aliases,
+then dispatches named bindings to dedicated PostgreSQL, DuckDB, or SQLite methods.
+PostgreSQL starts from a clean transaction, sets transaction read-only and a server-side
+statement timeout, and always rolls back. File-backed DuckDB connections are read-only
+and use interrupt-on-timeout; SQLite opens files with `mode=ro` and interrupts timed-out
+queries. The result must have the exact ordered aliases and finite numeric values, with
+null accepted only for nullable outputs. Driver exceptions are mapped to stable domain
+codes without leaking credential text. These adapters are internal capability only;
+idempotent `monitor_runs`, breach-policy evaluation, and lifecycle orchestration remain
+mandatory before activation.
 
 ---
 

@@ -80,6 +80,33 @@ class DuckDBConnector(BaseConnector):
             conn.interrupt()
             raise
 
+    async def execute_compiled_monitor(
+        self,
+        statement: str,
+        parameters: dict,
+        *,
+        timeout_seconds: int = 30,
+    ) -> dict:
+        """Execute a compiler-produced aggregate with DuckDB named bindings."""
+        conn = self._get_conn()
+
+        def run_query() -> dict:
+            cursor = conn.execute(statement, parameters)
+            names = [column[0] for column in cursor.description]
+            rows = cursor.fetchmany(2)
+            if len(rows) != 1:
+                raise ValueError("Compiled monitor must return exactly one row")
+            return dict(zip(names, rows[0], strict=True))
+
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(run_query),
+                timeout=timeout_seconds,
+            )
+        except TimeoutError:
+            conn.interrupt()
+            raise
+
     async def get_table_ddl(self, schema: str, table: str) -> str:
         conn = self._get_conn()
         rows = conn.execute(
