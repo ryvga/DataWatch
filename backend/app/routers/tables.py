@@ -21,6 +21,7 @@ from app.services.legacy_sql_monitor import (
     execute_legacy_monitor,
     validate_legacy_sql,
 )
+from app.services.schema_binding import parse_ddl_columns
 from app.services.table_autopilot import initial_autopilot_state, not_started_autopilot_state
 
 logger = logging.getLogger(__name__)
@@ -170,6 +171,43 @@ def _table_response(table: MonitoredTable, profile: ProfileSummary | None = None
     )
 
 
+async def _verified_schema_snapshot(
+    source: DataSource,
+    org_id: str,
+    schema_name: str,
+    table_name: str,
+) -> tuple[str, set[str]]:
+    """Fetch the server-owned DDL snapshot used to bind monitors and freshness."""
+    connector = None
+    try:
+        config = decrypt_config(source.connection_config["encrypted"], org_id)
+        connector = ConnectorFactory.create(source.type, config)
+        snapshot = await connector.get_table_ddl(schema_name, table_name)
+    except Exception as e:
+        logger.warning("Table schema snapshot failed: %s", type(e).__name__)
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Could not verify the table schema. Confirm the schema/table name "
+                "and source connectivity."
+            ),
+        ) from e
+    finally:
+        if connector is not None:
+            try:
+                await connector.close()
+            except Exception as e:
+                logger.warning("Table schema connector close failed: %s", type(e).__name__)
+
+    columns = parse_ddl_columns(snapshot)
+    if not columns:
+        raise HTTPException(
+            status_code=422,
+            detail="The connector did not return a structured schema with any columns.",
+        )
+    return snapshot, {column.name for column in columns}
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=TableResponse, status_code=201)
@@ -203,17 +241,26 @@ async def create_table(
     from app.services.plans import enforce_table_limit
     await enforce_table_limit(org, db)
 
-    schema_snapshot = body.dbt_model_yaml
-    if not schema_snapshot:
-        try:
-            config = decrypt_config(source.connection_config["encrypted"], str(org.id))
-            connector = ConnectorFactory.create(source.type, config)
-            try:
-                schema_snapshot = await connector.get_table_ddl(body.schema_name, body.table_name)
-            finally:
-                await connector.close()
-        except Exception as e:
-            logger.warning("Table schema snapshot failed: %s", type(e).__name__)
+    if body.dbt_model_yaml is not None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "dbt_model_yaml is no longer accepted during onboarding; "
+                "schema snapshots are captured from the source."
+            ),
+        )
+
+    schema_snapshot, column_names = await _verified_schema_snapshot(
+        source,
+        str(org.id),
+        body.schema_name,
+        body.table_name,
+    )
+    if body.freshness_column and body.freshness_column not in column_names:
+        raise HTTPException(
+            status_code=422,
+            detail="freshness_column must exist in the verified table schema.",
+        )
 
     table = MonitoredTable(
         source_id=body.source_id,
@@ -288,7 +335,32 @@ async def update_table(
     db: AsyncSession = Depends(get_db),
 ):
     table = await _get_table_or_404(table_id, org, db)
-    update_data = body.model_dump(exclude_none=True)
+    update_data = body.model_dump(exclude_unset=True)
+    if update_data.get("dbt_model_yaml") is not None:
+        raise HTTPException(
+            status_code=422,
+            detail="dbt_model_yaml is read-only; schema snapshots are captured from the source.",
+        )
+    update_data.pop("dbt_model_yaml", None)
+
+    freshness_column = update_data.get("freshness_column")
+    if freshness_column is not None:
+        source = await db.get(DataSource, table.source_id)
+        if source is None:
+            raise HTTPException(status_code=404, detail="Source not found")
+        schema_snapshot, column_names = await _verified_schema_snapshot(
+            source,
+            str(org.id),
+            table.schema_name,
+            table.table_name,
+        )
+        if freshness_column not in column_names:
+            raise HTTPException(
+                status_code=422,
+                detail="freshness_column must exist in the verified table schema.",
+            )
+        table.dbt_model_yaml = schema_snapshot
+
     for field, value in update_data.items():
         setattr(table, field, value)
 

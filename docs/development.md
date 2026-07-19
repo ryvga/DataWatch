@@ -130,6 +130,15 @@ except Exception as e:
 ```
 
 **Credentials never in logs.** If you add a new connector, make sure the DSN/password is never passed to `logger.*`. Use `type(e).__name__` not `str(e)` when logging connector errors.
+Public API and persisted profile errors must also use `services/error_safety.py`; driver
+messages may contain hosts, query text, or credentials.
+
+Run the optional connector services with `docker compose -f docker-compose.test-dbs.yml
+up -d`. MySQL listens on test-only port 3307 and MongoDB on 27018; connector integration
+tests skip explicitly when those services are unavailable. The local MySQL test passes
+`tls_mode=disabled` because that isolated container has no certificate; application
+connections default to certificate and hostname verification and accept an optional
+`ssl_ca` PEM bundle.
 
 **Org isolation is mandatory.** Every query on `data_sources`, `monitored_tables`, `monitors`, `monitor_runs`, `incidents`, `check_results`, and `alert_configs` must include or derive a verified `org_id` filter. Return 404 (not 403) when not found — don't leak existence.
 

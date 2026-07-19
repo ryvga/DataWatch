@@ -238,7 +238,9 @@ the UI and API documentation from presenting experimental adapters as complete.
 | `core` | Row count, freshness, null/distinct/uniqueness, min/max/mean and basic text/range metrics |
 | `none` | Connection/discovery may work, but scheduled profiling fails explicitly before SQL execution |
 
-The currently exercised vertical slices are PostgreSQL, DuckDB, and SQLite core.
+The currently exercised local vertical slices are PostgreSQL, DuckDB, and SQLite core.
+MySQL has a parsed-query and mocked-driver core contract, but remains experimental until
+the container-backed connection/discovery/schema/profile path passes.
 MongoDB and Cassandra require native planners because document and partition models
 must not be forced through relational full-table SQL semantics.
 
@@ -249,7 +251,16 @@ must not be forced through relational full-table SQL semantics.
 `ProfilerService` (`app/services/profiler.py`) builds **one aggregate query** per table
 run for a declared dialect. Identifiers are quoted as identifiers, never inserted as
 SQL fragments. PostgreSQL/DuckDB use the full metric set; SQLite uses a core dialect
-that omits unavailable native stddev/percentile functions.
+that omits unavailable native stddev/percentile functions. MySQL has a separate core
+dialect using backtick escaping, portable floating-point ratios, `TIMESTAMPDIFF`, and
+`STDDEV_POP`; percentile metrics remain absent until container/version conformance.
+MySQL creates a hostname-verifying, certificate-required TLS context by default. An
+explicit `tls_mode=disabled` exists for isolated development services and must not be
+used for remote databases.
+
+Table onboarding and freshness updates bind against a connector-fetched, server-owned
+DDL snapshot. Client input cannot replace this snapshot; the legacy model column name
+`dbt_model_yaml` is retained internally until a data migration renames it.
 
 Profiling does not run a preliminary exact `COUNT(*)`: that would double full-scan cost
 before the aggregate and could corrupt row-count anomalies if a sampled count replaced

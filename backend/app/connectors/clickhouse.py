@@ -36,7 +36,7 @@ class ClickHouseConnector(BaseConnector):
             await client.ping()
             return True
         except Exception as e:
-            logger.warning("ClickHouse connection test failed: %s", e)
+            logger.warning("ClickHouse connection test failed: %s", type(e).__name__)
             return False
 
     async def discover_schemas(self) -> list[SchemaInfo]:

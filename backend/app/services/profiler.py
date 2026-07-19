@@ -13,12 +13,14 @@ from decimal import Decimal
 from typing import Any
 
 from app.connectors.base import BaseConnector
+from app.services.error_safety import safe_profile_error
 
 logger = logging.getLogger(__name__)
 
 # Column type categories
 NUMERIC_TYPES = {
-    "integer", "bigint", "smallint", "numeric", "decimal", "real",
+    "int", "integer", "bigint", "smallint", "tinyint", "mediumint",
+    "numeric", "decimal", "real",
     "double", "double precision", "float", "float4", "float8", "int2", "int4", "int8",
     "INT64", "FLOAT64", "NUMERIC", "BIGNUMERIC",  # BigQuery
     "NUMBER", "FLOAT",  # Snowflake / DuckDB
@@ -43,6 +45,8 @@ class ColumnInfo:
     @property
     def category(self) -> str:
         t = self.data_type.upper().split("(")[0].strip()
+        for modifier in (" UNSIGNED", " ZEROFILL"):
+            t = t.replace(modifier, "")
         if any(nt.upper() == t for nt in NUMERIC_TYPES):
             return "numeric"
         if any(tt.upper() == t for tt in TIMESTAMP_TYPES):
@@ -141,17 +145,22 @@ class ProfilerService:
         return hashlib.md5("|".join(pairs).encode()).hexdigest()
 
     @staticmethod
-    def _quote_identifier(identifier: str) -> str:
+    def _quote_identifier(identifier: str, dialect: str = "postgres") -> str:
         """Quote a discovered identifier without treating it as SQL text."""
         if not identifier or "\x00" in identifier:
             raise ValueError("Database identifiers must be non-empty and contain no NUL bytes")
+        if dialect == "mysql":
+            return f"`{identifier.replace('`', '``')}`"
         return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
 
-    def _qualified_table(self, schema: str, table: str) -> str:
-        return f"{self._quote_identifier(schema)}.{self._quote_identifier(table)}"
+    def _qualified_table(self, schema: str, table: str, dialect: str = "postgres") -> str:
+        return (
+            f"{self._quote_identifier(schema, dialect)}."
+            f"{self._quote_identifier(table, dialect)}"
+        )
 
-    def _metric_alias(self, metric: str, column: str) -> str:
-        return self._quote_identifier(f"{metric}_{column}")
+    def _metric_alias(self, metric: str, column: str, dialect: str = "postgres") -> str:
+        return self._quote_identifier(f"{metric}_{column}", dialect)
 
     def build_profile_query(
         self,
@@ -165,10 +174,11 @@ class ProfilerService:
         Build a single SELECT with all aggregate metrics.
         Returns (query_string, metric_keys_in_order).
         """
-        if dialect not in {"postgres", "duckdb", "sqlite"}:
+        if dialect not in {"postgres", "duckdb", "sqlite", "mysql"}:
             raise ValueError(f"Unsupported profiling dialect: {dialect}")
 
         sqlite = dialect == "sqlite"
+        mysql = dialect == "mysql"
         parts = [
             "COUNT(*) AS _row_count",
             # Duplicate rate: what fraction of rows are duplicates of at least one other row
@@ -177,10 +187,15 @@ class ProfilerService:
         ]
 
         if freshness_column:
-            freshness = self._quote_identifier(freshness_column)
+            freshness = self._quote_identifier(freshness_column, dialect)
             if sqlite:
                 parts.append(
                     f"(julianday('now') - julianday(MAX({freshness}))) * 86400.0 "
+                    "AS _freshness_seconds"
+                )
+            elif mysql:
+                parts.append(
+                    f"TIMESTAMPDIFF(SECOND, MAX({freshness}), CURRENT_TIMESTAMP) "
                     "AS _freshness_seconds"
                 )
             else:
@@ -189,16 +204,21 @@ class ProfilerService:
                 )
 
         for col in columns:
-            safe = self._quote_identifier(col.name)
+            safe = self._quote_identifier(col.name, dialect)
             cat = col.category
 
             def alias(metric: str) -> str:
-                return self._metric_alias(metric, col.name)
+                return self._metric_alias(metric, col.name, dialect)
 
             # Null rate — all types
             if sqlite:
                 parts.append(
                     f"CAST(SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) AS REAL) "
+                    f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
+                )
+            elif mysql:
+                parts.append(
+                    f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) * 1.0 "
                     f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
                 )
             else:
@@ -212,6 +232,11 @@ class ProfilerService:
             if sqlite:
                 parts.append(
                     f"CAST(COUNT(DISTINCT {safe}) AS REAL) / NULLIF(COUNT(*), 0) "
+                    f"AS {alias('uniqueness_ratio')}"
+                )
+            elif mysql:
+                parts.append(
+                    f"COUNT(DISTINCT {safe}) * 1.0 / NULLIF(COUNT(*), 0) "
                     f"AS {alias('uniqueness_ratio')}"
                 )
             else:
@@ -232,6 +257,17 @@ class ProfilerService:
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
                         f"AS {alias('zero_rate')}",
                         f"CAST(SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END) AS REAL) "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('negative_rate')}",
+                    ]
+                elif mysql:
+                    parts += [
+                        f"AVG({safe}) AS {alias('mean')}",
+                        f"STDDEV_POP({safe}) AS {alias('stddev')}",
+                        f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('zero_rate')}",
+                        f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END) * 1.0 "
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
                         f"AS {alias('negative_rate')}",
                     ]
@@ -260,21 +296,37 @@ class ProfilerService:
                         f"(julianday(MAX({safe})) - julianday(MIN({safe}))) * 86400.0 "
                         f"AS {alias('range_seconds')}"
                     )
+                elif mysql:
+                    parts.append(
+                        f"TIMESTAMPDIFF(SECOND, MIN({safe}), MAX({safe})) "
+                        f"AS {alias('range_seconds')}"
+                    )
                 else:
                     parts.append(
                         f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) "
                         f"AS {alias('range_seconds')}"
                     )
             else:  # text / other
-                text_value = f"CAST({safe} AS TEXT)" if sqlite else f"{safe}::TEXT"
+                if sqlite:
+                    text_value = f"CAST({safe} AS TEXT)"
+                elif mysql:
+                    text_value = f"CAST({safe} AS CHAR)"
+                else:
+                    text_value = f"{safe}::TEXT"
                 parts += [
-                    f"MIN(LENGTH({text_value})) AS {alias('min_len')}",
-                    f"MAX(LENGTH({text_value})) AS {alias('max_len')}",
-                    f"AVG(LENGTH({text_value})) AS {alias('avg_len')}",
+                    f"MIN({'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})) AS {alias('min_len')}",
+                    f"MAX({'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})) AS {alias('max_len')}",
+                    f"AVG({'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})) AS {alias('avg_len')}",
                 ]
                 if sqlite:
                     parts.append(
                         f"CAST(SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END) AS REAL) "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('empty_rate')}"
+                    )
+                elif mysql:
+                    parts.append(
+                        f"SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END) * 1.0 "
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
                         f"AS {alias('empty_rate')}"
                     )
@@ -286,7 +338,7 @@ class ProfilerService:
                     )
 
         select_clause = ",\n       ".join(parts)
-        qualified_table = self._qualified_table(schema, table)
+        qualified_table = self._qualified_table(schema, table, dialect)
         return f"SELECT {select_clause}\nFROM {qualified_table}"
 
     async def get_top_values(
@@ -305,10 +357,12 @@ class ProfilerService:
         top_values: dict[str, list[dict]] = {}
         for col in text_cols:
             try:
-                safe_col = self._quote_identifier(col.name)
+                dialect = getattr(connector, "profile_dialect", "postgres")
+                safe_col = self._quote_identifier(col.name, dialect)
+                text_cast = "CHAR" if dialect == "mysql" else "TEXT"
                 q = (
-                    f"SELECT CAST({safe_col} AS TEXT) AS val, COUNT(*) AS cnt "
-                    f"FROM {self._qualified_table(schema, table)} "
+                    f"SELECT CAST({safe_col} AS {text_cast}) AS val, COUNT(*) AS cnt "
+                    f"FROM {self._qualified_table(schema, table, dialect)} "
                     f"WHERE {safe_col} IS NOT NULL "
                     f"GROUP BY {safe_col} ORDER BY cnt DESC LIMIT {limit}"
                 )
@@ -417,8 +471,13 @@ class ProfilerService:
 
         except Exception as e:
             duration_ms = int((time.monotonic() - start) * 1000)
-            logger.error("Profiling failed for %s.%s: %s", schema, table, e)
+            logger.error(
+                "Profiling failed for %s.%s: %s",
+                schema,
+                table,
+                type(e).__name__,
+            )
             return ProfileResult(
-                error=str(e),
+                error=safe_profile_error(e),
                 profiling_duration_ms=duration_ms,
             )

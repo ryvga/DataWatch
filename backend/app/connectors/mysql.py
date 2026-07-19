@@ -1,4 +1,5 @@
 import logging
+import ssl
 
 from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
 
@@ -10,9 +11,31 @@ _SKIP_SCHEMAS = {"sys", "mysql", "information_schema", "performance_schema"}
 class MySQLConnector(BaseConnector):
     """Async MySQL/MariaDB connector via aiomysql."""
 
+    profile_dialect = "mysql"
+
     def __init__(self, config: dict):
         self._config = config
         self._pool = None
+
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        if not identifier or "\x00" in identifier:
+            raise ValueError("MySQL identifiers must be non-empty and contain no NUL bytes")
+        return f"`{identifier.replace('`', '``')}`"
+
+    def _ssl_context(self) -> ssl.SSLContext | None:
+        """Require certificate and hostname verification unless explicitly disabled."""
+        mode = str(self._config.get("tls_mode", "verify_identity")).lower()
+        if mode == "disabled":
+            return None
+        if mode != "verify_identity":
+            raise ValueError("tls_mode must be 'verify_identity' or 'disabled'")
+
+        ca_pem = self._config.get("ssl_ca") or None
+        context = ssl.create_default_context(cadata=ca_pem)
+        context.check_hostname = True
+        context.verify_mode = ssl.CERT_REQUIRED
+        return context
 
     async def _get_pool(self):
         if self._pool is None:
@@ -24,6 +47,7 @@ class MySQLConnector(BaseConnector):
                 db=c["database"],
                 user=c.get("username") or c.get("user", ""),
                 password=c.get("password", ""),
+                ssl=self._ssl_context(),
                 autocommit=True,
                 minsize=1,
                 maxsize=2,
@@ -38,7 +62,7 @@ class MySQLConnector(BaseConnector):
                     await cur.execute("SELECT 1")
             return True
         except Exception as e:
-            logger.warning("MySQL connection test failed: %s", e)
+            logger.warning("MySQL connection test failed: %s", type(e).__name__)
             return False
 
     async def discover_schemas(self) -> list[SchemaInfo]:
@@ -88,8 +112,17 @@ class MySQLConnector(BaseConnector):
                     (schema, table),
                 )
                 rows = await cur.fetchall()
-        lines = [f"  {r[0]} {r[1]} {'NULL' if r[2] == 'YES' else 'NOT NULL'}" for r in rows]
-        return f"CREATE TABLE `{schema}`.`{table}` (\n" + ",\n".join(lines) + "\n);"
+        lines = [
+            f"  {self._quote_identifier(r[0])} {r[1]} "
+            f"{'NULL' if r[2] == 'YES' else 'NOT NULL'}"
+            for r in rows
+        ]
+        return (
+            f"CREATE TABLE {self._quote_identifier(schema)}."
+            f"{self._quote_identifier(table)} (\n"
+            + ",\n".join(lines)
+            + "\n);"
+        )
 
     async def close(self) -> None:
         if self._pool:

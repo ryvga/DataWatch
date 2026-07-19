@@ -17,6 +17,7 @@ from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
 from app.routers.auth import get_current_org_from_api_key, get_current_org_from_jwt
 from app.services.crypto import decrypt_config, encrypt_config
+from app.services.error_safety import safe_connection_error
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
@@ -133,13 +134,13 @@ async def _test_connection_config(source_type: str, config: dict) -> TestResult:
         raise HTTPException(status_code=501, detail=f"{source_type} connector coming soon")
     except Exception as e:
         logger.warning("Source connection test failed: %s", type(e).__name__)
-        err_str = str(e).lower()
-        if any(phrase in err_str for phrase in ("name or service not known", "could not connect", "connection refused", "nodename nor servname", "temporary failure in name resolution")):
-            return TestResult(connected=False, latency_ms=0, error="Cannot reach the database host. Check hostname and network access.")
-        return TestResult(connected=False, latency_ms=0, error=str(e))
+        return TestResult(connected=False, latency_ms=0, error=safe_connection_error(e))
     finally:
         if connector:
-            await connector.close()
+            try:
+                await connector.close()
+            except Exception as e:
+                logger.warning("Source connector close failed: %s", type(e).__name__)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -307,10 +308,7 @@ async def test_source(
         return result
     except Exception as e:
         logger.warning("Source test error: %s", type(e).__name__)
-        err_str = str(e).lower()
-        if any(phrase in err_str for phrase in ("name or service not known", "could not connect", "connection refused", "nodename nor servname", "temporary failure in name resolution")):
-            return TestResult(connected=False, latency_ms=0, error="Cannot reach the database host. Check hostname and network access.")
-        return TestResult(connected=False, latency_ms=0, error=str(e))
+        return TestResult(connected=False, latency_ms=0, error=safe_connection_error(e))
 
 
 @router.post("/{source_id}/discover", response_model=DiscoveryResponse)

@@ -1,10 +1,11 @@
 import sqlite3
 
 import pytest
+from sqlglot import parse_one
 
 from app.connectors.base import BaseConnector
 from app.services.profiler import ColumnInfo, ProfilerService
-from app.tasks import _profile_allows_downstream_checks
+from app.tasks import _profile_allows_downstream_checks, _profile_connector_safely
 
 
 def test_sqlite_profile_query_executes_and_returns_core_metrics():
@@ -62,6 +63,32 @@ def test_profile_query_quotes_discovered_identifiers():
 
     assert 'FROM "odd""schema"."order events"' in query
     assert '"select""value"' in query
+
+
+def test_mysql_profile_query_uses_native_core_aggregates_and_quoting():
+    query = ProfilerService().build_profile_query(
+        "analytics`prod",
+        "order events",
+        [
+            ColumnInfo("amount`gross", "DECIMAL(12,2)"),
+            ColumnInfo("status", "VARCHAR(32)"),
+            ColumnInfo("created_at", "DATETIME"),
+        ],
+        "created_at",
+        dialect="mysql",
+    )
+
+    assert "FROM `analytics``prod`.`order events`" in query
+    assert "`amount``gross`" in query
+    assert "TIMESTAMPDIFF(SECOND, MAX(`created_at`), CURRENT_TIMESTAMP)" in query
+    assert "TIMESTAMPDIFF(SECOND, MIN(`created_at`), MAX(`created_at`))" in query
+    assert "STDDEV_POP(`amount``gross`)" in query
+    assert "CAST(`status` AS CHAR)" in query
+    assert "CHAR_LENGTH(CAST(`status` AS CHAR))" in query
+    assert "MIN(LENGTH(CAST(`status` AS CHAR)))" not in query
+    assert "::" not in query
+    assert "PERCENTILE_CONT" not in query
+    assert parse_one(query, read="mysql").key == "select"
 
 
 @pytest.mark.asyncio
@@ -174,3 +201,80 @@ async def test_profile_executes_exactly_one_aggregate_query():
     assert len(connector.queries) == 1
     assert "TABLESAMPLE" not in connector.queries[0]
     assert "COUNT(*) AS _n" not in connector.queries[0]
+
+
+@pytest.mark.asyncio
+async def test_profile_errors_are_sanitized_before_persistence():
+    class Connector(BaseConnector):
+        profile_dialect = "postgres"
+
+        async def test_connection(self):
+            return True
+
+        async def discover_schemas(self):
+            return []
+
+        async def execute_profile_query(self, query):
+            raise RuntimeError("password=super-secret host=internal-db query=SELECT...")
+
+        async def get_table_ddl(self, schema, table):
+            return 'CREATE TABLE "events" (\n"id" integer NOT NULL\n);'
+
+    result = await ProfilerService().profile(Connector(), "public", "events")
+
+    assert result.error == "Profiling failed (RuntimeError)."
+    assert "super-secret" not in result.error
+    assert "internal-db" not in result.error
+
+
+@pytest.mark.asyncio
+async def test_profile_connector_close_errors_are_sanitized(monkeypatch):
+    class Connector(BaseConnector):
+        profile_dialect = "postgres"
+
+        async def test_connection(self):
+            return True
+
+        async def discover_schemas(self):
+            return []
+
+        async def get_table_ddl(self, schema, table):
+            return 'CREATE TABLE "events" (\n"id" integer NOT NULL\n);'
+
+        async def execute_profile_query(self, query):
+            return {
+                "_row_count": 1,
+                "null_rate_id": 0.0,
+                "distinct_count_id": 1,
+                "uniqueness_ratio_id": 1.0,
+                "min_id": 1,
+                "max_id": 1,
+                "mean_id": 1.0,
+                "stddev_id": 0.0,
+                "p25_id": 1,
+                "p50_id": 1,
+                "p75_id": 1,
+                "p95_id": 1,
+                "zero_rate_id": 0.0,
+                "negative_rate_id": 0.0,
+            }
+
+        async def close(self):
+            raise RuntimeError("password=super-secret host=internal-db")
+
+    monkeypatch.setattr(
+        "app.connectors.factory.ConnectorFactory.create",
+        lambda source_type, config: Connector(),
+    )
+
+    result = await _profile_connector_safely(
+        source_type="postgres",
+        config={},
+        schema="public",
+        table="events",
+        freshness_column=None,
+        table_id="table-1",
+    )
+
+    assert result.error == "Profiling failed (RuntimeError)."
+    assert "super-secret" not in result.error

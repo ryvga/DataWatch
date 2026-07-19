@@ -37,6 +37,12 @@ async def test_connector_types_include_registry_fields_and_versions():
         "internal_read_only"
     )
     assert by_type["sqlite"]["capabilities"]["profiling"] == "core"
+    assert by_type["mysql"]["capabilities"]["profiling"] == "core"
+    mysql_fields = {
+        field["name"]: field for field in by_type["mysql"]["fields"]
+    }
+    assert mysql_fields["tls_mode"]["default"] == "verify_identity"
+    assert mysql_fields["tls_mode"]["options"] == ["verify_identity", "disabled"]
     assert by_type["mongodb"]["capabilities"]["profiling"] == "none"
     assert by_type["snowflake"]["readiness"] == "planned"
 
@@ -70,6 +76,56 @@ async def test_preview_source_connection_tests_unsaved_config(monkeypatch):
     assert result.latency_ms >= 0
     assert calls["args"] == ("postgres", {"host": "localhost", "database": "demo"})
     assert calls["closed"] is True
+
+
+@pytest.mark.asyncio
+async def test_connection_errors_never_echo_driver_or_credential_details(monkeypatch):
+    class FailingConnector:
+        async def test_connection(self):
+            raise RuntimeError("access denied password=super-secret host=internal-db")
+
+        async def close(self):
+            return None
+
+    monkeypatch.setattr(
+        sources.ConnectorFactory,
+        "create",
+        lambda source_type, config: FailingConnector(),
+    )
+
+    result = await sources._test_connection_config(
+        "postgres",
+        {"host": "internal-db", "database": "analytics", "password": "super-secret"},
+    )
+
+    assert result.connected is False
+    assert result.error == "Database authentication failed. Check the configured credentials."
+    assert "super-secret" not in result.error
+    assert "internal-db" not in result.error
+
+
+@pytest.mark.asyncio
+async def test_connection_preview_swallows_and_sanitizes_close_failures(monkeypatch):
+    class Connector:
+        async def test_connection(self):
+            return True
+
+        async def close(self):
+            raise RuntimeError("password=super-secret host=internal-db")
+
+    monkeypatch.setattr(
+        sources.ConnectorFactory,
+        "create",
+        lambda source_type, config: Connector(),
+    )
+
+    result = await sources._test_connection_config(
+        "postgres",
+        {"host": "internal-db", "database": "analytics"},
+    )
+
+    assert result.connected is True
+    assert result.error is None
 
 
 @pytest.mark.asyncio
@@ -192,6 +248,186 @@ async def test_create_table_rejects_connector_without_profile_capability(monkeyp
 
     assert exc_info.value.status_code == 422
     assert "not scheduled profiling" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_create_table_fails_closed_when_schema_introspection_fails(monkeypatch):
+    source = SimpleNamespace(
+        id="source-1",
+        type="postgres",
+        connection_config={"encrypted": "ciphertext"},
+    )
+
+    class FailingConnector:
+        async def get_table_ddl(self, schema, table):
+            raise RuntimeError("password=super-secret host=internal-db")
+
+        async def close(self):
+            return None
+
+    class FakeSession:
+        async def scalar(self, query):
+            return None
+
+    async def fake_resolve(source_id, org, db):
+        return source
+
+    async def allow_table_limit(org, db):
+        return None
+
+    monkeypatch.setattr(tables, "_resolve_org_from_source", fake_resolve)
+    monkeypatch.setattr(tables, "decrypt_config", lambda encrypted, org_id: {})
+    monkeypatch.setattr(tables.ConnectorFactory, "create", lambda source_type, config: FailingConnector())
+    monkeypatch.setattr("app.services.plans.enforce_table_limit", allow_table_limit)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await tables.create_table(
+            body=tables.TableCreate(
+                source_id="source-1",
+                schema_name="public",
+                table_name="orders",
+            ),
+            org=SimpleNamespace(id="org-1"),
+            db=FakeSession(),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert "super-secret" not in exc_info.value.detail
+    assert "internal-db" not in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_create_table_rejects_caller_owned_schema_snapshot(monkeypatch):
+    source = SimpleNamespace(id="source-1", type="postgres")
+
+    class FakeSession:
+        async def scalar(self, query):
+            return None
+
+    async def fake_resolve(source_id, org, db):
+        return source
+
+    async def allow_table_limit(org, db):
+        return None
+
+    monkeypatch.setattr(tables, "_resolve_org_from_source", fake_resolve)
+    monkeypatch.setattr("app.services.plans.enforce_table_limit", allow_table_limit)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await tables.create_table(
+            body=tables.TableCreate(
+                source_id="source-1",
+                schema_name="public",
+                table_name="orders",
+                dbt_model_yaml="CREATE TABLE forged.orders (id integer NOT NULL);",
+            ),
+            org=SimpleNamespace(id="org-1"),
+            db=FakeSession(),
+        )
+    assert exc_info.value.status_code == 422
+    assert "captured from the source" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_create_table_validates_freshness_against_live_schema(monkeypatch):
+    source = SimpleNamespace(
+        id="source-1",
+        type="postgres",
+        connection_config={"encrypted": "ciphertext"},
+    )
+
+    class Connector:
+        async def get_table_ddl(self, schema, table):
+            return "CREATE TABLE public.orders (\n  id integer NOT NULL\n);"
+
+        async def close(self):
+            return None
+
+    class FakeSession:
+        async def scalar(self, query):
+            return None
+
+    async def fake_resolve(source_id, org, db):
+        return source
+
+    async def allow_table_limit(org, db):
+        return None
+
+    monkeypatch.setattr(tables, "_resolve_org_from_source", fake_resolve)
+    monkeypatch.setattr(tables, "decrypt_config", lambda encrypted, org_id: {})
+    monkeypatch.setattr(
+        tables.ConnectorFactory, "create", lambda source_type, config: Connector()
+    )
+    monkeypatch.setattr("app.services.plans.enforce_table_limit", allow_table_limit)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await tables.create_table(
+            body=tables.TableCreate(
+                source_id="source-1",
+                schema_name="public",
+                table_name="orders",
+                freshness_column="created_at",
+            ),
+            org=SimpleNamespace(id="org-1"),
+            db=FakeSession(),
+        )
+
+    assert exc_info.value.status_code == 422
+    assert "freshness_column" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_update_table_cannot_replace_or_bypass_live_schema(monkeypatch):
+    monitored = SimpleNamespace(
+        id="table-1",
+        source_id="source-1",
+        schema_name="public",
+        table_name="orders",
+        dbt_model_yaml="CREATE TABLE public.orders (\n  id integer NOT NULL\n);",
+    )
+    source = SimpleNamespace(
+        id="source-1",
+        type="postgres",
+        connection_config={"encrypted": "ciphertext"},
+    )
+
+    class Connector:
+        async def get_table_ddl(self, schema, table):
+            return "CREATE TABLE public.orders (\n  id integer NOT NULL\n);"
+
+        async def close(self):
+            return None
+
+    class FakeSession:
+        async def get(self, model, object_id):
+            return source
+
+    async def fake_get_table(table_id, org, db):
+        return monitored
+
+    monkeypatch.setattr(tables, "_get_table_or_404", fake_get_table)
+    monkeypatch.setattr(tables, "decrypt_config", lambda encrypted, org_id: {})
+    monkeypatch.setattr(
+        tables.ConnectorFactory, "create", lambda source_type, config: Connector()
+    )
+
+    with pytest.raises(HTTPException, match="read-only"):
+        await tables.update_table(
+            "table-1",
+            tables.TableUpdate(dbt_model_yaml="CREATE TABLE forged.t (id int);"),
+            SimpleNamespace(id="org-1"),
+            FakeSession(),
+        )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await tables.update_table(
+            "table-1",
+            tables.TableUpdate(freshness_column="created_at"),
+            SimpleNamespace(id="org-1"),
+            FakeSession(),
+        )
+    assert exc_info.value.status_code == 422
+    assert "freshness_column" in exc_info.value.detail
 
 
 @pytest.mark.asyncio

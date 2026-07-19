@@ -31,7 +31,7 @@ class DuckDBConnector(BaseConnector):
             self._get_conn().execute("SELECT 1")
             return True
         except Exception as e:
-            logger.warning("DuckDB connection test failed: %s", e)
+            logger.warning("DuckDB connection test failed: %s", type(e).__name__)
             return False
 
     async def discover_schemas(self) -> list[SchemaInfo]:

@@ -41,7 +41,7 @@ class SQLiteConnector(BaseConnector):
             await conn.execute("SELECT 1")
             return True
         except Exception as e:
-            logger.warning("SQLite connection test failed: %s", e)
+            logger.warning("SQLite connection test failed: %s", type(e).__name__)
             return False
 
     async def discover_schemas(self) -> list[SchemaInfo]:

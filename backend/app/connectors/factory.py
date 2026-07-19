@@ -24,6 +24,12 @@ FIELD_METADATA = {
     "access_token": {"label": "Access token", "input_type": "password", "secret": True},
     "catalog": {"label": "Catalog", "input_type": "text"},
     "http_scheme": {"label": "HTTP scheme", "input_type": "select", "options": ["http", "https"]},
+    "tls_mode": {
+        "label": "TLS mode",
+        "input_type": "select",
+        "options": ["verify_identity", "disabled"],
+    },
+    "ssl_ca": {"label": "TLS CA certificate (PEM)", "input_type": "textarea"},
 }
 
 
@@ -100,11 +106,17 @@ CONNECTOR_REGISTRY = {
         "module": "app.connectors.mysql",
         "class": "MySQLConnector",
         "required": ["host", "database"],
-        "optional": {"port": 3306, "username": "root", "password": ""},
+        "optional": {
+            "port": 3306,
+            "username": "root",
+            "password": "",
+            "tls_mode": "verify_identity",
+            "ssl_ca": None,
+        },
         "label": "MySQL / MariaDB",
         "description": "MySQL 5.7+, MariaDB 10+",
         "readiness": "experimental",
-        "capabilities": _capabilities(),
+        "capabilities": _capabilities(profiling="core"),
     },
     "redshift": {
         "module": "app.connectors.redshift",

@@ -35,7 +35,56 @@ async def _rollback_connector_transaction(connector) -> None:
         if inspect.isawaitable(result):
             await result
     except Exception as exc:
-        logger.warning("Custom monitors: rollback after SQL error failed: %s", exc)
+        logger.warning(
+            "Custom monitors: rollback after SQL error failed: %s",
+            type(exc).__name__,
+        )
+
+
+async def _profile_connector_safely(
+    *,
+    source_type: str,
+    config: dict,
+    schema: str,
+    table: str,
+    freshness_column: str | None,
+    table_id: str,
+):
+    """Run a profile while containing every connector lifecycle error."""
+    from app.connectors.factory import ConnectorFactory
+    from app.services.error_safety import safe_profile_error
+    from app.services.profiler import ProfileResult, ProfilerService
+
+    connector = None
+    result = ProfileResult()
+    try:
+        connector = ConnectorFactory.create(source_type, config)
+        result = await ProfilerService().profile(
+            connector=connector,
+            schema=schema,
+            table=table,
+            freshness_column=freshness_column,
+        )
+    except Exception as exc:
+        logger.error(
+            "Profile connector lifecycle failed for table %s: %s",
+            table_id,
+            type(exc).__name__,
+        )
+        result.error = safe_profile_error(exc)
+    finally:
+        if connector is not None:
+            try:
+                await connector.close()
+            except Exception as exc:
+                logger.warning(
+                    "Profile connector close failed for table %s: %s",
+                    table_id,
+                    type(exc).__name__,
+                )
+                if result.error is None:
+                    result.error = safe_profile_error(exc)
+    return result
 
 
 async def _dispose_engine():
@@ -73,21 +122,21 @@ def profile_table(self, table_id: str):
     try:
         return _run(_profile_table_async(table_id))
     except Exception as exc:
-        logger.error("profile_table failed for %s: %s", table_id, exc)
-        raise self.retry(exc=exc)
+        logger.error("profile_table failed for %s: %s", table_id, type(exc).__name__)
+        raise self.retry(
+            exc=RuntimeError(f"profile task failed ({type(exc).__name__})")
+        )
 
 
 async def _profile_table_async(table_id: str) -> dict:
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from app.connectors.factory import ConnectorFactory
     from app.database import AsyncSessionLocal
     from app.models.data_source import DataSource
     from app.models.monitored_table import MonitoredTable
     from app.models.table_profile import TableProfile
     from app.services.crypto import decrypt_config
-    from app.services.profiler import ProfilerService
     from app.services.table_autopilot import mark_profile_step
 
     async with AsyncSessionLocal() as db:
@@ -119,18 +168,14 @@ async def _profile_table_async(table_id: str) -> dict:
 
         # Decrypt + connect
         config = decrypt_config(source.connection_config["encrypted"], str(source.org_id))
-        connector = ConnectorFactory.create(source.type, config)
-
-        try:
-            profiler = ProfilerService()
-            result = await profiler.profile(
-                connector=connector,
-                schema=table.schema_name,
-                table=table.table_name,
-                freshness_column=table.freshness_column,
-            )
-        finally:
-            await connector.close()
+        result = await _profile_connector_safely(
+            source_type=source.type,
+            config=config,
+            schema=table.schema_name,
+            table=table.table_name,
+            freshness_column=table.freshness_column,
+            table_id=table_id,
+        )
 
         # Persist
         profile = TableProfile(

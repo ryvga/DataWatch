@@ -241,7 +241,7 @@ Query params: `schema_name`, `table_name`.
 ## Monitored Tables — `/api/v1/tables`
 
 ### `POST /api/v1/tables`
-Add a table to monitoring. Enqueues first profile run immediately, starts Table Autopilot for safe baseline + AI recommendations, creates an APScheduler job, and stores a table schema snapshot when DDL is available.
+Add a table to monitoring. Enqueues first profile run immediately, starts Table Autopilot for safe baseline + AI recommendations, creates an APScheduler job, and captures a server-owned schema snapshot directly from the connector. Creation fails with 422 before persistence or task dispatch when the snapshot cannot be captured/parsed or when `freshness_column` is absent from the snapshot.
 
 ```json
 // Request
@@ -251,8 +251,7 @@ Add a table to monitoring. Enqueues first profile run immediately, starts Table 
   "table_name": "orders",
   "freshness_column": "created_at",     // optional — enables freshness checks
   "check_interval_minutes": 60,         // default: 60
-  "sensitivity": 3.0,                   // z-score threshold, default: 3.0
-  "dbt_model_yaml": null                // optional — enriches LLM context
+  "sensitivity": 3.0                    // z-score threshold, default: 3.0
 }
 
 // Response 201 — includes latest_profile if available
@@ -281,6 +280,10 @@ Add a table to monitoring. Enqueues first profile run immediately, starts Table 
   }
 }
 ```
+
+`schema_snapshot` is response-only. The deprecated request field `dbt_model_yaml` is
+rejected with 422 instead of being trusted as connector metadata. Updating a freshness
+column refreshes the live snapshot and validates the column before changing the table.
 
 Existing tables created before Table Autopilot return `autopilot.status = "not_started"` so the UI can still show the workflow and next action.
 

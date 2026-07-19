@@ -29,6 +29,14 @@ class SQLServerConnector(BaseConnector):
         self._config = config
         self._conn: Any | None = None
 
+    @staticmethod
+    def _odbc_value(value: object) -> str:
+        """Brace and escape an ODBC value so it cannot add connection attributes."""
+        text = str(value)
+        if not text or "\x00" in text:
+            raise ValueError("SQL Server connection values must be non-empty")
+        return "{" + text.replace("}", "}}") + "}"
+
     def _connection_string(self) -> str:
         c = self._config
         driver = c.get("driver", _DEFAULT_DRIVER)
@@ -37,13 +45,17 @@ class SQLServerConnector(BaseConnector):
         database = c["database"]
         username = c.get("username") or c.get("user", "")
         password = c.get("password", "")
-        return (
-            f"DRIVER={{{driver}}};"
-            f"SERVER={host},{port};"
-            f"DATABASE={database};"
-            f"UID={username};"
-            f"PWD={password};"
-            "TrustServerCertificate=yes"
+        server = f"{host},{port}"
+        return ";".join(
+            (
+                f"DRIVER={self._odbc_value(driver)}",
+                f"SERVER={self._odbc_value(server)}",
+                f"DATABASE={self._odbc_value(database)}",
+                f"UID={self._odbc_value(username)}",
+                f"PWD={self._odbc_value(password)}",
+                "Encrypt=yes",
+                "TrustServerCertificate=no",
+            )
         )
 
     async def _get_conn(self):
@@ -53,6 +65,7 @@ class SQLServerConnector(BaseConnector):
             self._conn = await aioodbc.connect(
                 dsn=self._connection_string(),
                 autocommit=True,
+                timeout=10,
             )
         return self._conn
 
@@ -169,8 +182,11 @@ class SQLServerConnector(BaseConnector):
         lines = []
         for row in rows:
             nullable = "NULL" if row[6] == "YES" else "NOT NULL"
-            lines.append(f"  [{row[0]}] {self._format_data_type(row)} {nullable}")
-        return f"CREATE TABLE [{schema}].[{table}] (\n" + ",\n".join(lines) + "\n);"
+            column = row[0].replace("]", "]]")
+            lines.append(f"  [{column}] {self._format_data_type(row)} {nullable}")
+        safe_schema = schema.replace("]", "]]")
+        safe_table = table.replace("]", "]]")
+        return f"CREATE TABLE [{safe_schema}].[{safe_table}] (\n" + ",\n".join(lines) + "\n);"
 
     async def close(self) -> None:
         if self._conn is not None and not getattr(self._conn, "closed", False):
