@@ -38,6 +38,7 @@ async def test_connector_types_include_registry_fields_and_versions():
     )
     assert by_type["sqlite"]["capabilities"]["profiling"] == "core"
     assert by_type["mysql"]["capabilities"]["profiling"] == "core"
+    assert by_type["sqlserver"]["capabilities"]["profiling"] == "core"
     mysql_fields = {
         field["name"]: field for field in by_type["mysql"]["fields"]
     }

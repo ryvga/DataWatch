@@ -48,7 +48,7 @@ connector is not described as fully supported merely because it can connect.
 | ClickHouse | Experimental | Connect, discover, schema | Scheduled profile dialect pending |
 | Databricks | Experimental | Connect, discover, schema | Scheduled profile dialect pending |
 | Trino / Presto | Experimental | Connect, discover, schema | Auth and profile conformance pending |
-| SQL Server / Azure SQL | Experimental | Connect, discover, schema; production images package ODBC Driver 18 and enforce verified-TLS DSN defaults | Live TLS/container conformance and profile dialect pending |
+| SQL Server / Azure SQL | Experimental | Connect, discover, schema, core scheduled profile; production images package ODBC Driver 18 and enforce verified-TLS DSN defaults | Live TLS/container conformance and percentile metrics pending |
 | MongoDB | Experimental | Connect, discover, inferred document schema | Document profiler/DSL compiler not wired to scheduler |
 | Cassandra | Experimental | Connect, discover, schema | Partition-bounded native monitor planner pending; generic scans are intentionally unsupported |
 | Snowflake | Planned | Registry metadata only | Connector is a 501 stub |

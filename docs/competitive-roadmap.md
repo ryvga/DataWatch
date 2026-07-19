@@ -41,7 +41,7 @@ Primary references:
 | Freshness and volume | Legacy profiler/detectors plus typed metric primitives | First-class DSL monitor kinds and scheduler |
 | Schema changes | Profile fingerprint and drift detector | Typed schema-change policy and allow/deny lists |
 | Row validations | Typed violations measurement and predicate compiler | Incident bridge plus bounded failed-row evidence |
-| Numeric/quality metrics | Typed aggregate compiler for PostgreSQL, DuckDB, SQLite | MySQL/SQL Server/warehouse compiled adapters |
+| Numeric/quality metrics | Typed aggregate compiler for PostgreSQL, DuckDB, SQLite, MySQL, and SQL Server core | Warehouse compiled adapters and live version conformance |
 | Compound conditions | Bounded `all`/`any`/`not` predicate tree | UI builder and YAML import/export |
 | Consecutive breach/recovery/cooldown | Deterministic evaluator and persisted state | Public lifecycle and incident transitions |
 | Custom SQL escape hatch | AST-restricted single scalar for selected local/PostgreSQL paths | Explicit advanced-mode UX, query budgets, audit labels |

@@ -25,6 +25,8 @@ _SKIP_SCHEMAS = {
 class SQLServerConnector(BaseConnector):
     """Async Microsoft SQL Server connector via aioodbc."""
 
+    profile_dialect = "sqlserver"
+
     def __init__(self, config: dict):
         self._config = config
         self._conn: Any | None = None

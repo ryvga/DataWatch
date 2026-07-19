@@ -239,7 +239,7 @@ CONNECTOR_REGISTRY = {
         "description": "Microsoft SQL Server / Azure SQL",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(),
+        "capabilities": _capabilities(profiling="core"),
     },
 }
 

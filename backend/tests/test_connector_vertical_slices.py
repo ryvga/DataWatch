@@ -365,6 +365,73 @@ def test_sqlserver_dsn_escapes_values_and_enforces_verified_tls():
     assert dsn.endswith(";Encrypt=yes;TrustServerCertificate=no")
 
 
+def test_sqlserver_declares_tested_core_profile_dialect():
+    assert SQLServerConnector.profile_dialect == "sqlserver"
+
+
+@pytest.mark.asyncio
+async def test_sqlserver_schema_to_core_profile_contract():
+    executed = []
+
+    class Cursor:
+        description = None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def execute(self, query, params=None):
+            executed.append((query, params))
+            if "INFORMATION_SCHEMA.COLUMNS" not in query:
+                self.description = [
+                    ("_row_count",),
+                    ("mean_amount",),
+                    ("empty_rate_status",),
+                ]
+
+        async def fetchall(self):
+            return [
+                ("id", "int", None, 10, 0, None, "NO"),
+                ("amount", "money", None, 19, 4, None, "YES"),
+                ("status", "nvarchar", 32, None, None, None, "YES"),
+                ("created_at", "datetime2", None, None, None, 7, "YES"),
+            ]
+
+        async def fetchone(self):
+            return (3, 6.25, 0.5)
+
+    class Connection:
+        closed = False
+
+        def cursor(self):
+            return Cursor()
+
+        async def close(self):
+            self.closed = True
+
+    connector = SQLServerConnector(
+        {"host": "db", "database": "analytics", "username": "monitor"}
+    )
+    connector._conn = Connection()
+
+    result = await ProfilerService().profile(
+        connector,
+        "dbo",
+        "orders",
+        freshness_column="created_at",
+    )
+
+    assert result.error is None
+    assert result.row_count == 3
+    assert result.column_metrics["amount"]["mean"] == 6.25
+    assert result.column_metrics["status"]["empty_rate"] == 0.5
+    profile_query = executed[-1][0]
+    assert "FROM [dbo].[orders]" in profile_query
+    assert "STDEVP(CAST([amount] AS FLOAT))" in profile_query
+
+
 def test_backend_image_packages_microsoft_odbc_driver_18():
     backend = Path(__file__).parents[1]
     for filename in ("Dockerfile", "Dockerfile.api", "Dockerfile.worker"):

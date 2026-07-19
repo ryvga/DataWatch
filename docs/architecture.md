@@ -254,6 +254,9 @@ SQL fragments. PostgreSQL/DuckDB use the full metric set; SQLite uses a core dia
 that omits unavailable native stddev/percentile functions. MySQL has a separate core
 dialect using backtick escaping, portable floating-point ratios, `TIMESTAMPDIFF`, and
 `STDDEV_POP`; percentile metrics remain absent until container/version conformance.
+SQL Server has a separate T-SQL core dialect using bracket escaping, `DATEDIFF_BIG`,
+`STDEVP`, and explicit floating-point casts; it also omits percentiles until live
+container/version conformance.
 MySQL creates a hostname-verifying, certificate-required TLS context by default. An
 explicit `tls_mode=disabled` exists for isolated development services and must not be
 used for remote databases.

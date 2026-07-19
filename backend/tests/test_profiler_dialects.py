@@ -91,6 +91,31 @@ def test_mysql_profile_query_uses_native_core_aggregates_and_quoting():
     assert parse_one(query, read="mysql").key == "select"
 
 
+def test_sqlserver_profile_query_uses_native_core_aggregates_and_quoting():
+    query = ProfilerService().build_profile_query(
+        "analytics]prod",
+        "order events",
+        [
+            ColumnInfo("amount]gross", "money"),
+            ColumnInfo("status", "nvarchar(32)"),
+            ColumnInfo("created_at", "datetime2"),
+        ],
+        "created_at",
+        dialect="sqlserver",
+    )
+
+    assert "FROM [analytics]]prod].[order events]" in query
+    assert "[amount]]gross]" in query
+    assert "DATEDIFF_BIG(SECOND, MAX([created_at]), SYSUTCDATETIME())" in query
+    assert "DATEDIFF_BIG(SECOND, MIN([created_at]), MAX([created_at]))" in query
+    assert "STDEVP(CAST([amount]]gross] AS FLOAT))" in query
+    assert "CAST([status] AS NVARCHAR(MAX))" in query
+    assert "LEN(CAST([status] AS NVARCHAR(MAX)) + N'#') - 1" in query
+    assert "::" not in query
+    assert "PERCENTILE_CONT" not in query
+    assert parse_one(query, read="tsql").key == "select"
+
+
 @pytest.mark.asyncio
 async def test_top_values_quotes_identifiers_and_bounds_limit():
     captured = []

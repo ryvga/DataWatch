@@ -20,14 +20,15 @@ logger = logging.getLogger(__name__)
 # Column type categories
 NUMERIC_TYPES = {
     "int", "integer", "bigint", "smallint", "tinyint", "mediumint",
-    "numeric", "decimal", "real",
+    "numeric", "decimal", "real", "money", "smallmoney",
     "double", "double precision", "float", "float4", "float8", "int2", "int4", "int8",
     "INT64", "FLOAT64", "NUMERIC", "BIGNUMERIC",  # BigQuery
     "NUMBER", "FLOAT",  # Snowflake / DuckDB
 }
 TIMESTAMP_TYPES = {
     "timestamp", "timestamp without time zone", "timestamp with time zone",
-    "timestamptz", "datetime", "TIMESTAMP", "DATETIME",
+    "timestamptz", "datetime", "datetime2", "smalldatetime", "datetimeoffset",
+    "TIMESTAMP", "DATETIME",
 }
 DATE_TYPES = {"date", "DATE"}
 TEXT_TYPES = {
@@ -151,6 +152,8 @@ class ProfilerService:
             raise ValueError("Database identifiers must be non-empty and contain no NUL bytes")
         if dialect == "mysql":
             return f"`{identifier.replace('`', '``')}`"
+        if dialect == "sqlserver":
+            return f"[{identifier.replace(']', ']]')}]"
         return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
 
     def _qualified_table(self, schema: str, table: str, dialect: str = "postgres") -> str:
@@ -174,11 +177,12 @@ class ProfilerService:
         Build a single SELECT with all aggregate metrics.
         Returns (query_string, metric_keys_in_order).
         """
-        if dialect not in {"postgres", "duckdb", "sqlite", "mysql"}:
+        if dialect not in {"postgres", "duckdb", "sqlite", "mysql", "sqlserver"}:
             raise ValueError(f"Unsupported profiling dialect: {dialect}")
 
         sqlite = dialect == "sqlite"
         mysql = dialect == "mysql"
+        sqlserver = dialect == "sqlserver"
         parts = [
             "COUNT(*) AS _row_count",
             # Duplicate rate: what fraction of rows are duplicates of at least one other row
@@ -196,6 +200,11 @@ class ProfilerService:
             elif mysql:
                 parts.append(
                     f"TIMESTAMPDIFF(SECOND, MAX({freshness}), CURRENT_TIMESTAMP) "
+                    "AS _freshness_seconds"
+                )
+            elif sqlserver:
+                parts.append(
+                    f"DATEDIFF_BIG(SECOND, MAX({freshness}), SYSUTCDATETIME()) "
                     "AS _freshness_seconds"
                 )
             else:
@@ -216,7 +225,7 @@ class ProfilerService:
                     f"CAST(SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) AS REAL) "
                     f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
                 )
-            elif mysql:
+            elif mysql or sqlserver:
                 parts.append(
                     f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) * 1.0 "
                     f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
@@ -234,7 +243,7 @@ class ProfilerService:
                     f"CAST(COUNT(DISTINCT {safe}) AS REAL) / NULLIF(COUNT(*), 0) "
                     f"AS {alias('uniqueness_ratio')}"
                 )
-            elif mysql:
+            elif mysql or sqlserver:
                 parts.append(
                     f"COUNT(DISTINCT {safe}) * 1.0 / NULLIF(COUNT(*), 0) "
                     f"AS {alias('uniqueness_ratio')}"
@@ -264,6 +273,17 @@ class ProfilerService:
                     parts += [
                         f"AVG({safe}) AS {alias('mean')}",
                         f"STDDEV_POP({safe}) AS {alias('stddev')}",
+                        f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('zero_rate')}",
+                        f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('negative_rate')}",
+                    ]
+                elif sqlserver:
+                    parts += [
+                        f"AVG(CAST({safe} AS FLOAT)) AS {alias('mean')}",
+                        f"STDEVP(CAST({safe} AS FLOAT)) AS {alias('stddev')}",
                         f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END) * 1.0 "
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
                         f"AS {alias('zero_rate')}",
@@ -301,6 +321,11 @@ class ProfilerService:
                         f"TIMESTAMPDIFF(SECOND, MIN({safe}), MAX({safe})) "
                         f"AS {alias('range_seconds')}"
                     )
+                elif sqlserver:
+                    parts.append(
+                        f"DATEDIFF_BIG(SECOND, MIN({safe}), MAX({safe})) "
+                        f"AS {alias('range_seconds')}"
+                    )
                 else:
                     parts.append(
                         f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) "
@@ -311,12 +336,21 @@ class ProfilerService:
                     text_value = f"CAST({safe} AS TEXT)"
                 elif mysql:
                     text_value = f"CAST({safe} AS CHAR)"
+                elif sqlserver:
+                    text_value = f"CAST({safe} AS NVARCHAR(MAX))"
                 else:
                     text_value = f"{safe}::TEXT"
+                length_value = (
+                    f"LEN({text_value} + N'#') - 1"
+                    if sqlserver
+                    else f"{'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})"
+                )
                 parts += [
-                    f"MIN({'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})) AS {alias('min_len')}",
-                    f"MAX({'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})) AS {alias('max_len')}",
-                    f"AVG({'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})) AS {alias('avg_len')}",
+                    f"MIN({length_value}) AS {alias('min_len')}",
+                    f"MAX({length_value}) AS {alias('max_len')}",
+                    f"AVG(CAST({length_value} AS FLOAT)) AS {alias('avg_len')}"
+                    if sqlserver
+                    else f"AVG({length_value}) AS {alias('avg_len')}",
                 ]
                 if sqlite:
                     parts.append(
@@ -324,7 +358,7 @@ class ProfilerService:
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
                         f"AS {alias('empty_rate')}"
                     )
-                elif mysql:
+                elif mysql or sqlserver:
                     parts.append(
                         f"SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END) * 1.0 "
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
