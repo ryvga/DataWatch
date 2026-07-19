@@ -346,6 +346,21 @@ not auto-resolve incidents.
 
 ---
 
+## Safe Monitor DSL — `/api/v2/monitors`
+
+### `POST /api/v2/monitors/validate`
+
+Validates a strict `datawatch.io/v1alpha1` JSON definition and resolves its `assetId`
+inside the authenticated organization. The response includes `canonicalDefinition`, a
+stable `definitionHash`, predicate/measurement statistics, and `capabilityPlan`.
+
+This first runtime slice is validation-only. A valid response currently reports
+`activationSupported: false` and `dsl_compiler_not_implemented`; it does not persist or
+execute the definition. Unknown fields and invalid grammar return FastAPI/Pydantic 422,
+while an asset outside the tenant returns 404.
+
+---
+
 ### `GET /api/v1/tables/{id}/profiles`
 Paginated profile history. Excludes `column_metrics` blob for list performance.
 

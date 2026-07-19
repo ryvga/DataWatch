@@ -9,7 +9,7 @@ from sqlalchemy import select, text
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.routers import alerts, auth, billing, incidents, orgs, sources, tables
-from app.routers import admin, reports, custom_monitors, notifications, teams
+from app.routers import admin, reports, custom_monitors, monitor_dsl, notifications, teams
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -81,6 +81,7 @@ app.include_router(alerts.router)
 app.include_router(reports.router)
 app.include_router(custom_monitors.router)
 app.include_router(custom_monitors.org_router)
+app.include_router(monitor_dsl.router)
 app.include_router(teams.router)
 app.include_router(notifications.router)
 

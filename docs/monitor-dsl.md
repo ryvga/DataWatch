@@ -1,9 +1,22 @@
 # Safe Monitor DSL Specification
 
-Status: Draft (`datawatch.io/v1alpha1`)
+Status: Validation runtime implemented; compiler/activation draft (`datawatch.io/v1alpha1`)
 
-Tracking: Linear MOU-15
+Tracking: Linear MOU-15 (parent), MOU-19 (runtime)
 Implementation plan: Notion “DataWatch Connector & Safe Monitor DSL Overhaul”
+
+## Current implementation
+
+`POST /api/v2/monitors/validate` now accepts strict JSON definitions for `metric` and
+`violations` measurements. It rejects unknown fields, versions, predicate shapes,
+duplicate IDs, unknown references, non-finite/complex literals, oversized values,
+excessive predicate depth/node counts, and cross-measurement references inside violation
+predicates. The response contains canonical JSON, a stable SHA-256 definition hash,
+structural statistics, tenant-owned asset resolution, and a truthful capability plan.
+
+The endpoint is deliberately validation-only: `activationSupported=false` and
+`dsl_compiler_not_implemented` remain explicit until typed dialect compilers, immutable
+revisions, preview attestations, and monitor runs are implemented.
 
 ## Purpose
 

@@ -60,6 +60,11 @@ are AST-validated to one table, run through a read-only/timeout connector path, 
 return exactly one non-negative integer scalar. The typed safe monitor DSL roadmap is
 documented in `docs/monitor-dsl.md`.
 
+The first `datawatch.io/v1alpha1` runtime is available at
+`POST /api/v2/monitors/validate`: strict JSON validation, tenant asset resolution,
+canonical hashing, predicate bounds, and capability planning are implemented. Execution
+and activation remain explicitly disabled until typed connector compilers are ready.
+
 ## Quick Start (local)
 
 **Prerequisites:** Docker, Docker Compose

@@ -229,6 +229,13 @@ separate monitor method, with database read-only mode where available, a stateme
 timeout, exact-one-row detection, and an exact one-numeric-column non-negative integer
 contract. Empty or malformed results are execution errors and cannot resolve incidents.
 
+The v2 DSL validation boundary lives in `services/monitor_dsl.py`. Strict Pydantic models
+produce canonical JSON and a stable SHA-256 hash, enforce bounded recursive predicates
+and measurement references, and never compile or execute user input. The validation
+router resolves the target through the tenant's data source and returns an explicit
+capability plan. Activation remains disabled until connector compilers and immutable
+revision/run persistence land.
+
 ---
 
 ## Anomaly Detection Detail
