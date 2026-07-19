@@ -21,7 +21,9 @@ from app.services.monitor_attestation import (
     create_preview_attestation,
     verify_preview_attestation,
 )
+from app.services.monitor_compiler import PLANNER_VERSION, analyze_relational_support
 from app.services.monitor_dsl import MonitorDefinition, definition_hash, predicate_stats
+from app.services.schema_binding import SchemaBindingError, build_relation_binding
 
 router = APIRouter(prefix="/api/v2/monitors", tags=["monitor_dsl"])
 asset_router = APIRouter(prefix="/api/v2/assets", tags=["monitor_dsl"])
@@ -63,24 +65,95 @@ async def _latest_schema_fingerprint(table_id, db: AsyncSession) -> str | None:
     )
 
 
-def _capability_plan(definition: MonitorDefinition, source: DataSource) -> dict:
+def _planning_result(
+    definition: MonitorDefinition,
+    source: DataSource,
+    table: MonitoredTable,
+    schema_fingerprint: str | None,
+) -> tuple[dict, dict | None, str | None]:
     capabilities = ConnectorFactory.capabilities_for(source.type)
     requirements = sorted({measurement.type for measurement in definition.spec.measurements})
-    unsupported = []
+    issues = []
+    plan = None
+    binding_fingerprint = schema_fingerprint
+    try:
+        relation = build_relation_binding(
+            asset_id=table.id,
+            source_type=source.type,
+            schema_name=table.schema_name,
+            table_name=table.table_name,
+            ddl=table.dbt_model_yaml,
+            latest_schema_fingerprint=schema_fingerprint,
+        )
+    except SchemaBindingError as exc:
+        compilation = {
+            "compilationSupported": False,
+            "plannerVersion": PLANNER_VERSION,
+            "issues": [{"code": exc.code, "path": "schema", "message": str(exc)}],
+        }
+    else:
+        binding_fingerprint = relation.schema_fingerprint
+        compilation, compiled = analyze_relational_support(definition, relation=relation)
+        plan = compiled.payload() if compiled else None
+
+    issues.extend(compilation["issues"])
     if capabilities["profiling"] == "none":
-        unsupported.append("connector_has_no_profile_runtime")
-    unsupported.append("dsl_compiler_not_integrated")
-    return {
+        issues.append(
+            {
+                "code": "connector_has_no_profile_runtime",
+                "path": "source.type",
+                "message": f"{source.type} has no scheduled profile runtime",
+            }
+        )
+    unsupported = [issue["code"] for issue in issues]
+    payload = {
         "sourceType": source.type,
         "requirements": requirements,
-        "compatible": not unsupported,
+        "compilationSupported": compilation["compilationSupported"],
+        "plannerVersion": compilation["plannerVersion"],
+        "compatible": compilation["compilationSupported"] and not unsupported,
         "unsupported": unsupported,
+        "issues": issues,
         "activationSupported": False,
+        "activationBlockers": ["dsl_execution_runtime_not_implemented"],
     }
+    return payload, plan, binding_fingerprint
 
 
-def _validation_payload(definition: MonitorDefinition, source: DataSource) -> dict:
-    return {
+def _binding_fingerprint(
+    table: MonitoredTable,
+    source: DataSource,
+    latest_schema_fingerprint: str | None,
+) -> str | None:
+    try:
+        relation = build_relation_binding(
+            asset_id=table.id,
+            source_type=source.type,
+            schema_name=table.schema_name,
+            table_name=table.table_name,
+            ddl=table.dbt_model_yaml,
+            latest_schema_fingerprint=latest_schema_fingerprint,
+        )
+    except SchemaBindingError:
+        return latest_schema_fingerprint
+    return relation.schema_fingerprint
+
+
+def _validation_payload(
+    definition: MonitorDefinition,
+    source: DataSource,
+    table: MonitoredTable,
+    schema_fingerprint: str | None,
+    *,
+    include_plan: bool = False,
+) -> tuple[dict, str | None]:
+    capability_plan, compiled_plan, binding_fingerprint = _planning_result(
+        definition,
+        source,
+        table,
+        schema_fingerprint,
+    )
+    payload = {
         "valid": True,
         "apiVersion": definition.api_version,
         "definitionHash": definition_hash(definition),
@@ -89,8 +162,11 @@ def _validation_payload(definition: MonitorDefinition, source: DataSource) -> di
             "measurements": len(definition.spec.measurements),
             **predicate_stats(definition),
         },
-        "capabilityPlan": _capability_plan(definition, source),
+        "capabilityPlan": capability_plan,
     }
+    if include_plan and compiled_plan:
+        payload["compiledPlan"] = compiled_plan
+    return payload, binding_fingerprint
 
 
 def _monitor_payload(monitor: Monitor, revision: MonitorRevision) -> dict:
@@ -168,8 +244,10 @@ async def validate_monitor_definition(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
-    _, source = await _resolve_target(definition.spec.target.asset_id, org.id, db)
-    return _validation_payload(definition, source)
+    table, source = await _resolve_target(definition.spec.target.asset_id, org.id, db)
+    schema_fingerprint = await _latest_schema_fingerprint(table.id, db)
+    payload, _ = _validation_payload(definition, source, table, schema_fingerprint)
+    return payload
 
 
 @router.post("/preview")
@@ -180,24 +258,36 @@ async def preview_monitor_definition(
 ):
     table, source = await _resolve_target(definition.spec.target.asset_id, org.id, db)
     schema_fingerprint = await _latest_schema_fingerprint(table.id, db)
-    digest = definition_hash(definition)
-    token, claims = create_preview_attestation(
-        org_id=str(org.id),
-        asset_id=str(table.id),
-        definition_hash=digest,
-        schema_fingerprint=schema_fingerprint,
+    validation, binding_fingerprint = _validation_payload(
+        definition,
+        source,
+        table,
+        schema_fingerprint,
+        include_plan=True,
     )
-    return {
-        **_validation_payload(definition, source),
-        "preview": {
-            "status": "validation_only",
-            "attestation": token,
-            "issuedAt": claims.issued_at,
-            "expiresAt": claims.expires_at,
-            "plannerVersion": claims.planner_version,
-            "schemaFingerprint": schema_fingerprint,
-        },
+    preview = {
+        "status": "validation_only",
+        "plannerVersion": PLANNER_VERSION,
+        "schemaFingerprint": binding_fingerprint,
     }
+    if "compiledPlan" in validation:
+        digest = definition_hash(definition)
+        token, claims = create_preview_attestation(
+            org_id=str(org.id),
+            asset_id=str(table.id),
+            definition_hash=digest,
+            schema_fingerprint=binding_fingerprint,
+        )
+        preview.update(
+            {
+                "status": "compiled_validation_only",
+                "attestation": token,
+                "issuedAt": claims.issued_at,
+                "expiresAt": claims.expires_at,
+                "plannerVersion": claims.planner_version,
+            }
+        )
+    return {**validation, "preview": preview}
 
 
 @asset_router.post("/{asset_id}/monitors", status_code=201)
@@ -209,7 +299,7 @@ async def create_monitor_draft(
 ):
     if definition.spec.target.asset_id != asset_id:
         raise HTTPException(status_code=422, detail="Definition target does not match asset path")
-    table, _ = await _resolve_target(asset_id, org.id, db)
+    table, source = await _resolve_target(asset_id, org.id, db)
     duplicate = await db.scalar(
         select(Monitor.id).where(
             Monitor.org_id == org.id,
@@ -220,7 +310,12 @@ async def create_monitor_draft(
     if duplicate:
         raise HTTPException(status_code=409, detail="A monitor with this name already exists")
 
-    schema_fingerprint = await _latest_schema_fingerprint(table.id, db)
+    latest_schema_fingerprint = await _latest_schema_fingerprint(table.id, db)
+    schema_fingerprint = _binding_fingerprint(
+        table,
+        source,
+        latest_schema_fingerprint,
+    )
     digest = definition_hash(definition)
     monitor = Monitor(
         org_id=org.id,
@@ -346,6 +441,7 @@ async def create_monitor_revision(
     db: AsyncSession = Depends(get_db),
 ):
     monitor = await _get_monitor(monitor_id, org.id, db)
+    table, source = await _resolve_target(monitor.table_id, org.id, db)
     if body.definition.spec.target.asset_id != monitor.table_id:
         raise HTTPException(status_code=422, detail="Monitor target is immutable")
     if body.expected_revision != monitor.current_revision:
@@ -358,7 +454,12 @@ async def create_monitor_revision(
     if digest == current.definition_hash:
         raise HTTPException(status_code=409, detail="Definition is unchanged")
 
-    schema_fingerprint = await _latest_schema_fingerprint(monitor.table_id, db)
+    latest_schema_fingerprint = await _latest_schema_fingerprint(monitor.table_id, db)
+    schema_fingerprint = _binding_fingerprint(
+        table,
+        source,
+        latest_schema_fingerprint,
+    )
     next_revision = monitor.current_revision + 1
     result = await db.execute(
         update(Monitor)
@@ -408,7 +509,13 @@ async def activate_monitor(
     if body.expected_revision != monitor.current_revision:
         raise HTTPException(status_code=409, detail="Monitor revision changed after preview")
     revision = await _current_revision(monitor, db)
-    schema_fingerprint = await _latest_schema_fingerprint(monitor.table_id, db)
+    table, source = await _resolve_target(monitor.table_id, org.id, db)
+    latest_schema_fingerprint = await _latest_schema_fingerprint(monitor.table_id, db)
+    schema_fingerprint = _binding_fingerprint(
+        table,
+        source,
+        latest_schema_fingerprint,
+    )
     try:
         verify_preview_attestation(
             body.preview_attestation,

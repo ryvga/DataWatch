@@ -1,6 +1,6 @@
 # Safe Monitor DSL Specification
 
-Status: Validation, draft persistence, immutable revision history, preview attestations, and a non-executing relational compiler foundation implemented; compiler integration/activation pending (`datawatch.io/v1alpha1`)
+Status: Validation, draft persistence, immutable revision history, schema-bound compiled previews, and preview attestations implemented; execution/activation pending (`datawatch.io/v1alpha1`)
 
 Tracking: Linear MOU-15 (parent), MOU-19 (runtime)
 Implementation plan: Notion “DataWatch Connector & Safe Monitor DSL Overhaul”
@@ -19,10 +19,15 @@ append-only revision table. Preview returns a five-minute HMAC attestation bound
 organization, asset, definition hash, latest schema fingerprint, and planner version.
 Revision history and the run audit collection are readable through tenant-scoped APIs.
 
+Validation now distinguishes structural validity from connector compatibility. The API
+parses the asset's connector DDL snapshot into a typed relation, checks field existence
+and operation/type compatibility, and reports structured compiler issues. Preview emits
+the deterministic plan only when compilation succeeds.
+
 Execution remains deliberately disabled: `activationSupported=false` and
-`dsl_compiler_not_integrated` stay explicit until schema-aware planning is wired to the
-API and the run orchestrator is implemented. The run table exists for that audit trail
-but no DSL runs are created yet.
+`dsl_execution_runtime_not_implemented` remain explicit until connector parameter
+adapters and the run orchestrator are implemented. The run table exists for that audit
+trail but no DSL runs are created yet.
 
 The first pure relational compiler constructs SQLGlot AST nodes programmatically for
 PostgreSQL, DuckDB, and SQLite. It emits one aggregate `SELECT`, short deterministic
@@ -30,11 +35,15 @@ output aliases, ordered named placeholders, typed parameter metadata, output bin
 and a stable plan hash. Its rendered SQL is preview-only: each connector still needs a
 driver-specific binding adapter and execution controls before it can run.
 
-The deliberately narrow portable subset is row count, null count/rate, distinct
-count/rate, equality/inequality, membership, null checks, and nested boolean predicates.
-String matching, ordered numeric comparisons, missing/NaN semantics, stddev, freshness,
-and other typed metrics remain deferred until field existence and logical types are
-validated against a structured schema binding.
+The schema-bound subset includes row/null/distinct metrics; numeric min/max/mean/sum;
+PostgreSQL/DuckDB stddev; timestamp/date freshness; typed equality and ordered
+comparisons; field-to-field comparisons; between/membership; escaped string matching;
+null/zero/negative checks; and nested boolean predicates. SQLite explicitly rejects
+stddev. Relational `is_missing` and portable NaN semantics remain fail-closed.
+
+Planner version `datawatch-v1alpha1-relational-2` binds the compiled preview to the
+latest successful profile fingerprint, or a deterministic DDL fingerprint before the
+first profile. The version bump invalidates attestations created by the unbound planner.
 
 ## Purpose
 

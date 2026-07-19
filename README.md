@@ -67,10 +67,11 @@ sample provenance prevent sampled counts from masquerading as true row counts.
 The `datawatch.io/v1alpha1` runtime provides strict JSON validation, tenant asset
 resolution, canonical hashing, bounded predicates, capability planning, draft creation,
 append-only revision history, and short-lived preview attestations under `/api/v2`.
-An initial non-executing compiler produces deterministic, parameterized aggregate plans
-for a portable PostgreSQL/DuckDB/SQLite subset. Execution and activation remain explicitly
-disabled until schema binding and connector-specific parameter/read-only runtime adapters
-are ready; the run audit schema and read API are present but do not yet record DSL runs.
+Preview now parses connector DDL into a typed, asset-bound schema and produces
+deterministic parameterized PostgreSQL/DuckDB/SQLite aggregate plans only when every
+referenced field and operation is compatible. Execution and activation remain explicitly
+disabled until connector-specific parameter/read-only runtime adapters are ready; the run
+audit schema and read API are present but do not yet record DSL runs.
 
 ## Quick Start (local)
 

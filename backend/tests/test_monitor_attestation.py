@@ -33,6 +33,7 @@ def test_preview_attestation_is_bound_to_full_context_and_expiry():
     verified = _claims(token)
     assert verified == issued
     assert verified.planner_version == PLANNER_VERSION
+    assert PLANNER_VERSION == "datawatch-v1alpha1-relational-2"
     assert verified.expires_at == 1_060
     assert ATTESTATION_VERSION == 1
 

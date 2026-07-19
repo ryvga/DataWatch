@@ -151,6 +151,9 @@ except Exception as e:
   while snapshots depend on its renderer; never interpolate a user literal or parse a
   user-authored fragment in the typed compiler. Rendered placeholders are preview-only
   until a connector-specific parameter adapter is tested.
+- Compilers require a `RelationBinding` from the connector DDL snapshot. Resolve fields
+  by exact name, reject missing fields and incompatible logical types, and bind plans to
+  the latest schema fingerprint. Never infer compatibility from a field name alone.
 
 ### React / Frontend
 

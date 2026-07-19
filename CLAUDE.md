@@ -420,7 +420,7 @@ When working on this project with Claude Code, these skills are relevant:
 The project is in **MVP SaaS state**. Completed milestones:
 
 1. **Subdomain-first multi-tenancy** — `localhost` = landing, `slug.localhost` = workspace, `admin.localhost` = admin (env-configured subdomain, never guessable)
-2. **Capability-aware connector registry and safe DSL foundation** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and `datawatch.io/v1alpha1` provides strict validation, canonical draft/revision persistence, run audit schema, context-bound preview attestations, and a pure parameterized PostgreSQL/DuckDB/SQLite compiler foundation while schema-aware API integration and activation remain gated
+2. **Capability-aware connector registry and safe DSL foundation** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and `datawatch.io/v1alpha1` provides strict validation, canonical draft/revision persistence, run audit schema, typed DDL schema bindings, parameterized PostgreSQL/DuckDB/SQLite compiled previews, and context-bound attestations while execution and activation remain gated
 3. **7 anomaly detection methods** — Z-Score, Isolation Forest, STL Seasonal, Cardinality Drop, Row Growth Rate, Rule-Based, **Enum/Category Drift** (new)
 4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
 5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)

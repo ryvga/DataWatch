@@ -71,7 +71,10 @@ async def test_dsl_draft_revision_preview_and_tenant_isolation(client, auth_head
         "/api/v2/monitors/preview", headers=auth_headers, json=initial
     )
     assert preview.status_code == 200, preview.text
-    assert preview.json()["preview"]["status"] == "validation_only"
+    assert preview.json()["preview"]["status"] == "compiled_validation_only"
+    assert preview.json()["capabilityPlan"]["compilationSupported"] is True
+    assert preview.json()["compiledPlan"]["statementMode"] == "preview_only"
+    assert preview.json()["compiledPlan"]["driverBindingRequired"] is True
 
     created = await client.post(
         f"/api/v2/assets/{asset_id}/monitors", headers=auth_headers, json=initial

@@ -354,17 +354,22 @@ Validates a strict `datawatch.io/v1alpha1` JSON definition and resolves its `ass
 inside the authenticated organization. The response includes `canonicalDefinition`, a
 stable `definitionHash`, predicate/measurement statistics, and `capabilityPlan`.
 
-Validation does not persist or execute the definition. A valid response reports
-`activationSupported: false` and `dsl_compiler_not_integrated` until schema-aware plans
-and connector execution adapters are wired to the API. Unknown fields and invalid grammar
-return FastAPI/Pydantic 422, while an asset outside the tenant returns 404.
+Validation does not persist or execute the definition. It returns separate
+`valid`, `compilationSupported`, `compatible`, and `activationSupported` states. A valid
+grammar can therefore report structured schema/compiler issues such as
+`field_not_found`, `field_type_not_supported`, or `schema_snapshot_missing` without
+being treated as malformed. Unknown grammar fields return 422, while an asset outside
+the tenant returns 404. Activation always remains false until the execution runtime lands.
 
 ### `POST /api/v2/monitors/preview`
 
-Validates the same definition and returns a validation-only preview plus a short-lived
-HMAC attestation. The attestation expires after five minutes and is bound to the tenant,
-asset, canonical definition hash, latest successful schema fingerprint, and planner
-version. Any bound-context change makes activation reject it.
+Validates the same definition and, when compatible, returns `compiledPlan` plus a
+short-lived HMAC attestation. The plan contains preview-only SQL, ordered typed parameter
+metadata, logical-to-physical output bindings, and an exact-one-row result contract. It
+is not a connector driver execution contract. The attestation expires after five minutes
+and is bound to the tenant, asset, canonical definition hash, latest successful schema
+fingerprint, and planner version. Any bound-context change makes activation reject it.
+An incompatible validation-only preview contains structured issues but no attestation.
 
 ### `POST /api/v2/assets/{asset_id}/monitors`
 

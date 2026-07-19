@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -13,6 +12,7 @@ from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
 from app.services.crypto import CryptoService
 from app.services.monitor_recommender import recommend_monitors
+from app.services.schema_binding import LogicalType, parse_ddl_columns
 
 logger = logging.getLogger(__name__)
 
@@ -70,49 +70,23 @@ def mark_profile_step(state: dict | None, *, status: str, profile_id: str | None
     return state
 
 
-_DDL_COLUMN_RE = re.compile(
-    r"^\s*\"?`?(?P<name>[A-Za-z_][\w$]*)\"?`?\s+(?P<type>[A-Za-z][\w\s()]+?)(?:\s+|,|$)(?P<nullable>NOT NULL|NULL)?",
-    re.IGNORECASE,
-)
-
-
 def columns_from_ddl(ddl: str | None) -> list[dict]:
-    if not ddl:
-        return []
-    columns: list[dict] = []
-    for raw in ddl.splitlines():
-        line = raw.strip().rstrip(",")
-        if not line or line.upper().startswith(("CREATE ", ");", ")")):
-            continue
-        match = _DDL_COLUMN_RE.match(line)
-        if not match:
-            continue
-        name = match.group("name")
-        dtype = " ".join(match.group("type").split()).lower()
-        nullable_token = (match.group("nullable") or "").upper()
-        category = _category_for_type(dtype, name)
-        columns.append(
-            {
-                "name": name,
-                "data_type": dtype,
-                "category": category,
-                "nullable": nullable_token != "NOT NULL",
-            }
-        )
-    return columns
-
-
-def _category_for_type(dtype: str, name: str) -> str:
-    text = f"{dtype} {name}".lower()
-    if any(token in text for token in ("timestamp", "datetime", "timestamptz", "created_at", "updated_at", "loaded_at")):
-        return "timestamp"
-    if re.search(r"\bdate\b", text):
-        return "date"
-    if any(token in dtype for token in ("int", "numeric", "decimal", "double", "float", "real")):
-        return "numeric"
-    if "bool" in dtype:
-        return "boolean"
-    return "text"
+    category = {
+        LogicalType.INTEGER: "numeric",
+        LogicalType.NUMBER: "numeric",
+        LogicalType.TIMESTAMP: "timestamp",
+        LogicalType.DATE: "date",
+        LogicalType.BOOLEAN: "boolean",
+    }
+    return [
+        {
+            "name": column.name,
+            "data_type": column.data_type,
+            "category": category.get(column.logical_type, "text"),
+            "nullable": column.nullable,
+        }
+        for column in parse_ddl_columns(ddl)
+    ]
 
 
 def _is_safe_builtin(monitor: dict) -> bool:

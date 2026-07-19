@@ -138,7 +138,17 @@ def test_metric_measurement_has_strict_type_contract():
 async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
     from app.routers.monitor_dsl import validate_monitor_definition
 
-    table = SimpleNamespace(id=UUID(ASSET_ID), source_id="source-1")
+    table = SimpleNamespace(
+        id=UUID(ASSET_ID),
+        source_id="source-1",
+        schema_name="public",
+        table_name="orders",
+        dbt_model_yaml=(
+            "CREATE TABLE public.orders ("
+            "status text NULL, payment_reference text NULL"
+            ");"
+        ),
+    )
     source = SimpleNamespace(id="source-1", type="postgres")
 
     class Database:
@@ -148,6 +158,9 @@ async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
                     return (table, source)
 
             return Result()
+
+        async def scalar(self, statement):
+            return None
 
     definition = MonitorDefinition.model_validate(valid_definition())
     response = await validate_monitor_definition(
@@ -166,7 +179,144 @@ async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
     assert response["capabilityPlan"] == {
         "sourceType": "postgres",
         "requirements": ["violations"],
-        "compatible": False,
-        "unsupported": ["dsl_compiler_not_integrated"],
+        "compilationSupported": True,
+        "plannerVersion": "datawatch-v1alpha1-relational-2",
+        "compatible": True,
+        "unsupported": [],
+        "issues": [],
         "activationSupported": False,
+        "activationBlockers": ["dsl_execution_runtime_not_implemented"],
     }
+
+
+@pytest.mark.asyncio
+async def test_validation_distinguishes_valid_grammar_from_schema_incompatibility():
+    from app.routers.monitor_dsl import validate_monitor_definition
+
+    table = SimpleNamespace(
+        id=UUID(ASSET_ID),
+        schema_name="public",
+        table_name="orders",
+        dbt_model_yaml="CREATE TABLE public.orders (amount text NULL);",
+    )
+    source = SimpleNamespace(type="postgres")
+
+    class Database:
+        async def execute(self, statement):
+            class Result:
+                def one_or_none(self):
+                    return (table, source)
+
+            return Result()
+
+        async def scalar(self, statement):
+            return None
+
+    body = valid_definition()
+    body["spec"]["measurements"] = [
+        {"id": "average", "type": "metric", "metric": "mean", "field": "amount"}
+    ]
+    body["spec"]["breachWhen"] = {
+        "op": "gt",
+        "left": {"ref": "average"},
+        "right": {"literal": 10},
+    }
+    response = await validate_monitor_definition(
+        MonitorDefinition.model_validate(body),
+        org=SimpleNamespace(id="org-1"),
+        db=Database(),
+    )
+
+    assert response["valid"] is True
+    assert response["capabilityPlan"]["compilationSupported"] is False
+    assert response["capabilityPlan"]["compatible"] is False
+    assert response["capabilityPlan"]["unsupported"] == ["field_type_not_supported"]
+    assert response["capabilityPlan"]["issues"][0]["message"] == (
+        "mean does not support amount (string)"
+    )
+
+
+@pytest.mark.asyncio
+async def test_preview_returns_bound_plan_without_enabling_execution():
+    from app.routers.monitor_dsl import preview_monitor_definition
+
+    table = SimpleNamespace(
+        id=UUID(ASSET_ID),
+        schema_name="public",
+        table_name="orders",
+        dbt_model_yaml=(
+            "CREATE TABLE public.orders ("
+            "status text NULL, payment_reference text NULL"
+            ");"
+        ),
+    )
+    source = SimpleNamespace(type="postgres")
+
+    class Database:
+        async def execute(self, statement):
+            class Result:
+                def one_or_none(self):
+                    return (table, source)
+
+            return Result()
+
+        async def scalar(self, statement):
+            return None
+
+    response = await preview_monitor_definition(
+        MonitorDefinition.model_validate(valid_definition()),
+        org=SimpleNamespace(id="org-1"),
+        db=Database(),
+    )
+
+    assert response["preview"]["status"] == "compiled_validation_only"
+    assert len(response["compiledPlan"]["relation"]["schemaFingerprint"]) == 32
+    assert response["compiledPlan"]["statementMode"] == "preview_only"
+    assert response["capabilityPlan"]["activationSupported"] is False
+    assert response["capabilityPlan"]["activationBlockers"] == [
+        "dsl_execution_runtime_not_implemented"
+    ]
+
+
+@pytest.mark.asyncio
+async def test_incompatible_preview_does_not_issue_activation_attestation():
+    from app.routers.monitor_dsl import preview_monitor_definition
+
+    table = SimpleNamespace(
+        id=UUID(ASSET_ID),
+        schema_name="public",
+        table_name="orders",
+        dbt_model_yaml="CREATE TABLE public.orders (amount text NULL);",
+    )
+    source = SimpleNamespace(type="postgres")
+
+    class Database:
+        async def execute(self, statement):
+            class Result:
+                def one_or_none(self):
+                    return (table, source)
+
+            return Result()
+
+        async def scalar(self, statement):
+            return None
+
+    body = valid_definition()
+    body["spec"]["measurements"] = [
+        {"id": "average", "type": "metric", "metric": "mean", "field": "amount"}
+    ]
+    body["spec"]["breachWhen"] = {
+        "op": "gt",
+        "left": {"ref": "average"},
+        "right": {"literal": 10},
+    }
+    response = await preview_monitor_definition(
+        MonitorDefinition.model_validate(body),
+        org=SimpleNamespace(id="org-1"),
+        db=Database(),
+    )
+
+    assert response["preview"]["status"] == "validation_only"
+    assert "attestation" not in response["preview"]
+    assert "compiledPlan" not in response
+    assert response["capabilityPlan"]["compilationSupported"] is False

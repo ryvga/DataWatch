@@ -10,7 +10,39 @@ from app.services.monitor_compiler import (
     compile_relational_plan,
 )
 from app.services.monitor_dsl import MonitorDefinition, canonical_json
+from app.services.schema_binding import build_relation_binding
 from tests.test_monitor_dsl import valid_definition
+
+
+DEFAULT_DDL = """CREATE TABLE analytics.orders (
+  id integer NOT NULL,
+  status text NULL,
+  payment_reference text NULL,
+  amount numeric(12, 2) NULL,
+  other_amount numeric(12, 2) NULL,
+  email text NULL,
+  user_id bigint NULL,
+  created_at timestamp NULL
+);"""
+
+
+def _relation(
+    *,
+    source_type="postgres",
+    schema_name="analytics",
+    table_name="orders",
+    ddl=DEFAULT_DDL,
+    asset_id=None,
+):
+    definition = valid_definition()
+    return build_relation_binding(
+        asset_id=asset_id or MonitorDefinition.model_validate(definition).spec.target.asset_id,
+        source_type=source_type,
+        schema_name=schema_name,
+        table_name=table_name,
+        ddl=ddl,
+        latest_schema_fingerprint=None,
+    )
 
 
 def _metric_definition(metric: str, field: str | None = None) -> MonitorDefinition:
@@ -37,9 +69,10 @@ def test_postgres_plan_quotes_identifiers_and_parameterizes_hostile_literals():
 
     payload = compile_relational_plan(
         model,
-        source_type="postgres",
-        schema_name='sales"; DROP SCHEMA public; --',
-        table_name='order items"; DELETE FROM users; --',
+        relation=_relation(
+            schema_name='sales"; DROP SCHEMA public; --',
+            table_name='order items"; DELETE FROM users; --',
+        ),
     ).payload()
 
     assert payload["plannerVersion"] == PLANNER_VERSION
@@ -80,15 +113,11 @@ def test_relational_compiler_has_deterministic_dialect_snapshots(
     model = MonitorDefinition.model_validate(valid_definition())
     first = compile_relational_plan(
         model,
-        source_type=source_type,
-        schema_name="analytics",
-        table_name="orders",
+        relation=_relation(source_type=source_type),
     ).payload()
     second = compile_relational_plan(
         model,
-        source_type=source_type,
-        schema_name="analytics",
-        table_name="orders",
+        relation=_relation(source_type=source_type),
     ).payload()
 
     assert first == second
@@ -109,9 +138,7 @@ def test_nested_violation_sql_snapshots_are_pinned_per_dialect():
     for source_type, statement in expected.items():
         plan = compile_relational_plan(
             model,
-            source_type=source_type,
-            schema_name="analytics",
-            table_name="orders",
+            relation=_relation(source_type=source_type),
         )
         assert plan.statement == statement
 
@@ -142,9 +169,7 @@ def test_portable_metrics_batch_into_one_aggregate_select():
     }
     payload = compile_relational_plan(
         MonitorDefinition.model_validate(definition),
-        source_type="postgres",
-        schema_name="analytics",
-        table_name="orders",
+        relation=_relation(),
     ).payload()
 
     parsed = parse_one(payload["statement"], dialect="postgres")
@@ -165,12 +190,10 @@ def test_portable_metrics_batch_into_one_aggregate_select():
 
 def test_sqlite_rejects_stddev_without_emitting_a_statement():
     definition = _metric_definition("stddev", "amount")
-    with pytest.raises(MonitorPlanError, match="deferred") as exc:
+    with pytest.raises(MonitorPlanError, match="not available") as exc:
         compile_relational_plan(
             definition,
-            source_type="sqlite",
-            schema_name="main",
-            table_name="orders",
+            relation=_relation(source_type="sqlite", schema_name="main"),
         )
     assert exc.value.code == "metric_not_supported"
 
@@ -181,9 +204,7 @@ def test_output_aliases_are_short_and_cannot_collide_after_suffixing():
     definition["spec"]["breachWhen"]["left"]["ref"] = f"{'a' * 63}.rate"
     payload = compile_relational_plan(
         MonitorDefinition.model_validate(definition),
-        source_type="postgres",
-        schema_name="analytics",
-        table_name="orders",
+        relation=_relation(),
     ).payload()
 
     assert payload["resultContract"]["columns"] == ["dw_m0_count", "dw_m0_rate"]
@@ -199,9 +220,7 @@ def test_membership_parameters_are_ordered_and_must_be_homogeneous():
     }
     payload = compile_relational_plan(
         MonitorDefinition.model_validate(definition),
-        source_type="postgres",
-        schema_name="analytics",
-        table_name="orders",
+        relation=_relation(),
     ).payload()
     assert payload["parameters"] == [
         {"name": "p0", "type": "string", "value": "paid"},
@@ -214,27 +233,22 @@ def test_membership_parameters_are_ordered_and_must_be_homogeneous():
     with pytest.raises(MonitorPlanError, match="homogeneous"):
         compile_relational_plan(
             MonitorDefinition.model_validate(definition),
-            source_type="postgres",
-            schema_name="analytics",
-            table_name="orders",
+            relation=_relation(),
         )
 
 
 @pytest.mark.parametrize(
     "predicate",
     [
-        {"op": "gt", "left": {"field": "amount"}, "right": {"literal": 0}},
         {
             "op": "eq",
             "left": {"field": "amount"},
-            "right": {"field": "other_amount"},
+            "right": {"literal": "not-a-number"},
         },
-        {
-            "op": "contains",
-            "left": {"field": "status"},
-            "right": {"literal": "paid"},
-        },
+        {"op": "gt", "left": {"field": "status"}, "right": {"literal": "paid"}},
         {"op": "is_missing", "value": {"field": "status"}},
+        {"op": "is_nan", "value": {"field": "amount"}},
+        {"op": "eq", "left": {"field": "missing"}, "right": {"literal": 1}},
     ],
 )
 def test_non_portable_or_untyped_predicates_are_deferred(predicate):
@@ -243,9 +257,7 @@ def test_non_portable_or_untyped_predicates_are_deferred(predicate):
     with pytest.raises(MonitorPlanError):
         compile_relational_plan(
             MonitorDefinition.model_validate(definition),
-            source_type="postgres",
-            schema_name="analytics",
-            table_name="orders",
+            relation=_relation(),
         )
 
 
@@ -254,9 +266,7 @@ def test_compilation_does_not_mutate_canonical_definition():
     before = canonical_json(model)
     compile_relational_plan(
         model,
-        source_type="postgres",
-        schema_name="analytics",
-        table_name="orders",
+        relation=_relation(),
     )
     assert canonical_json(model) == before
 
@@ -266,9 +276,7 @@ def test_non_relational_source_is_explicitly_unsupported():
     with pytest.raises(MonitorPlanError, match="mongodb") as exc:
         compile_relational_plan(
             definition,
-            source_type="mongodb",
-            schema_name="db",
-            table_name="orders",
+            relation=_relation(source_type="mongodb", schema_name="db"),
         )
     assert exc.value.code == "relational_compiler_not_supported"
 
@@ -302,3 +310,82 @@ def test_predicate_literal_shapes_are_validated_before_compilation():
         }
         with pytest.raises(ValidationError):
             MonitorDefinition.model_validate(definition)
+
+
+def test_typed_numeric_string_and_field_comparisons_compile_safely():
+    definition = valid_definition()
+    definition["spec"]["measurements"][0]["violationWhen"] = {
+        "all": [
+            {"op": "between", "left": {"field": "amount"}, "right": {"literal": [1, 10]}},
+            {"op": "gte", "left": {"field": "amount"}, "right": {"field": "other_amount"}},
+            {"op": "contains", "left": {"field": "status"}, "right": {"literal": "50%_off!"}},
+            {"op": "is_negative", "value": {"field": "amount"}},
+        ]
+    }
+    payload = compile_relational_plan(
+        MonitorDefinition.model_validate(definition),
+        relation=_relation(),
+    ).payload()
+
+    assert '"amount" BETWEEN %(p0)s AND %(p1)s' in payload["statement"]
+    assert '"amount" >= "other_amount"' in payload["statement"]
+    assert '"status" LIKE %(p2)s ESCAPE \'!\'' in payload["statement"]
+    assert payload["parameters"][2]["value"] == "%50!%!_off!!%"
+    assert '"amount" < 0' in payload["statement"]
+
+
+def test_typed_numeric_and_freshness_metrics_compile_per_dialect():
+    definition = valid_definition()
+    definition["spec"]["measurements"] = [
+        {"id": "minimum", "type": "metric", "metric": "min", "field": "amount"},
+        {"id": "maximum", "type": "metric", "metric": "max", "field": "amount"},
+        {"id": "average", "type": "metric", "metric": "mean", "field": "amount"},
+        {"id": "total", "type": "metric", "metric": "sum", "field": "amount"},
+        {"id": "spread", "type": "metric", "metric": "stddev", "field": "amount"},
+        {
+            "id": "freshness",
+            "type": "metric",
+            "metric": "freshness_seconds",
+            "field": "created_at",
+        },
+    ]
+    definition["spec"]["breachWhen"] = {
+        "op": "gt",
+        "left": {"ref": "average"},
+        "right": {"literal": 100},
+    }
+    postgres = compile_relational_plan(
+        MonitorDefinition.model_validate(definition),
+        relation=_relation(),
+    ).statement
+    assert 'MIN("amount")' in postgres
+    assert 'MAX("amount")' in postgres
+    assert 'AVG("amount")' in postgres
+    assert 'SUM("amount")' in postgres
+    assert 'STDDEV("amount")' in postgres
+    assert 'EXTRACT(EPOCH FROM CURRENT_TIMESTAMP - MAX("created_at"))' in postgres
+
+    definition["spec"]["measurements"] = [definition["spec"]["measurements"][-1]]
+    definition["spec"]["breachWhen"] = {
+        "op": "gt",
+        "left": {"ref": "freshness"},
+        "right": {"literal": 3600},
+    }
+    sqlite = compile_relational_plan(
+        MonitorDefinition.model_validate(definition),
+        relation=_relation(source_type="sqlite", schema_name="main"),
+    ).statement
+    assert "JULIANDAY('now')" in sqlite
+    assert 'JULIANDAY(MAX("created_at"))' in sqlite
+    assert "86400.0" in sqlite
+
+
+def test_asset_binding_must_match_definition_target():
+    import uuid
+
+    with pytest.raises(MonitorPlanError, match="target asset") as exc:
+        compile_relational_plan(
+            MonitorDefinition.model_validate(valid_definition()),
+            relation=_relation(asset_id=uuid.uuid4()),
+        )
+    assert exc.value.code == "asset_binding_mismatch"

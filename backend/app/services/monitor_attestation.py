@@ -9,9 +9,9 @@ import time
 from dataclasses import dataclass
 
 from app.config import settings
+from app.services.monitor_compiler import PLANNER_VERSION
 
 ATTESTATION_VERSION = 1
-PLANNER_VERSION = "datawatch-v1alpha1-validation-1"
 DEFAULT_TTL_SECONDS = 300
 
 
