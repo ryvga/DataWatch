@@ -123,7 +123,7 @@ POST /tables → scheduler.add_job()
 
 ---
 
-## Database Schema (19 tables)
+## Database Schema (20 tables)
 
 | Table | Purpose |
 |---|---|
@@ -140,6 +140,7 @@ POST /tables → scheduler.add_job()
 | `monitors` | Stable typed-monitor identity, lifecycle state, and current revision pointer |
 | `monitor_revisions` | Append-only canonical DSL definition snapshots and validation context |
 | `monitor_runs` | Idempotent execution audit records tied to exact monitor revisions |
+| `monitor_evaluation_states` | Mutable ordered breach/recovery/cooldown state per typed monitor |
 | `table_profiles` | Profile snapshots — row_count, freshness_seconds, schema_fingerprint, column_metrics (JSONB) |
 | `check_results` | Per-check outcome — check_type, status, observed_value, expected_range, deviation_score |
 | `incidents` | Anomaly events — severity (P1/P2/P3), status (open/acknowledged/resolved), fired_checks, llm_narration (JSONB) |
@@ -420,7 +421,7 @@ When working on this project with Claude Code, these skills are relevant:
 The project is in **MVP SaaS state**. Completed milestones:
 
 1. **Subdomain-first multi-tenancy** — `localhost` = landing, `slug.localhost` = workspace, `admin.localhost` = admin (env-configured subdomain, never guessable)
-2. **Capability-aware connector registry and safe DSL foundation** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and `datawatch.io/v1alpha1` provides strict validation, canonical draft/revision persistence, run audit schema, typed DDL schema bindings, parameterized PostgreSQL/DuckDB/SQLite compiled previews, context-bound attestations, and internal read-only execution adapters while run persistence, policy evaluation, and activation remain gated
+2. **Capability-aware connector registry and safe DSL foundation** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and `datawatch.io/v1alpha1` provides strict validation, immutable revisions with separate edit/active pointers, schema-bound compiled previews, attestations, internal read-only execution, deterministic policy evaluation, and an idempotent ordered run state machine while scheduling, incident integration, and activation remain gated
 3. **7 anomaly detection methods** — Z-Score, Isolation Forest, STL Seasonal, Cardinality Drop, Row Growth Rate, Rule-Based, **Enum/Category Drift** (new)
 4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
 5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)

@@ -359,8 +359,8 @@ Validation does not persist or execute the definition. It returns separate
 grammar can therefore report structured schema/compiler issues such as
 `field_not_found`, `field_type_not_supported`, or `schema_snapshot_missing` without
 being treated as malformed. Unknown grammar fields return 422, while an asset outside
-the tenant returns 404. Activation remains false until run and policy-state persistence
-land.
+the tenant returns 404. Activation remains false until scheduling and monitor-specific
+incident integration land.
 
 ### `POST /api/v2/monitors/preview`
 
@@ -383,8 +383,9 @@ Lists the tenant's monitors for the asset with each current canonical revision.
 
 ### `GET /api/v2/monitors/{monitor_id}`
 
-Returns stable monitor identity, lifecycle status, current revision, canonical
-definition, hashes, schema fingerprint, and timestamps. Cross-tenant IDs return 404.
+Returns stable monitor identity, lifecycle status, current edit revision, nullable active
+revision ID, canonical definition, hashes, schema fingerprint, and timestamps.
+Cross-tenant IDs return 404.
 
 ### `PUT /api/v2/monitors/{monitor_id}`
 
@@ -399,16 +400,18 @@ definitions return 409.
 - `GET /api/v2/monitors/{monitor_id}/revisions/{revision}`
 - `GET /api/v2/monitors/{monitor_id}/runs`
 
-Revision history is newest first. Runs are capped at the latest 250 and remain empty
-until the run orchestrator begins recording execution audit rows.
+Revision history is newest first. Runs are capped at the latest 250 and include trigger,
+ordering, plan/revision/schema audit context, attempt count, sanitized error code,
+measurements, and versioned policy result. They remain empty until a future scheduler or
+manual-run API invokes the internal state machine.
 
 ### `POST /api/v2/monitors/{monitor_id}/activate`
 
 Requires `expectedRevision` and the matching `previewAttestation`. It verifies the
 current tenant, asset, definition, schema, and planner context, then currently returns
-409 `activation_not_supported` with reason `dsl_run_persistence_not_implemented`.
-This is an intentional hard gate: the internal relational adapters are not exposed until
-every attempt can be idempotently audited and evaluated against the revision's policy.
+409 `activation_not_supported` with reason `dsl_scheduler_not_implemented`.
+This is an intentional hard gate: persistence is ready, but no monitor-specific incident
+bridge consumes policy actions and no scheduler dispatches the active revision.
 
 ---
 

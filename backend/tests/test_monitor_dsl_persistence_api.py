@@ -84,6 +84,7 @@ async def test_dsl_draft_revision_preview_and_tenant_isolation(client, auth_head
     monitor_id = monitor["id"]
     assert monitor["status"] == "draft"
     assert monitor["currentRevision"] == 1
+    assert monitor["activeRevisionId"] is None
 
     duplicate = await client.post(
         f"/api/v2/assets/{asset_id}/monitors", headers=auth_headers, json=initial
@@ -133,7 +134,7 @@ async def test_dsl_draft_revision_preview_and_tenant_isolation(client, auth_head
     assert activation.status_code == 409
     assert activation.json()["detail"] == {
         "error": "activation_not_supported",
-        "reason": "dsl_run_persistence_not_implemented",
+        "reason": "dsl_scheduler_not_implemented",
     }
 
     listed = await client.get(f"/api/v2/assets/{asset_id}/monitors", headers=auth_headers)

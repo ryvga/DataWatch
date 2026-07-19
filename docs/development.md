@@ -145,8 +145,13 @@ except Exception as e:
 - JSONB columns: `postgresql.JSONB` from `sqlalchemy.dialects.postgresql`
 - Monitor definition edits append `monitor_revisions`; never update or delete a stored
   revision through application code. Use `expectedRevision` when advancing a monitor.
+- Set `active_revision_id` and `status = 'active'` atomically; database ownership and
+  lifecycle constraints reject active monitors without an owned immutable revision.
 - DSL executions must persist an idempotent `monitor_runs` audit row tied to the exact
   revision before activation can be enabled.
+- Claim runs through `monitor_run_service`; commit the claim before connector I/O, execute
+  outside a database transaction, and finalize only with the current lease token. Never
+  mutate or retry a terminal run.
 - Breach and policy evaluation must use the pure `monitor_evaluator`; never coerce missing,
   null, boolean, string, NaN, or infinite measurement values into a passing observation.
 - Safe monitor SQL is built only from programmatic SQLGlot AST nodes. Keep SQLGlot pinned

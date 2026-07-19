@@ -39,7 +39,7 @@ connector is not described as fully supported merely because it can connect.
 
 | Source | Readiness | Current application path | Current limit |
 |---|---|---|---|
-| PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, restricted legacy SQL, internal typed-plan execution | DSL run persistence/policy orchestration pending |
+| PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, restricted legacy SQL, internal typed-plan execution | DSL scheduling/incident bridge pending |
 | DuckDB | Beta | Connect, discover, schema, full profile, restricted legacy SQL, verified internal typed-plan execution | Local/in-process deployment model; DSL activation pending |
 | SQLite | Beta | Connect, discover, schema, core profile, restricted legacy SQL, verified internal typed-plan execution | No native stddev/percentiles or table sampling; DSL activation pending |
 | MySQL / MariaDB | Experimental | Connect, discover, schema | Scheduled profile and restricted monitor execution pending |
@@ -72,13 +72,15 @@ deterministic parameterized PostgreSQL/DuckDB/SQLite aggregate plans only when e
 referenced field and operation is compatible. Internal PostgreSQL, DuckDB, and SQLite
 adapters now bind those parameters, enforce read-only/timeout controls, and validate the
 exact typed result contract; real DuckDB/SQLite file executions are covered by tests.
-Public execution and activation remain explicitly disabled until idempotent run and
-policy-state persistence are wired. The run audit schema and read
-API are present but do not yet record DSL runs.
+Public execution and activation remain explicitly disabled until scheduling and the
+monitor-specific incident bridge are wired. Migration 012 and the internal run service
+now provide idempotent reservations, ordered claims, expiring leases, immutable terminal
+audits, and atomic policy-state finalization; no public lifecycle invokes them yet.
 
 The internal evaluator already implements deterministic `breachWhen`, consecutive breach,
 recovery pass, and cooldown decisions; it remains side-effect-free until the idempotent
-run orchestrator persists every attempted transition.
+run orchestrator persists every attempted transition. Definition edit head and active
+runtime revision are separate pointers, preventing unactivated edits from changing runs.
 
 ## Quick Start (local)
 

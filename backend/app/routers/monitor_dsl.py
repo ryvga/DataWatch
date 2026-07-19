@@ -28,8 +28,8 @@ from app.services.schema_binding import SchemaBindingError, build_relation_bindi
 router = APIRouter(prefix="/api/v2/monitors", tags=["monitor_dsl"])
 asset_router = APIRouter(prefix="/api/v2/assets", tags=["monitor_dsl"])
 ACTIVATION_BLOCKERS = (
-    "dsl_run_persistence_not_implemented",
-    "dsl_policy_state_persistence_not_implemented",
+    "dsl_scheduler_not_implemented",
+    "dsl_incident_bridge_not_implemented",
 )
 
 
@@ -181,6 +181,9 @@ def _monitor_payload(monitor: Monitor, revision: MonitorRevision) -> dict:
         "mode": monitor.mode,
         "status": monitor.status,
         "currentRevision": monitor.current_revision,
+        "activeRevisionId": (
+            str(monitor.active_revision_id) if monitor.active_revision_id else None
+        ),
         "definitionVersion": revision.definition_version,
         "definitionHash": revision.definition_hash,
         "definition": revision.definition,
@@ -212,10 +215,20 @@ def _run_payload(run: MonitorRun) -> dict:
         "revisionId": str(run.revision_id),
         "assetId": str(run.table_id),
         "idempotencyKey": run.idempotency_key,
+        "triggerType": run.trigger_type,
+        "profileId": str(run.profile_id) if run.profile_id else None,
+        "sequenceAt": run.sequence_at,
+        "queuedAt": run.queued_at,
+        "planHash": run.plan_hash,
+        "plannerVersion": run.planner_version,
+        "definitionHash": run.definition_hash,
+        "schemaFingerprint": run.schema_fingerprint,
         "status": run.status,
+        "attempt": run.attempt,
         "measurements": run.measurements,
         "result": run.result,
         "error": run.error,
+        "errorCode": run.error_code,
         "startedAt": run.started_at,
         "completedAt": run.completed_at,
     }

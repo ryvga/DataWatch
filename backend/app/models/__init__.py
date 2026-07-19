@@ -11,7 +11,7 @@ from app.models.team import Team, TeamMember
 from app.models.custom_monitor import CustomMonitor
 from app.models.oncall import OncallSchedule
 from app.models.notification_prefs import UserNotificationPrefs
-from app.models.monitor import Monitor, MonitorRevision, MonitorRun
+from app.models.monitor import Monitor, MonitorEvaluationState, MonitorRevision, MonitorRun
 
 __all__ = [
     "Organization",
@@ -33,4 +33,5 @@ __all__ = [
     "Monitor",
     "MonitorRevision",
     "MonitorRun",
+    "MonitorEvaluationState",
 ]

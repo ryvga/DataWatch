@@ -1,6 +1,6 @@
 # Safe Monitor DSL Specification
 
-Status: Validation, immutable revisions, schema-bound previews, attestations, and internal read-only relational execution adapters implemented; run orchestration/activation pending (`datawatch.io/v1alpha1`)
+Status: Validation, immutable revisions, schema-bound previews, attestations, internal relational execution, evaluation, and persisted run state machine implemented; scheduling/incident integration/activation pending (`datawatch.io/v1alpha1`)
 
 Tracking: Linear MOU-15 (parent), MOU-19 (runtime)
 Implementation plan: Notion “DataWatch Connector & Safe Monitor DSL Overhaul”
@@ -25,11 +25,10 @@ and operation/type compatibility, and reports structured compiler issues. Previe
 the deterministic plan only when compilation succeeds.
 
 Public execution remains deliberately disabled: `activationSupported=false` reports
-`dsl_run_persistence_not_implemented` and
-`dsl_policy_state_persistence_not_implemented`.
+`dsl_scheduler_not_implemented` and `dsl_incident_bridge_not_implemented`.
 The PostgreSQL, DuckDB, and SQLite parameter adapters now exist behind an internal-only
-service boundary, but the run table is not populated and no lifecycle transition can
-invoke them yet.
+service boundary. The persisted run service is also internal-only; no scheduler or API
+lifecycle transition invokes it yet.
 
 The first pure relational compiler constructs SQLGlot AST nodes programmatically for
 PostgreSQL, DuckDB, and SQLite. It emits one aggregate `SELECT`, short deterministic
@@ -43,8 +42,8 @@ accepts only one exact row of finite numeric-or-allowed-null results.
 side effects. It advances explicit healthy/breached policy state using consecutive breach,
 recovery-pass, and cooldown rules and returns a stable decision payload. Missing outputs,
 wrong types, non-finite values, unsupported output operators, corrupt prior state, and
-naive timestamps fail closed. This evaluator is not yet connected to persisted runs or
-incidents.
+naive timestamps fail closed. Successful and error decisions can now be finalized
+atomically with persisted policy state, but incidents remain disconnected.
 
 The schema-bound subset includes row/null/distinct metrics; numeric min/max/mean/sum;
 PostgreSQL/DuckDB stddev; timestamp/date freshness; typed equality and ordered
@@ -168,9 +167,14 @@ Algorithm evaluation is deterministic application code over persisted measuremen
 creates a new `monitor_revisions` row containing canonical `definition`,
 `definition_version`, `definition_hash`, revision number, validation status, and the
 schema fingerprint observed during validation. The application exposes no revision
-mutation or deletion path. `monitor_runs` is the append-only execution audit schema with
-tenant-scoped idempotency; the run orchestrator will populate it in the next phase and
-persist the evaluator decision used for each transition.
+mutation or deletion path. `current_revision` is the edit head; nullable
+`active_revision_id` is the independently activated runtime snapshot. `monitor_runs`
+stores tenant-scoped idempotency, trigger ordering, plan/definition/schema hashes, claim
+leases, attempts, sanitized errors, measurements, and versioned decisions. Mutable
+streak/cooldown state and the complete `(sequenceAt, idempotencyKey)` ordering cursor live
+separately in `monitor_evaluation_states`. Composite ownership constraints prevent
+cross-monitor audit links. PostgreSQL triggers reject revision mutation and any update or
+deletion of a terminal run; terminal runs are never re-queued by the service.
 
 Implemented endpoints:
 
@@ -184,7 +188,7 @@ Implemented endpoints:
 - `GET /api/v2/monitors/{id}/revisions/{revision}`
 - `GET /api/v2/monitors/{id}/runs`
 - `POST /api/v2/monitors/{id}/activate` verifies preview context, then returns the
-  explicit run-persistence-not-implemented guard
+  explicit scheduler-not-implemented guard
 
 Planned endpoints and formats:
 

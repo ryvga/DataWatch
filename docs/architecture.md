@@ -125,7 +125,8 @@ is_active BOOL | dbt_model_yaml TEXT | autopilot JSONB | created_at | last_profi
 ```sql
 monitors:
 id UUID PK | org_id FK | table_id FK | name | mode | status
-current_revision INT | created_by FK | created_at | updated_at | activated_at
+current_revision INT | active_revision_id FK nullable | created_by FK
+created_at | updated_at | activated_at
 UNIQUE (org_id, table_id, name)
 
 monitor_revisions:
@@ -139,17 +140,37 @@ The monitor row is stable identity and lifecycle state. Definitions are canonica
 append-only snapshots; edits use `expectedRevision` compare-and-swap semantics so two
 writers cannot silently overwrite one another. The application exposes no update or
 delete endpoint for revision rows.
+Edits advance `current_revision`; execution may use only `active_revision_id`. A new edit
+therefore cannot alter runtime behavior until a fresh attested activation changes the
+active pointer. A database check forbids `status = 'active'` without that pointer, and a
+composite foreign key requires the active revision to belong to the same monitor.
 
 ### monitor_runs
 
 ```sql
 id UUID PK | org_id FK | monitor_id FK | revision_id FK | table_id FK
-idempotency_key | status | measurements JSONB | result JSONB | error
-started_at | completed_at | UNIQUE (org_id, idempotency_key)
+idempotency_key | trigger_type | profile_id | sequence_at | queued_at
+plan_hash | planner_version | definition_hash | schema_fingerprint
+status | attempt | claim_token | lease_expires_at
+measurements JSONB | result JSONB | error_code | error | started_at | completed_at
+UNIQUE (org_id, idempotency_key)
 ```
 
-This is the execution audit boundary for the future typed runtime. It is queryable now,
-but activation remains gated and therefore no DSL run rows are produced yet.
+This is the execution audit boundary for the typed runtime. A partial unique index allows
+only one running execution per monitor; another prevents duplicate profile triggers.
+Terminal rows retain versioned measurements/decisions or an allowlisted sanitized error.
+The internal state machine is queryable but not dispatched by a public lifecycle yet.
+
+### monitor_evaluation_states
+
+```sql
+monitor_id UUID PK | org_id FK | revision_id FK | phase
+breach_streak | recovery_streak | cooldown_until
+last_run_id | last_sequence_at | last_idempotency_key | version | updated_at
+```
+
+This mutable row is locked and advanced atomically with terminal run finalization. It is
+separate from terminal audit rows so retry/lease mechanics cannot rewrite history.
 
 ### table_profiles
 ```sql
@@ -272,7 +293,7 @@ the target through the tenant's data source and returns an explicit capability p
 Draft definitions are stored as immutable revisions. Preview attestations use HMAC-SHA256
 with a five-minute TTL and bind organization, asset, definition hash, latest successful
 schema fingerprint, and planner version. Activation verifies that context but remains
-hard-disabled until the run orchestrator and policy-state persistence land.
+hard-disabled until scheduling and the monitor-specific incident bridge land.
 
 `services/schema_binding.py` parses generated connector DDL into an asset-scoped relation
 of exact field names, normalized physical types, logical types, nullability, and a schema
@@ -294,17 +315,31 @@ statement timeout, and always rolls back. File-backed DuckDB connections are rea
 and use interrupt-on-timeout; SQLite opens files with `mode=ro` and interrupts timed-out
 queries. The result must have the exact ordered aliases and finite numeric values, with
 null accepted only for nullable outputs. Driver exceptions are mapped to stable domain
-codes without leaking credential text. These adapters are internal capability only;
-idempotent `monitor_runs`, breach-policy evaluation, and lifecycle orchestration remain
-mandatory before activation.
+codes without leaking credential text. These adapters are internal capability only.
 
 `services/monitor_evaluator.py` is a pure post-query boundary. It resolves only declared
 measurement references and JSON literals, performs no coercion, and deterministically
 advances consecutive-breach, recovery-pass, cooldown, and notification eligibility
 state. The compiled plan stores predicate fields with `exclude_unset=True`; this preserves
 the distinction between absent operands and explicit JSON null and allows strict model
-reconstruction before evaluation. The evaluator currently has no database or incident
-side effects; the upcoming run orchestrator must persist its decision atomically.
+reconstruction before evaluation.
+
+`services/monitor_run_service.py` reserves runs with PostgreSQL `ON CONFLICT`, validates
+tenant/monitor/revision identity, and derives the profile cursor, schema binding, and plan
+hash from stored tenant-owned records rather than worker input. It claims only the
+earliest `(sequence_at, idempotency_key)` trigger, serializes a monitor with a row lock
+plus partial unique index, and supports bounded lease recovery and renewal.
+The claim must commit before connector I/O. Finalization locks the run and policy row,
+rejects expired or obsolete claim tokens, inactive revisions, and plan-context drift,
+then stores the terminal audit and policy transition in one transaction. Composite
+foreign keys enforce tenant/monitor/revision/asset ownership, while PostgreSQL triggers
+make revisions and terminal run rows append-only. Execution is at-least-once after worker
+failure, but each idempotency key has one terminal result and one policy transition.
+Profile IDs are immutable soft references so profile-retention cleanup cannot delete
+audit history. Direct audit deletion is rejected; cascades initiated by an intentional
+parent asset/source/tenant deletion remain available for the existing data-removal flows.
+Migration 012 intentionally refuses to upgrade a non-empty `monitor_runs` table because
+activation was previously gated and legacy rows lack the required audit context.
 
 ---
 
