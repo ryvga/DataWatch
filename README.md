@@ -60,10 +60,11 @@ are AST-validated to one table, run through a read-only/timeout connector path, 
 return exactly one non-negative integer scalar. The typed safe monitor DSL roadmap is
 documented in `docs/monitor-dsl.md`.
 
-The first `datawatch.io/v1alpha1` runtime is available at
-`POST /api/v2/monitors/validate`: strict JSON validation, tenant asset resolution,
-canonical hashing, predicate bounds, and capability planning are implemented. Execution
-and activation remain explicitly disabled until typed connector compilers are ready.
+The `datawatch.io/v1alpha1` runtime provides strict JSON validation, tenant asset
+resolution, canonical hashing, bounded predicates, capability planning, draft creation,
+append-only revision history, and short-lived preview attestations under `/api/v2`.
+Execution and activation remain explicitly disabled until typed connector compilers are
+ready; the run audit schema and read API are present but do not yet record DSL runs.
 
 ## Quick Start (local)
 

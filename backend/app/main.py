@@ -82,6 +82,7 @@ app.include_router(reports.router)
 app.include_router(custom_monitors.router)
 app.include_router(custom_monitors.org_router)
 app.include_router(monitor_dsl.router)
+app.include_router(monitor_dsl.asset_router)
 app.include_router(teams.router)
 app.include_router(notifications.router)
 

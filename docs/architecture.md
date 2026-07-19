@@ -120,6 +120,37 @@ freshness_column | check_interval_minutes INT | sensitivity FLOAT (z-score thres
 is_active BOOL | dbt_model_yaml TEXT | autopilot JSONB | created_at | last_profiled_at
 ```
 
+### monitors and monitor_revisions
+
+```sql
+monitors:
+id UUID PK | org_id FK | table_id FK | name | mode | status
+current_revision INT | created_by FK | created_at | updated_at | activated_at
+UNIQUE (org_id, table_id, name)
+
+monitor_revisions:
+id UUID PK | monitor_id FK | revision INT | definition_version
+definition_hash CHAR(64) | definition JSONB | validation_status
+schema_fingerprint CHAR(64) | created_by FK | created_at
+UNIQUE (monitor_id, revision)
+```
+
+The monitor row is stable identity and lifecycle state. Definitions are canonical,
+append-only snapshots; edits use `expectedRevision` compare-and-swap semantics so two
+writers cannot silently overwrite one another. The application exposes no update or
+delete endpoint for revision rows.
+
+### monitor_runs
+
+```sql
+id UUID PK | org_id FK | monitor_id FK | revision_id FK | table_id FK
+idempotency_key | status | measurements JSONB | result JSONB | error
+started_at | completed_at | UNIQUE (org_id, idempotency_key)
+```
+
+This is the execution audit boundary for the future typed runtime. It is queryable now,
+but activation remains gated and therefore no DSL run rows are produced yet.
+
 ### table_profiles
 ```sql
 id UUID PK | table_id FK | collected_at TIMESTAMPTZ
@@ -231,10 +262,12 @@ contract. Empty or malformed results are execution errors and cannot resolve inc
 
 The v2 DSL validation boundary lives in `services/monitor_dsl.py`. Strict Pydantic models
 produce canonical JSON and a stable SHA-256 hash, enforce bounded recursive predicates
-and measurement references, and never compile or execute user input. The validation
-router resolves the target through the tenant's data source and returns an explicit
-capability plan. Activation remains disabled until connector compilers and immutable
-revision/run persistence land.
+and measurement references, and never compile or execute user input. The router resolves
+the target through the tenant's data source and returns an explicit capability plan.
+Draft definitions are stored as immutable revisions. Preview attestations use HMAC-SHA256
+with a five-minute TTL and bind organization, asset, definition hash, latest successful
+schema fingerprint, and planner version. Activation verifies that context but remains
+hard-disabled until typed connector compilers and the run orchestrator land.
 
 ---
 

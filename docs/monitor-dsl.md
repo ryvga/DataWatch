@@ -1,22 +1,28 @@
 # Safe Monitor DSL Specification
 
-Status: Validation runtime implemented; compiler/activation draft (`datawatch.io/v1alpha1`)
+Status: Validation, draft persistence, immutable revision history, and preview attestations implemented; compiler/activation draft (`datawatch.io/v1alpha1`)
 
 Tracking: Linear MOU-15 (parent), MOU-19 (runtime)
 Implementation plan: Notion “DataWatch Connector & Safe Monitor DSL Overhaul”
 
 ## Current implementation
 
-`POST /api/v2/monitors/validate` now accepts strict JSON definitions for `metric` and
+`POST /api/v2/monitors/validate` accepts strict JSON definitions for `metric` and
 `violations` measurements. It rejects unknown fields, versions, predicate shapes,
 duplicate IDs, unknown references, non-finite/complex literals, oversized values,
 excessive predicate depth/node counts, and cross-measurement references inside violation
 predicates. The response contains canonical JSON, a stable SHA-256 definition hash,
 structural statistics, tenant-owned asset resolution, and a truthful capability plan.
 
-The endpoint is deliberately validation-only: `activationSupported=false` and
-`dsl_compiler_not_implemented` remain explicit until typed dialect compilers, immutable
-revisions, preview attestations, and monitor runs are implemented.
+Draft creation and compare-and-swap revision APIs persist canonical definitions in an
+append-only revision table. Preview returns a five-minute HMAC attestation bound to the
+organization, asset, definition hash, latest schema fingerprint, and planner version.
+Revision history and the run audit collection are readable through tenant-scoped APIs.
+
+Execution remains deliberately disabled: `activationSupported=false` and
+`dsl_compiler_not_implemented` stay explicit until typed dialect compilers and the run
+orchestrator are implemented. The run table exists for that audit trail but no DSL runs
+are created yet.
 
 ## Purpose
 
@@ -124,19 +130,31 @@ Algorithm evaluation is deterministic application code over persisted measuremen
 - Forbid imports, loops, recursion, file/network access, `eval`, `exec`, database UDFs,
   and user-supplied Mongo stages such as `$out`, `$merge`, `$function`, and `$where`.
 
-## Persistence and API Plan
+## Persistence and API
 
-Add canonical `definition`, `definition_version`, `definition_hash`, `revision`, mode,
-validation status, schema fingerprint, immutable revisions, and immutable monitor runs.
-Check results reference monitor ID and revision so renames cannot break incident identity.
+`monitors` stores stable identity and current mutable lifecycle state. Every accepted edit
+creates a new `monitor_revisions` row containing canonical `definition`,
+`definition_version`, `definition_hash`, revision number, validation status, and the
+schema fingerprint observed during validation. The application exposes no revision
+mutation or deletion path. `monitor_runs` is the append-only execution audit schema with
+tenant-scoped idempotency; the compiler/runtime will populate it in the next phase.
 
-Planned endpoints:
+Implemented endpoints:
 
 - `POST /api/v2/monitors/validate`
 - `POST /api/v2/monitors/preview`
 - `POST /api/v2/assets/{id}/monitors`
+- `GET /api/v2/assets/{id}/monitors`
+- `GET /api/v2/monitors/{id}`
 - `PUT /api/v2/monitors/{id}` with optimistic revision
-- `POST /api/v2/monitors/{id}/activate`
+- `GET /api/v2/monitors/{id}/revisions`
+- `GET /api/v2/monitors/{id}/revisions/{revision}`
+- `GET /api/v2/monitors/{id}/runs`
+- `POST /api/v2/monitors/{id}/activate` verifies preview context, then returns the
+  explicit compiler-not-implemented guard
+
+Planned endpoints and formats:
+
 - `POST /api/v2/monitors/{id}/run`
 - `GET /api/v2/connectors/{type}/monitor-capabilities`
 - YAML import/export with canonical JSON responses

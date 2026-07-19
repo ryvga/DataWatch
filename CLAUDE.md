@@ -57,7 +57,7 @@ DataWatch/
 │   │   ├── scheduler.py       ← APScheduler — one job per monitored table
 │   │   ├── worker.py          ← Celery app + beat schedule
 │   │   ├── tasks.py           ← Celery tasks (profile, anomaly, LLM, alerts, cleanup)
-│   │   ├── models/            ← SQLAlchemy ORM models (9 tables)
+│   │   ├── models/            ← SQLAlchemy ORM models (19 tables)
 │   │   ├── routers/           ← FastAPI routers (auth, orgs, sources, tables, incidents, alerts)
 │   │   ├── services/          ← Business logic (profiler, anomaly, incident, LLM, alert, crypto, plans)
 │   │   └── connectors/        ← Warehouse connectors (postgres, bigquery, duckdb, snowflake stub)
@@ -123,7 +123,7 @@ POST /tables → scheduler.add_job()
 
 ---
 
-## Database Schema (14 tables)
+## Database Schema (19 tables)
 
 | Table | Purpose |
 |---|---|
@@ -136,10 +136,16 @@ POST /tables → scheduler.add_job()
 | `team_members` | Team membership — user_id, team_id, role |
 | `data_sources` | Warehouse connections — type, connection_config (Fernet-encrypted JSONB) |
 | `monitored_tables` | What to watch — schema, table, interval, sensitivity, freshness_column |
+| `custom_monitors` | Transitional AST-restricted scalar SQL monitor definitions |
+| `monitors` | Stable typed-monitor identity, lifecycle state, and current revision pointer |
+| `monitor_revisions` | Append-only canonical DSL definition snapshots and validation context |
+| `monitor_runs` | Idempotent execution audit records tied to exact monitor revisions |
 | `table_profiles` | Profile snapshots — row_count, freshness_seconds, schema_fingerprint, column_metrics (JSONB) |
 | `check_results` | Per-check outcome — check_type, status, observed_value, expected_range, deviation_score |
 | `incidents` | Anomaly events — severity (P1/P2/P3), status (open/acknowledged/resolved), fired_checks, llm_narration (JSONB) |
 | `alert_configs` | Routing rules — channel (slack/email/pagerduty), config (JSONB), min_severity |
+| `user_notification_prefs` | Per-user email, Slack, severity, digest, and quiet-hour preferences |
+| `oncall_schedules` | Tenant on-call rotation configuration and escalation targets |
 
 ---
 
@@ -414,7 +420,7 @@ When working on this project with Claude Code, these skills are relevant:
 The project is in **MVP SaaS state**. Completed milestones:
 
 1. **Subdomain-first multi-tenancy** — `localhost` = landing, `slug.localhost` = workspace, `admin.localhost` = admin (env-configured subdomain, never guessable)
-2. **Capability-aware connector registry and DSL validation** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and `datawatch.io/v1alpha1` has a strict validation-only API while compiler/activation work remains
+2. **Capability-aware connector registry and safe DSL foundation** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and `datawatch.io/v1alpha1` provides strict validation, canonical draft/revision persistence, run audit schema, and context-bound preview attestations while compiler/activation work remains
 3. **7 anomaly detection methods** — Z-Score, Isolation Forest, STL Seasonal, Cardinality Drop, Row Growth Rate, Rule-Based, **Enum/Category Drift** (new)
 4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
 5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)

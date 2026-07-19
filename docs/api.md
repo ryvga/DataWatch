@@ -354,10 +354,54 @@ Validates a strict `datawatch.io/v1alpha1` JSON definition and resolves its `ass
 inside the authenticated organization. The response includes `canonicalDefinition`, a
 stable `definitionHash`, predicate/measurement statistics, and `capabilityPlan`.
 
-This first runtime slice is validation-only. A valid response currently reports
-`activationSupported: false` and `dsl_compiler_not_implemented`; it does not persist or
-execute the definition. Unknown fields and invalid grammar return FastAPI/Pydantic 422,
+Validation does not persist or execute the definition. A valid response reports
+`activationSupported: false` and `dsl_compiler_not_implemented` until typed connector
+compilers are available. Unknown fields and invalid grammar return FastAPI/Pydantic 422,
 while an asset outside the tenant returns 404.
+
+### `POST /api/v2/monitors/preview`
+
+Validates the same definition and returns a validation-only preview plus a short-lived
+HMAC attestation. The attestation expires after five minutes and is bound to the tenant,
+asset, canonical definition hash, latest successful schema fingerprint, and planner
+version. Any bound-context change makes activation reject it.
+
+### `POST /api/v2/assets/{asset_id}/monitors`
+
+Creates a draft monitor and immutable revision 1. The definition target must match the
+asset path. Monitor names are unique per tenant and asset; conflicts return 409.
+
+### `GET /api/v2/assets/{asset_id}/monitors`
+
+Lists the tenant's monitors for the asset with each current canonical revision.
+
+### `GET /api/v2/monitors/{monitor_id}`
+
+Returns stable monitor identity, lifecycle status, current revision, canonical
+definition, hashes, schema fingerprint, and timestamps. Cross-tenant IDs return 404.
+
+### `PUT /api/v2/monitors/{monitor_id}`
+
+Creates a new immutable revision. The body is
+`{"expectedRevision": 1, "definition": {...}}`; the expected revision provides
+compare-and-swap concurrency control. The target asset cannot change. Stale or unchanged
+definitions return 409.
+
+### Revision and run history
+
+- `GET /api/v2/monitors/{monitor_id}/revisions`
+- `GET /api/v2/monitors/{monitor_id}/revisions/{revision}`
+- `GET /api/v2/monitors/{monitor_id}/runs`
+
+Revision history is newest first. Runs are capped at the latest 250 and remain empty
+until the typed compiler/runtime begins recording execution audit rows.
+
+### `POST /api/v2/monitors/{monitor_id}/activate`
+
+Requires `expectedRevision` and the matching `previewAttestation`. It verifies the
+current tenant, asset, definition, schema, and planner context, then currently returns
+409 `activation_not_supported` with reason `dsl_compiler_not_implemented`. This is an
+intentional hard gate; no valid DSL definition is executed yet.
 
 ---
 

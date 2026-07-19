@@ -142,11 +142,12 @@ async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
     source = SimpleNamespace(id="source-1", type="postgres")
 
     class Database:
-        async def scalar(self, statement):
-            return table
+        async def execute(self, statement):
+            class Result:
+                def one_or_none(self):
+                    return (table, source)
 
-        async def get(self, model, item_id):
-            return source
+            return Result()
 
     definition = MonitorDefinition.model_validate(valid_definition())
     response = await validate_monitor_definition(

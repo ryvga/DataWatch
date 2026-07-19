@@ -131,7 +131,7 @@ except Exception as e:
 
 **Credentials never in logs.** If you add a new connector, make sure the DSN/password is never passed to `logger.*`. Use `type(e).__name__` not `str(e)` when logging connector errors.
 
-**Org isolation is mandatory.** Every query on `data_sources`, `monitored_tables`, `incidents`, `check_results`, `alert_configs` must include an `org_id` filter. Return 404 (not 403) when not found — don't leak existence.
+**Org isolation is mandatory.** Every query on `data_sources`, `monitored_tables`, `monitors`, `monitor_runs`, `incidents`, `check_results`, and `alert_configs` must include or derive a verified `org_id` filter. Return 404 (not 403) when not found — don't leak existence.
 
 **Pydantic response models strip secrets.** If you add a new endpoint returning a `DataSource`, use `DataSourceResponse` (no `connection_config`). Never filter in the handler — use Pydantic model exclusion.
 
@@ -143,6 +143,10 @@ except Exception as e:
 - Never modify existing migration files — create a new one
 - Index every FK column and every column used in `.where()` filters
 - JSONB columns: `postgresql.JSONB` from `sqlalchemy.dialects.postgresql`
+- Monitor definition edits append `monitor_revisions`; never update or delete a stored
+  revision through application code. Use `expectedRevision` when advancing a monitor.
+- DSL executions must persist an idempotent `monitor_runs` audit row tied to the exact
+  revision before activation can be enabled.
 
 ### React / Frontend
 
