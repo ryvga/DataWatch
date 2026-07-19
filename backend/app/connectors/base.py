@@ -21,7 +21,6 @@ class BaseConnector(ABC):
     # connect, discover assets, and execute a scalar query without supporting
     # the aggregate SQL emitted by ProfilerService.
     profile_dialect: str | None = None
-    supports_profile_sampling: bool = False
 
     @abstractmethod
     async def test_connection(self) -> bool:

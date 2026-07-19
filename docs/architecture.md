@@ -213,7 +213,7 @@ the UI and API documentation from presenting experimental adapters as complete.
 
 | Profile tier | Meaning |
 |---|---|
-| `full` | Standard metrics plus stddev, percentiles, and supported sampling |
+| `full` | Standard metrics plus stddev and percentiles; sampling is a separate capability |
 | `core` | Row count, freshness, null/distinct/uniqueness, min/max/mean and basic text/range metrics |
 | `none` | Connection/discovery may work, but scheduled profiling fails explicitly before SQL execution |
 
@@ -229,6 +229,11 @@ must not be forced through relational full-table SQL semantics.
 run for a declared dialect. Identifiers are quoted as identifiers, never inserted as
 SQL fragments. PostgreSQL/DuckDB use the full metric set; SQLite uses a core dialect
 that omits unavailable native stddev/percentile functions.
+
+Profiling does not run a preliminary exact `COUNT(*)`: that would double full-scan cost
+before the aggregate and could corrupt row-count anomalies if a sampled count replaced
+the true count. Sampling remains disabled until a connector supplies a non-scanning row
+estimate and the persisted profile records explicit sampling provenance.
 
 ```sql
 SELECT

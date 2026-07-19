@@ -128,3 +128,49 @@ async def test_profile_fails_explicitly_for_discovery_only_connector():
         "_DiscoveryOnlyConnector supports connection/discovery but does not yet "
         "support automated profiling"
     )
+
+
+@pytest.mark.asyncio
+async def test_profile_executes_exactly_one_aggregate_query():
+    class Connector(BaseConnector):
+        profile_dialect = "postgres"
+
+        def __init__(self):
+            self.queries = []
+
+        async def test_connection(self):
+            return True
+
+        async def discover_schemas(self):
+            return []
+
+        async def execute_profile_query(self, query):
+            self.queries.append(query)
+            return {
+                "_row_count": 6_000_000,
+                "null_rate_id": 0.0,
+                "distinct_count_id": 6_000_000,
+                "uniqueness_ratio_id": 1.0,
+                "min_id": 1,
+                "max_id": 6_000_000,
+                "mean_id": 3_000_000.5,
+                "stddev_id": 1.0,
+                "p25_id": 1_500_000,
+                "p50_id": 3_000_000,
+                "p75_id": 4_500_000,
+                "p95_id": 5_700_000,
+                "zero_rate_id": 0.0,
+                "negative_rate_id": 0.0,
+            }
+
+        async def get_table_ddl(self, schema, table):
+            return 'CREATE TABLE "events" (\n"id" integer NOT NULL\n);'
+
+    connector = Connector()
+    result = await ProfilerService().profile(connector, "public", "events")
+
+    assert result.error is None
+    assert result.row_count == 6_000_000
+    assert len(connector.queries) == 1
+    assert "TABLESAMPLE" not in connector.queries[0]
+    assert "COUNT(*) AS _n" not in connector.queries[0]

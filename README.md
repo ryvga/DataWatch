@@ -60,6 +60,10 @@ are AST-validated to one table, run through a read-only/timeout connector path, 
 return exactly one non-negative integer scalar. The typed safe monitor DSL roadmap is
 documented in `docs/monitor-dsl.md`.
 
+Scheduled profiling executes one aggregate statement per asset. Sampling is currently
+disabled: it will only be enabled after connector-native non-scanning estimates and
+sample provenance prevent sampled counts from masquerading as true row counts.
+
 The `datawatch.io/v1alpha1` runtime provides strict JSON validation, tenant asset
 resolution, canonical hashing, bounded predicates, capability planning, draft creation,
 append-only revision history, and short-lived preview attestations under `/api/v2`.

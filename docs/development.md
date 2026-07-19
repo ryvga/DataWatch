@@ -241,6 +241,11 @@ Connector conformance tests must cover quoted identifiers, cleanup, failure beha
 and any source-specific cost/scan limit. A registry entry by itself is not feature
 completion.
 
+The profiler's one-query invariant includes cost discovery: do not add a preliminary
+exact `COUNT(*)` to decide whether to sample. Sampling requires a connector-native
+non-scanning estimate, explicit persisted provenance, and anomaly semantics tested
+against the true row-count contract.
+
 `custom_monitors=legacy_sql_scalar` requires a separate `execute_monitor_query` path,
 database-enforced read-only access where supported, driver and application timeouts,
 zero/multi-row detection, and the attack corpus in `test_legacy_sql_monitor.py`. Do not

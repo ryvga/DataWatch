@@ -52,10 +52,6 @@ class ColumnInfo:
         return "text"
 
 
-LARGE_TABLE_THRESHOLD = 5_000_000   # rows — trigger sampling
-SAMPLE_TARGET_ROWS = 1_000_000       # rows to sample for large tables
-
-
 @dataclass
 class ProfileResult:
     row_count: int = 0
@@ -64,8 +60,6 @@ class ProfileResult:
     column_metrics: dict[str, Any] = field(default_factory=dict)
     profiling_duration_ms: int = 0
     error: str | None = None
-    sampled: bool = False
-    sample_pct: float | None = None
 
 
 class ProfilerService:
@@ -165,7 +159,6 @@ class ProfilerService:
         table: str,
         columns: list[ColumnInfo],
         freshness_column: str | None,
-        sample_pct: float | None = None,
         dialect: str = "postgres",
     ) -> str:
         """
@@ -294,11 +287,7 @@ class ProfilerService:
 
         select_clause = ",\n       ".join(parts)
         qualified_table = self._qualified_table(schema, table)
-        if sample_pct is not None and sample_pct < 100 and not sqlite:
-            from_clause = f"{qualified_table} TABLESAMPLE SYSTEM({sample_pct:.2f})"
-        else:
-            from_clause = qualified_table
-        return f"SELECT {select_clause}\nFROM {from_clause}"
+        return f"SELECT {select_clause}\nFROM {qualified_table}"
 
     async def get_top_values(
         self,
@@ -399,49 +388,22 @@ class ProfilerService:
 
             fingerprint = self.compute_schema_fingerprint(columns)
 
-            # Quick estimated row count to decide sampling
-            estimated_rows: int | None = None
-            try:
-                count_raw = await connector.execute_profile_query(
-                    f"SELECT COUNT(*) AS _n FROM {self._qualified_table(schema, table)}"
-                )
-                estimated_rows = int(count_raw.get("_n", 0) or 0)
-            except Exception:
-                pass  # count failed — proceed without sampling
-
-            # Build profile query (with optional sampling for large tables)
-            sample_pct: float | None = None
-            if (
-                estimated_rows
-                and estimated_rows > LARGE_TABLE_THRESHOLD
-                and getattr(connector, "supports_profile_sampling", False)
-            ):
-                sample_pct = min(100.0, SAMPLE_TARGET_ROWS / estimated_rows * 100)
-                logger.warning(
-                    "Large table %s.%s (%dM rows): sampling %.1f%%",
-                    schema, table, estimated_rows // 1_000_000, sample_pct,
-                )
-                query = self.build_profile_query(
-                    schema,
-                    table,
-                    columns,
-                    freshness_column,
-                    sample_pct=sample_pct,
-                    dialect=dialect,
-                )
-            else:
-                query = self.build_profile_query(
-                    schema, table, columns, freshness_column, dialect=dialect
-                )
+            # One aggregate query is the correctness and cost contract. Sampling must
+            # not be reintroduced until a connector can provide a non-scanning row
+            # estimate and sampled metrics carry explicit provenance.
+            query = self.build_profile_query(
+                schema,
+                table,
+                columns,
+                freshness_column,
+                dialect=dialect,
+            )
 
             logger.info("Profiling %s.%s — query built, executing", schema, table)
             raw = await connector.execute_profile_query(query)
 
             duration_ms = int((time.monotonic() - start) * 1000)
             result = self.parse_results(raw, columns, freshness_column, fingerprint, duration_ms)
-            if sample_pct is not None:
-                result.sampled = True
-                result.sample_pct = round(sample_pct, 2)
 
             logger.info(
                 "Profile complete",
