@@ -17,6 +17,12 @@ class SchemaInfo:
 class BaseConnector(ABC):
     """Abstract base for all warehouse connectors."""
 
+    # Automated profiling is intentionally opt-in. A connector may be able to
+    # connect, discover assets, and execute a scalar query without supporting
+    # the aggregate SQL emitted by ProfilerService.
+    profile_dialect: str | None = None
+    supports_profile_sampling: bool = False
+
     @abstractmethod
     async def test_connection(self) -> bool:
         """Return True if connection succeeds, False otherwise. Never raise."""

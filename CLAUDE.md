@@ -8,7 +8,7 @@
 
 ## What This Project Is
 
-DataWatch is a **multi-tenant data quality monitoring SaaS**. It connects to databases and warehouses (PostgreSQL, MySQL, MongoDB, Cassandra, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Databricks, Trino, DuckDB, SQLite), profiles tables on a schedule, detects anomalies using 7 statistical methods, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
+DataWatch is a **multi-tenant data quality monitoring SaaS**. Its registry covers PostgreSQL, MySQL, MongoDB, Cassandra, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Databricks, Trino, DuckDB, and SQLite, but support is capability-based: PostgreSQL is stable, DuckDB and SQLite have tested profiling paths, and the remaining adapters are experimental or planned until their profile contracts pass. Redis source monitoring is planned. The app detects anomalies, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
 
 The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions.
 
@@ -414,7 +414,7 @@ When working on this project with Claude Code, these skills are relevant:
 The project is in **MVP SaaS state**. Completed milestones:
 
 1. **Subdomain-first multi-tenancy** — `localhost` = landing, `slug.localhost` = workspace, `admin.localhost` = admin (env-configured subdomain, never guessable)
-2. **13 database connectors** — PostgreSQL, MySQL, MongoDB (Tier 1), + ClickHouse, Redshift, BigQuery, Snowflake, SQL Server, Cassandra, Databricks, Trino, DuckDB, SQLite
+2. **Capability-aware connector registry** — 13 adapters are visible, with readiness and separate connect/discover/schema/profile/custom-monitor capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, Snowflake is planned, and Redis source monitoring is not yet implemented
 3. **7 anomaly detection methods** — Z-Score, Isolation Forest, STL Seasonal, Cardinality Drop, Row Growth Rate, Rule-Based, **Enum/Category Drift** (new)
 4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
 5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)

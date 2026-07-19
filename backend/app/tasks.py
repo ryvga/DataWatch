@@ -13,6 +13,11 @@ from app.worker import celery_app
 logger = logging.getLogger(__name__)
 
 
+def _profile_allows_downstream_checks(profile_result) -> bool:
+    """An execution error is not a zero-row observation and must fail closed."""
+    return not bool(profile_result.error)
+
+
 async def _rollback_connector_transaction(connector) -> None:
     """Best-effort rollback for connectors that keep a transaction-bearing connection."""
     rollback = getattr(connector, "rollback", None)
@@ -149,6 +154,17 @@ async def _profile_table_async(table_id: str) -> dict:
             error=result.error,
         )
         await db.commit()
+
+        if not _profile_allows_downstream_checks(result):
+            log_payload = {
+                "table_id": table_id,
+                "profile_id": str(profile.id),
+                "row_count": result.row_count,
+                "duration_ms": result.profiling_duration_ms,
+                "status": "error",
+            }
+            logger.warning("profile_table stopped before checks: %s", log_payload)
+            return log_payload
 
         # Enqueue anomaly checks (Day 4)
         from app.tasks import run_anomaly_checks

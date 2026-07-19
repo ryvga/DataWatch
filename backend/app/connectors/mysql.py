@@ -65,10 +65,11 @@ class MySQLConnector(BaseConnector):
         return list(schemas.values())
 
     async def execute_profile_query(self, query: str) -> dict:
+        import aiomysql
+
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor(aiomysql.DictCursor) as cur:
-                import aiomysql
                 await cur.execute(query)
                 row = await cur.fetchone()
                 return dict(row) if row else {}

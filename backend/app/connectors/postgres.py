@@ -16,6 +16,8 @@ class PostgresConnector(BaseConnector):
     which avoids event-loop teardown races with asyncio.run() in Celery tasks.
     """
 
+    profile_dialect = "postgres"
+
     def __init__(self, config: dict):
         self._config = config
         self._conn: psycopg.AsyncConnection | None = None
@@ -92,7 +94,8 @@ class PostgresConnector(BaseConnector):
             col = row["column_name"]
             dtype = row["data_type"]
             nullable = "NULL" if row["is_nullable"] == "YES" else "NOT NULL"
-            lines.append(f"  {col} {dtype} {nullable}")
+            quoted_col = '"' + col.replace('"', '""') + '"'
+            lines.append(f"  {quoted_col} {dtype} {nullable}")
         return f"CREATE TABLE {schema}.{table} (\n" + ",\n".join(lines) + "\n);"
 
     async def close(self) -> None:

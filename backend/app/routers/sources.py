@@ -82,6 +82,19 @@ async def _redis() -> aioredis.Redis:
     return aioredis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
+def _discovery_cache_key(org_id, source_id: str) -> str:
+    """Keep cached source metadata tenant-scoped even if IDs are disclosed."""
+    return f"discovery:{org_id}:{source_id}"
+
+
+async def _invalidate_discovery_cache(org_id, source_id: str) -> None:
+    r = await _redis()
+    try:
+        await r.delete(_discovery_cache_key(org_id, source_id))
+    finally:
+        await r.aclose()
+
+
 def _connector_metadata(source_type: str) -> dict:
     metadata = next(
         (item for item in ConnectorFactory.supported_types() if item["type"] == source_type),
@@ -243,6 +256,7 @@ async def update_source(
         src.connection_config = {"encrypted": encrypted}
         src.status = "connected"
         src.last_connected_at = datetime.now(timezone.utc)
+        await _invalidate_discovery_cache(org.id, source_id)
 
     return DataSourceResponse(
         id=str(src.id),
@@ -261,6 +275,7 @@ async def pause_source(
 ):
     src = await _get_source_or_404(source_id, org, db)
     src.status = "paused"  # soft delete — preserves profile history
+    await _invalidate_discovery_cache(org.id, source_id)
     tables = (await db.scalars(
         select(MonitoredTable).where(MonitoredTable.source_id == src.id, MonitoredTable.is_active == True)
     )).all()
@@ -323,7 +338,11 @@ async def discover_source(
 
     # Cache in Redis for 30 min
     r = await _redis()
-    await r.setex(f"discovery:{source_id}", DISCOVERY_TTL, json.dumps(result))
+    await r.setex(
+        _discovery_cache_key(org.id, source_id),
+        DISCOVERY_TTL,
+        json.dumps(result),
+    )
     await r.aclose()
 
     return DiscoveryResponse(**result)
@@ -335,9 +354,13 @@ async def get_schemas(
     org: Organization = Depends(get_current_org_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
+    # Ownership must be checked before cache access. Otherwise a caller who
+    # learns another tenant's source UUID could read its cached schema.
+    await _get_source_or_404(source_id, org, db)
+
     # Try cache first
     r = await _redis()
-    cached = await r.get(f"discovery:{source_id}")
+    cached = await r.get(_discovery_cache_key(org.id, source_id))
     await r.aclose()
 
     if cached:

@@ -19,16 +19,25 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # ── Test DB URL ────────────────────────────────────────────────────────────────
 TEST_DB_URL = os.environ.get(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://datawatch:datawatch@localhost:5432/datawatch_test",
+    "postgresql+asyncpg://datawatch:datawatch@localhost:5433/datawatch_test",
 )
 
+if make_url(TEST_DB_URL).database != "datawatch_test":
+    raise RuntimeError(
+        "Refusing to run destructive DB fixtures unless TEST_DATABASE_URL targets "
+        "a database named exactly 'datawatch_test'"
+    )
+
 # Patch settings BEFORE importing the app
-os.environ.setdefault("DATABASE_URL", TEST_DB_URL)
+# The application-level engine must never inherit a developer/production URL in
+# tests that drop and recreate metadata.
+os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ.setdefault("SECRET_KEY", "test-secret-key-" + "x" * 20)
 os.environ.setdefault("FERNET_MASTER_KEY", "dGVzdC1mZXJuZXQta2V5LXBhZGRlZC10by0zMmJ5dGVzISE=")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/1")  # DB 1 = test

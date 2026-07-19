@@ -44,6 +44,26 @@ VERSION_OPTIONS = {
 }
 
 
+def _capabilities(
+    *,
+    connection: bool = True,
+    discovery: bool = True,
+    schema: bool = True,
+    profiling: str = "none",
+    custom_monitors: str = "none",
+    sampling: bool = False,
+) -> dict:
+    """Public capability contract; readiness tells callers how much is verified."""
+    return {
+        "connection_test": connection,
+        "discovery": discovery,
+        "schema": schema,
+        "profiling": profiling,
+        "custom_monitors": custom_monitors,
+        "sampling": sampling,
+    }
+
+
 def _field_metadata(name: str, default, required: bool) -> dict:
     metadata = FIELD_METADATA.get(name, {})
     return {
@@ -67,6 +87,10 @@ CONNECTOR_REGISTRY = {
         "optional": {"port": 5432, "username": "", "password": ""},
         "label": "PostgreSQL",
         "description": "PostgreSQL / Aurora Postgres",
+        "readiness": "stable",
+        "capabilities": _capabilities(
+            profiling="full", custom_monitors="sql_scalar"
+        ),
     },
     "mysql": {
         "module": "app.connectors.mysql",
@@ -75,6 +99,8 @@ CONNECTOR_REGISTRY = {
         "optional": {"port": 3306, "username": "root", "password": ""},
         "label": "MySQL / MariaDB",
         "description": "MySQL 5.7+, MariaDB 10+",
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="sql_scalar"),
     },
     "redshift": {
         "module": "app.connectors.redshift",
@@ -83,6 +109,8 @@ CONNECTOR_REGISTRY = {
         "optional": {"port": 5439},
         "label": "Amazon Redshift",
         "description": "AWS Redshift (Postgres-compatible)",
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="sql_scalar"),
     },
     "bigquery": {
         "module": "app.connectors.bigquery",
@@ -91,6 +119,8 @@ CONNECTOR_REGISTRY = {
         "optional": {"credentials_json": None, "dataset": None},
         "label": "Google BigQuery",
         "description": "Google Cloud BigQuery",
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="sql_scalar"),
     },
     "snowflake": {
         "module": "app.connectors.snowflake",
@@ -99,6 +129,10 @@ CONNECTOR_REGISTRY = {
         "optional": {"password": "", "warehouse": "COMPUTE_WH", "schema": "PUBLIC"},
         "label": "Snowflake",
         "description": "Snowflake Cloud Data Platform",
+        "readiness": "planned",
+        "capabilities": _capabilities(
+            connection=False, discovery=False, schema=False
+        ),
     },
     "clickhouse": {
         "module": "app.connectors.clickhouse",
@@ -107,6 +141,8 @@ CONNECTOR_REGISTRY = {
         "optional": {"port": 8123, "database": "default", "username": "default", "password": ""},
         "label": "ClickHouse",
         "description": "ClickHouse OLAP database",
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="sql_scalar"),
     },
     "databricks": {
         "module": "app.connectors.databricks",
@@ -115,6 +151,8 @@ CONNECTOR_REGISTRY = {
         "optional": {"catalog": "hive_metastore", "schema": "default"},
         "label": "Databricks",
         "description": "Databricks Lakehouse SQL",
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="sql_scalar"),
     },
     "trino": {
         "module": "app.connectors.trino",
@@ -123,6 +161,8 @@ CONNECTOR_REGISTRY = {
         "optional": {"port": 8080, "user": "trino", "password": "", "schema": "default", "http_scheme": "http"},
         "label": "Trino / Presto",
         "description": "Trino or PrestoDB federated query",
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="sql_scalar"),
     },
     "duckdb": {
         "module": "app.connectors.duckdb",
@@ -131,6 +171,10 @@ CONNECTOR_REGISTRY = {
         "optional": {"path": ":memory:"},
         "label": "DuckDB",
         "description": "DuckDB in-process OLAP",
+        "readiness": "beta",
+        "capabilities": _capabilities(
+            profiling="full", custom_monitors="sql_scalar"
+        ),
     },
     "sqlite": {
         "module": "app.connectors.sqlite",
@@ -139,6 +183,10 @@ CONNECTOR_REGISTRY = {
         "optional": {},
         "label": "SQLite",
         "description": "SQLite file database",
+        "readiness": "beta",
+        "capabilities": _capabilities(
+            profiling="core", custom_monitors="sql_scalar"
+        ),
     },
     "cassandra": {
         "module": "app.connectors.cassandra",
@@ -148,6 +196,8 @@ CONNECTOR_REGISTRY = {
         "label": "Cassandra",
         "description": "Apache Cassandra (safe monitors — no full-table scans)",
         "tier": 2,
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="partition_count"),
     },
     "mongodb": {
         "module": "app.connectors.mongodb",
@@ -157,6 +207,8 @@ CONNECTOR_REGISTRY = {
         "label": "MongoDB",
         "description": "MongoDB document database (Tier 1 — field drift detection)",
         "tier": 1,
+        "readiness": "experimental",
+        "capabilities": _capabilities(),
     },
     "sqlserver": {
         "module": "app.connectors.sqlserver",
@@ -166,11 +218,20 @@ CONNECTOR_REGISTRY = {
         "label": "SQL Server",
         "description": "Microsoft SQL Server / Azure SQL",
         "tier": 2,
+        "readiness": "experimental",
+        "capabilities": _capabilities(custom_monitors="sql_scalar"),
     },
 }
 
 
 class ConnectorFactory:
+    @staticmethod
+    def capabilities_for(source_type: str) -> dict:
+        entry = CONNECTOR_REGISTRY.get(source_type.lower())
+        if not entry:
+            raise ValueError(f"Unsupported source type: {source_type}")
+        return dict(entry["capabilities"])
+
     @staticmethod
     def create(source_type: str, config: dict) -> BaseConnector:
         key = source_type.lower()
@@ -204,5 +265,7 @@ class ConnectorFactory:
                 "fields": required_fields + optional_fields,
                 "versions": VERSION_OPTIONS.get(k, ["Auto-detect"]),
                 "tier": v.get("tier", 0),
+                "readiness": v["readiness"],
+                "capabilities": dict(v["capabilities"]),
             })
         return result

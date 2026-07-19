@@ -158,7 +158,12 @@ Test an unsaved connection configuration before storing credentials. Auth: JWT.
 ---
 
 ### `GET /api/v1/sources/connector-types`
-Returns connector metadata for dynamic UI forms: required fields, optional defaults, provider labels, version choices, and field input hints.
+Returns connector metadata for dynamic UI forms: required fields, optional defaults,
+provider labels, version choices, field input hints, readiness, and capabilities.
+
+`readiness` is one of `stable | beta | experimental | planned`. `capabilities`
+separately reports `connection_test`, `discovery`, `schema`, `profiling`
+(`none | core | full`), `custom_monitors`, and `sampling`.
 
 ---
 
@@ -190,7 +195,8 @@ Errors: `501` for Snowflake stub.
 ---
 
 ### `POST /api/v1/sources/{id}/discover`
-Discover all schemas and tables. Caches result in Redis for 30 minutes.
+Discover all schemas and tables. Caches the result in Redis for 30 minutes using a
+tenant-scoped key. Ownership is checked before both fresh discovery and cached reads.
 
 ```json
 // Response 200

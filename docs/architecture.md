@@ -34,7 +34,7 @@ DataWatch is a multi-tenant data quality monitoring platform. It is structured a
 ┌─────────▼─────────────────────────────────────────────┐
 │  Redis                                                  │
 │  • Celery broker + result backend                       │
-│  • Discovery cache  key=discovery:{source_id}  TTL=30m │
+│  • Discovery cache  key=discovery:{org}:{source_id} TTL=30m │
 │  • IsoForest model  key=isoforest:{table_id}   TTL=7d  │
 │  • LLM narration    key=llm:incident:{id}      TTL=24h │
 │  • Rate counters    key=rate:{kind}:{org}:{date}        │
@@ -166,6 +166,8 @@ All connectors implement `BaseConnector` (abstract, `app/connectors/base.py`):
 
 ```python
 class BaseConnector(ABC):
+    profile_dialect: str | None
+    supports_profile_sampling: bool
     async def test_connection(self) -> bool
     async def discover_schemas(self) -> list[SchemaInfo]
     async def execute_profile_query(self, query: str) -> dict
@@ -173,20 +175,29 @@ class BaseConnector(ABC):
     async def close(self) -> None
 ```
 
-`ConnectorFactory.create(source_type, config)` returns the right implementation.
+`ConnectorFactory.create(source_type, config)` returns the implementation. Registry
+metadata also publishes readiness and separate capabilities for connection tests,
+discovery, schema inspection, profiling, custom monitors, and sampling. This prevents
+the UI and API documentation from presenting experimental adapters as complete.
 
-| Connector | File | Notes |
-|---|---|---|
-| PostgresConnector | `connectors/postgres.py` | psycopg3 async, connection pool min=1/max=5 |
-| BigQueryConnector | `connectors/bigquery.py` | Service account JSON auth, sync client wrapped |
-| DuckDBConnector | `connectors/duckdb.py` | In-process, path from config, great for demo |
-| SnowflakeConnector | `connectors/snowflake.py` | Stub — raises NotImplementedError, API returns 501 |
+| Profile tier | Meaning |
+|---|---|
+| `full` | Standard metrics plus stddev, percentiles, and supported sampling |
+| `core` | Row count, freshness, null/distinct/uniqueness, min/max/mean and basic text/range metrics |
+| `none` | Connection/discovery may work, but scheduled profiling fails explicitly before SQL execution |
+
+The currently exercised vertical slices are PostgreSQL, DuckDB, and SQLite core.
+MongoDB and Cassandra require native planners because document and partition models
+must not be forced through relational full-table SQL semantics.
 
 ---
 
 ## Profiling Query Design
 
-`ProfilerService` (`app/services/profiler.py`) builds **one SQL query** per table run:
+`ProfilerService` (`app/services/profiler.py`) builds **one aggregate query** per table
+run for a declared dialect. Identifiers are quoted as identifiers, never inserted as
+SQL fragments. PostgreSQL/DuckDB use the full metric set; SQLite uses a core dialect
+that omits unavailable native stddev/percentile functions.
 
 ```sql
 SELECT
@@ -200,10 +211,16 @@ SELECT
   AVG(amount::FLOAT) AS mean_amount,
   STDDEV(amount::FLOAT) AS stddev_amount,
   ...
-FROM schema.table
+FROM "schema"."table"
 ```
 
 Column types are introspected once (via `get_table_ddl`) and classified as `numeric | text | timestamp | date` to generate appropriate expressions. Schema fingerprint = MD5(sorted `col:type` pairs).
+
+Discovery cache keys are tenant-scoped (`discovery:{org_id}:{source_id}`), and source
+ownership is checked before any cache read to prevent cross-workspace metadata leaks.
+
+See `docs/monitor-dsl.md` for the connector-neutral monitoring plan and the security
+boundary between typed DSL monitors and the legacy custom SQL escape hatch.
 
 ---
 

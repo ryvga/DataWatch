@@ -12,6 +12,8 @@ class DuckDBConnector(BaseConnector):
     config: { 'path': '/path/to/file.duckdb' }  (or ':memory:')
     """
 
+    profile_dialect = "duckdb"
+
     def __init__(self, config: dict):
         self._config = config
         self._conn = None
@@ -35,7 +37,7 @@ class DuckDBConnector(BaseConnector):
         conn = self._get_conn()
         rows = conn.execute(
             """
-            SELECT table_schema, table_name,
+            SELECT schema_name AS table_schema, table_name,
                    estimated_size AS estimated_rows
             FROM duckdb_tables()
             ORDER BY table_schema, table_name
@@ -64,7 +66,8 @@ class DuckDBConnector(BaseConnector):
             "ORDER BY ordinal_position",
             [schema, table],
         ).fetchall()
-        lines = [f"  {col} {dtype} {'NULL' if nullable == 'YES' else 'NOT NULL'}"
+        lines = [f'  "{col.replace(chr(34), chr(34) * 2)}" {dtype} '
+                 f"{'NULL' if nullable == 'YES' else 'NOT NULL'}"
                  for col, dtype, nullable in rows]
         return f"CREATE TABLE {schema}.{table} (\n" + ",\n".join(lines) + "\n);"
 

@@ -13,6 +13,8 @@ class SQLiteConnector(BaseConnector):
     Config: path (file path to .db file, or ':memory:').
     """
 
+    profile_dialect = "sqlite"
+
     def __init__(self, config: dict):
         self._path = config.get("path", ":memory:")
         self._conn: aiosqlite.Connection | None = None
@@ -54,7 +56,9 @@ class SQLiteConnector(BaseConnector):
     async def get_table_ddl(self, schema: str, table: str) -> str:
         conn = await self._get_conn()
         async with conn.execute(
-            f"PRAGMA table_info('{table}')"
+            "SELECT cid, name, type, \"notnull\", dflt_value, pk "
+            "FROM pragma_table_info(?) ORDER BY cid",
+            (table,),
         ) as cur:
             rows = await cur.fetchall()
         lines = []
@@ -62,7 +66,8 @@ class SQLiteConnector(BaseConnector):
             col_name = row[1]
             col_type = row[2] or "TEXT"
             notnull = "NOT NULL" if row[3] else "NULL"
-            lines.append(f"  {col_name} {col_type} {notnull}")
+            quoted_col = '"' + col_name.replace('"', '""') + '"'
+            lines.append(f"  {quoted_col} {col_type} {notnull}")
         return f"CREATE TABLE {table} (\n" + ",\n".join(lines) + "\n);"
 
     async def close(self) -> None:

@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Column type categories
 NUMERIC_TYPES = {
     "integer", "bigint", "smallint", "numeric", "decimal", "real",
-    "double precision", "float", "float4", "float8", "int2", "int4", "int8",
+    "double", "double precision", "float", "float4", "float8", "int2", "int4", "int8",
     "INT64", "FLOAT64", "NUMERIC", "BIGNUMERIC",  # BigQuery
     "NUMBER", "FLOAT",  # Snowflake / DuckDB
 }
@@ -74,6 +74,31 @@ class ProfilerService:
     Column introspection result is passed in (caller caches it).
     """
 
+    @staticmethod
+    def _split_ddl_column(line: str) -> tuple[str, str] | None:
+        """Split a DDL-like column line while preserving quoted identifier spaces."""
+        if not line:
+            return None
+        opener = line[0]
+        closers = {'"': '"', '`': '`', '[': ']'}
+        closer = closers.get(opener)
+        if closer:
+            chars: list[str] = []
+            i = 1
+            while i < len(line):
+                ch = line[i]
+                if ch == closer:
+                    if i + 1 < len(line) and line[i + 1] == closer:
+                        chars.append(closer)
+                        i += 2
+                        continue
+                    return "".join(chars), line[i + 1:].strip()
+                chars.append(ch)
+                i += 1
+            return None
+        parts = line.split(maxsplit=1)
+        return (parts[0], parts[1]) if len(parts) == 2 else None
+
     async def get_columns(
         self, connector: BaseConnector, schema: str, table: str
     ) -> list[ColumnInfo]:
@@ -102,18 +127,17 @@ class ProfilerService:
             line = line.strip().rstrip(",")
             if line.startswith("CREATE TABLE") or line in ("{", "}", ");", "("):
                 continue
-            parts = line.split()
-            if len(parts) >= 2:
-                col_name = parts[0]
+            split = self._split_ddl_column(line)
+            if split:
+                col_name, remainder = split
                 nullable = "NOT NULL" not in line
                 # Strip trailing NULL/NOT NULL to capture multi-word types
                 # e.g. "character varying NULL" → "character varying"
-                remainder = line[len(col_name):].strip()
                 for suffix in ("NOT NULL", "NULL"):
                     if remainder.endswith(suffix):
                         remainder = remainder[: -len(suffix)].strip()
                         break
-                data_type = remainder if remainder else parts[1]
+                data_type = remainder
                 columns.append(ColumnInfo(name=col_name, data_type=data_type, is_nullable=nullable))
         return columns
 
@@ -122,6 +146,19 @@ class ProfilerService:
         pairs = sorted(f"{c.name}:{c.data_type}" for c in columns)
         return hashlib.md5("|".join(pairs).encode()).hexdigest()
 
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        """Quote a discovered identifier without treating it as SQL text."""
+        if not identifier or "\x00" in identifier:
+            raise ValueError("Database identifiers must be non-empty and contain no NUL bytes")
+        return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
+
+    def _qualified_table(self, schema: str, table: str) -> str:
+        return f"{self._quote_identifier(schema)}.{self._quote_identifier(table)}"
+
+    def _metric_alias(self, metric: str, column: str) -> str:
+        return self._quote_identifier(f"{metric}_{column}")
+
     def build_profile_query(
         self,
         schema: str,
@@ -129,11 +166,16 @@ class ProfilerService:
         columns: list[ColumnInfo],
         freshness_column: str | None,
         sample_pct: float | None = None,
+        dialect: str = "postgres",
     ) -> str:
         """
         Build a single SELECT with all aggregate metrics.
         Returns (query_string, metric_keys_in_order).
         """
+        if dialect not in {"postgres", "duckdb", "sqlite"}:
+            raise ValueError(f"Unsupported profiling dialect: {dialect}")
+
+        sqlite = dialect == "sqlite"
         parts = [
             "COUNT(*) AS _row_count",
             # Duplicate rate: what fraction of rows are duplicates of at least one other row
@@ -142,61 +184,120 @@ class ProfilerService:
         ]
 
         if freshness_column:
-            parts.append(
-                f"EXTRACT(EPOCH FROM NOW() - MAX({freshness_column})) AS _freshness_seconds"
-            )
+            freshness = self._quote_identifier(freshness_column)
+            if sqlite:
+                parts.append(
+                    f"(julianday('now') - julianday(MAX({freshness}))) * 86400.0 "
+                    "AS _freshness_seconds"
+                )
+            else:
+                parts.append(
+                    f"EXTRACT(EPOCH FROM NOW() - MAX({freshness})) AS _freshness_seconds"
+                )
 
         for col in columns:
-            safe = col.name
+            safe = self._quote_identifier(col.name)
             cat = col.category
 
+            def alias(metric: str) -> str:
+                return self._metric_alias(metric, col.name)
+
             # Null rate — all types
-            parts.append(
-                f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END)::FLOAT "
-                f"/ NULLIF(COUNT(*), 0) AS null_rate_{safe}"
-            )
+            if sqlite:
+                parts.append(
+                    f"CAST(SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) AS REAL) "
+                    f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
+                )
+            else:
+                parts.append(
+                    f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END)::FLOAT "
+                    f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
+                )
             # Distinct count — all types
-            parts.append(f"COUNT(DISTINCT {safe}) AS distinct_count_{safe}")
+            parts.append(f"COUNT(DISTINCT {safe}) AS {alias('distinct_count')}")
             # Uniqueness ratio — 1.0 means all values unique, lower = many duplicates
-            parts.append(
-                f"COUNT(DISTINCT {safe})::FLOAT / NULLIF(COUNT(*), 0) AS uniqueness_ratio_{safe}"
-            )
+            if sqlite:
+                parts.append(
+                    f"CAST(COUNT(DISTINCT {safe}) AS REAL) / NULLIF(COUNT(*), 0) "
+                    f"AS {alias('uniqueness_ratio')}"
+                )
+            else:
+                parts.append(
+                    f"COUNT(DISTINCT {safe})::FLOAT / NULLIF(COUNT(*), 0) "
+                    f"AS {alias('uniqueness_ratio')}"
+                )
 
             if cat == "numeric":
                 parts += [
-                    f"MIN({safe}) AS min_{safe}",
-                    f"MAX({safe}) AS max_{safe}",
-                    f"AVG({safe}::FLOAT) AS mean_{safe}",
-                    f"STDDEV({safe}::FLOAT) AS stddev_{safe}",
-                    f"PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY {safe}) AS p25_{safe}",
-                    f"PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY {safe}) AS p50_{safe}",
-                    f"PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY {safe}) AS p75_{safe}",
-                    f"PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY {safe}) AS p95_{safe}",
-                    f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END)::FLOAT "
-                    f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) AS zero_rate_{safe}",
-                    f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END)::FLOAT "
-                    f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) AS negative_rate_{safe}",
+                    f"MIN({safe}) AS {alias('min')}",
+                    f"MAX({safe}) AS {alias('max')}",
                 ]
+                if sqlite:
+                    parts += [
+                        f"AVG(CAST({safe} AS REAL)) AS {alias('mean')}",
+                        f"CAST(SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END) AS REAL) "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('zero_rate')}",
+                        f"CAST(SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END) AS REAL) "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('negative_rate')}",
+                    ]
+                else:
+                    parts += [
+                        f"AVG({safe}::FLOAT) AS {alias('mean')}",
+                        f"STDDEV({safe}::FLOAT) AS {alias('stddev')}",
+                        f"PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY {safe}) AS {alias('p25')}",
+                        f"PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY {safe}) AS {alias('p50')}",
+                        f"PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY {safe}) AS {alias('p75')}",
+                        f"PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY {safe}) AS {alias('p95')}",
+                        f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END)::FLOAT "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('zero_rate')}",
+                        f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END)::FLOAT "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('negative_rate')}",
+                    ]
             elif cat in ("timestamp", "date"):
                 parts += [
-                    f"MIN({safe}) AS min_{safe}",
-                    f"MAX({safe}) AS max_{safe}",
-                    f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) AS range_seconds_{safe}",
+                    f"MIN({safe}) AS {alias('min')}",
+                    f"MAX({safe}) AS {alias('max')}",
                 ]
+                if sqlite:
+                    parts.append(
+                        f"(julianday(MAX({safe})) - julianday(MIN({safe}))) * 86400.0 "
+                        f"AS {alias('range_seconds')}"
+                    )
+                else:
+                    parts.append(
+                        f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) "
+                        f"AS {alias('range_seconds')}"
+                    )
             else:  # text / other
+                text_value = f"CAST({safe} AS TEXT)" if sqlite else f"{safe}::TEXT"
                 parts += [
-                    f"MIN(LENGTH({safe}::TEXT)) AS min_len_{safe}",
-                    f"MAX(LENGTH({safe}::TEXT)) AS max_len_{safe}",
-                    f"AVG(LENGTH({safe}::TEXT)) AS avg_len_{safe}",
-                    f"SUM(CASE WHEN {safe}::TEXT = '' THEN 1 ELSE 0 END)::FLOAT "
-                    f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) AS empty_rate_{safe}",
+                    f"MIN(LENGTH({text_value})) AS {alias('min_len')}",
+                    f"MAX(LENGTH({text_value})) AS {alias('max_len')}",
+                    f"AVG(LENGTH({text_value})) AS {alias('avg_len')}",
                 ]
+                if sqlite:
+                    parts.append(
+                        f"CAST(SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END) AS REAL) "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('empty_rate')}"
+                    )
+                else:
+                    parts.append(
+                        f"SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END)::FLOAT "
+                        f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('empty_rate')}"
+                    )
 
         select_clause = ",\n       ".join(parts)
-        if sample_pct is not None and sample_pct < 100:
-            from_clause = f"{schema}.{table} TABLESAMPLE SYSTEM({sample_pct:.2f})"
+        qualified_table = self._qualified_table(schema, table)
+        if sample_pct is not None and sample_pct < 100 and not sqlite:
+            from_clause = f"{qualified_table} TABLESAMPLE SYSTEM({sample_pct:.2f})"
         else:
-            from_clause = f"{schema}.{table}"
+            from_clause = qualified_table
         return f"SELECT {select_clause}\nFROM {from_clause}"
 
     async def get_top_values(
@@ -208,15 +309,19 @@ class ProfilerService:
         limit: int = 10,
     ) -> dict[str, list[dict]]:
         """Fetch top N most frequent values for categorical columns (max 5 cols to avoid query bloat)."""
+        if limit < 1 or limit > 100:
+            raise ValueError("Top-value limit must be between 1 and 100")
+
         text_cols = [c for c in columns if c.category == "text"][:5]
         top_values: dict[str, list[dict]] = {}
         for col in text_cols:
             try:
+                safe_col = self._quote_identifier(col.name)
                 q = (
-                    f"SELECT {col.name}::TEXT AS val, COUNT(*) AS cnt "
-                    f"FROM {schema}.{table} "
-                    f"WHERE {col.name} IS NOT NULL "
-                    f"GROUP BY {col.name} ORDER BY cnt DESC LIMIT {limit}"
+                    f"SELECT CAST({safe_col} AS TEXT) AS val, COUNT(*) AS cnt "
+                    f"FROM {self._qualified_table(schema, table)} "
+                    f"WHERE {safe_col} IS NOT NULL "
+                    f"GROUP BY {safe_col} ORDER BY cnt DESC LIMIT {limit}"
                 )
                 # execute_profile_query only returns one row — use raw query method if available
                 if hasattr(connector, "execute_query_many"):
@@ -280,6 +385,14 @@ class ProfilerService:
     ) -> ProfileResult:
         start = time.monotonic()
         try:
+            dialect = getattr(connector, "profile_dialect", None)
+            if dialect is None:
+                return ProfileResult(
+                    error=(
+                        f"{type(connector).__name__} supports connection/discovery but "
+                        "does not yet support automated profiling"
+                    )
+                )
             columns = await self._get_columns_raw(connector, schema, table)
             if not columns:
                 return ProfileResult(error="Could not introspect columns")
@@ -290,7 +403,7 @@ class ProfilerService:
             estimated_rows: int | None = None
             try:
                 count_raw = await connector.execute_profile_query(
-                    f"SELECT COUNT(*) AS _n FROM {schema}.{table}"
+                    f"SELECT COUNT(*) AS _n FROM {self._qualified_table(schema, table)}"
                 )
                 estimated_rows = int(count_raw.get("_n", 0) or 0)
             except Exception:
@@ -298,17 +411,28 @@ class ProfilerService:
 
             # Build profile query (with optional sampling for large tables)
             sample_pct: float | None = None
-            if estimated_rows and estimated_rows > LARGE_TABLE_THRESHOLD:
+            if (
+                estimated_rows
+                and estimated_rows > LARGE_TABLE_THRESHOLD
+                and getattr(connector, "supports_profile_sampling", False)
+            ):
                 sample_pct = min(100.0, SAMPLE_TARGET_ROWS / estimated_rows * 100)
                 logger.warning(
                     "Large table %s.%s (%dM rows): sampling %.1f%%",
                     schema, table, estimated_rows // 1_000_000, sample_pct,
                 )
                 query = self.build_profile_query(
-                    schema, table, columns, freshness_column, sample_pct=sample_pct
+                    schema,
+                    table,
+                    columns,
+                    freshness_column,
+                    sample_pct=sample_pct,
+                    dialect=dialect,
                 )
             else:
-                query = self.build_profile_query(schema, table, columns, freshness_column)
+                query = self.build_profile_query(
+                    schema, table, columns, freshness_column, dialect=dialect
+                )
 
             logger.info("Profiling %s.%s — query built, executing", schema, table)
             raw = await connector.execute_profile_query(query)

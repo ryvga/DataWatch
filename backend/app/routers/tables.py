@@ -250,6 +250,14 @@ async def create_table(
     db: AsyncSession = Depends(get_db),
 ):
     source = await _resolve_org_from_source(body.source_id, org, db)
+    profile_capability = ConnectorFactory.capabilities_for(source.type)["profiling"]
+    if profile_capability == "none":
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{source.type} supports connection/discovery but not scheduled profiling yet"
+            ),
+        )
 
     # Reject duplicate (same source + schema + table)
     existing = await db.scalar(

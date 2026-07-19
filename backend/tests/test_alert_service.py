@@ -83,8 +83,8 @@ def test_send_opsgenie_alert_posts_create_alert_payload(monkeypatch):
         "message": "Orders freshness breach",
         "description": "Orders have not refreshed for two hours.",
         "priority": "P1",
-        "tags": ["datawatch"],
-        "source": "DataWatch",
+        "tags": ["panopta"],
+        "source": "Panopta",
     }
 
 

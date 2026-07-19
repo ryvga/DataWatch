@@ -83,8 +83,12 @@ def test_invite_email_uses_smtp_and_app_base_url(monkeypatch):
     host, port, timeout, message = sent_messages[0]
     assert (host, port, timeout) == ("localhost", 1025, 10)
     assert message["To"] == "invitee@example.com"
-    assert message["Subject"] == "You are invited to join Acme Data on DataWatch"
-    assert "http://localhost:5173/accept-invite?token=invite-token" in message.as_string()
+    assert message["Subject"] == "You are invited to join Acme Data on Panopta"
+    html_part = next(
+        part for part in message.walk() if part.get_content_type() == "text/html"
+    )
+    html = html_part.get_payload(decode=True).decode(html_part.get_content_charset())
+    assert "http://localhost:5173/accept-invite?token=invite-token" in html
 
 
 @pytest.mark.asyncio

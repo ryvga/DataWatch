@@ -34,12 +34,29 @@ Monitors your warehouse tables, detects anomalies (z-score, Isolation Forest, ST
 
 ## Connectors
 
-| Warehouse  | Status   |
-|------------|----------|
-| PostgreSQL | ✅ Full  |
-| BigQuery   | ✅ Full  |
-| DuckDB     | ✅ Full (local/demo) |
-| Snowflake  | 🚧 Stub (501) |
+Connector metadata distinguishes connection/discovery from scheduled profiling. A
+connector is not described as fully supported merely because it can connect.
+
+| Source | Readiness | Current application path | Current limit |
+|---|---|---|---|
+| PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, scalar SQL monitor | Discovery row estimates still need cost optimization |
+| DuckDB | Beta | Connect, discover, schema, full profile, scalar SQL monitor | Local/in-process deployment model |
+| SQLite | Beta | Connect, discover, schema, core profile, scalar SQL monitor | No native stddev/percentiles or table sampling |
+| MySQL / MariaDB | Experimental | Connect, discover, schema, scalar SQL monitor | Scheduled profile dialect pending |
+| Redshift | Experimental | Connect, discover, schema, scalar SQL monitor | Scheduled profile conformance pending |
+| BigQuery | Experimental | Connect, discover, schema, scalar SQL monitor | Async/cost-bounded profile planner pending |
+| ClickHouse | Experimental | Connect, discover, schema, scalar SQL monitor | Scheduled profile dialect pending |
+| Databricks | Experimental | Connect, discover, schema, scalar SQL monitor | Scheduled profile dialect pending |
+| Trino / Presto | Experimental | Connect, discover, schema, scalar SQL monitor | Auth and profile conformance pending |
+| SQL Server / Azure SQL | Experimental | Adapter implemented | Native driver packaging and profile dialect pending |
+| MongoDB | Experimental | Connect, discover, inferred document schema | Document profiler/DSL compiler not wired to scheduler |
+| Cassandra | Experimental | Connect, discover, schema, partition-bounded count monitor | Generic full-table profiling is intentionally unsupported |
+| Snowflake | Planned | Registry metadata only | Connector is a 501 stub |
+| Redis | Planned | Not yet a monitored source | Keyspace/TTL/stream adapter pending |
+
+`GET /api/v1/sources/connector-types` returns this readiness plus machine-readable
+capabilities. Legacy custom SQL is an advanced escape hatch, not a security sandbox;
+the safe monitor DSL roadmap is documented in `docs/monitor-dsl.md`.
 
 ## Quick Start (local)
 

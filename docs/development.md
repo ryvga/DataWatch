@@ -222,11 +222,16 @@ python scripts/test_llm_prompt.py --incident-id <uuid>
 ## Adding a New Connector
 
 1. Create `app/connectors/<name>.py` implementing all 4 `BaseConnector` methods
-2. Add the case to `ConnectorFactory` in `app/connectors/factory.py`
-3. Add the type string to `valid_types` set in `app/routers/sources.py`
-4. Add any new Python deps to `requirements.txt` as `# <connector_name> connector`
-5. Update `README.md` connector table
-6. Update `docs/architecture.md` connector table
+2. Add the registry entry, readiness, and truthful capability metadata in `factory.py`
+3. Implement and declare a profile dialect only when its generated query has a direct execution test
+4. Add connection/discovery/schema tests plus a real discover → profile vertical slice
+5. Add any new Python and native runtime dependencies, including container packages
+6. Update the README and architecture capability matrices
+7. Keep unsupported operations explicit; never silently return an empty successful profile
+
+Connector conformance tests must cover quoted identifiers, cleanup, failure behavior,
+and any source-specific cost/scan limit. A registry entry by itself is not feature
+completion.
 
 ---
 
