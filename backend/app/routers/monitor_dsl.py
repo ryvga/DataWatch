@@ -69,7 +69,7 @@ def _capability_plan(definition: MonitorDefinition, source: DataSource) -> dict:
     unsupported = []
     if capabilities["profiling"] == "none":
         unsupported.append("connector_has_no_profile_runtime")
-    unsupported.append("dsl_compiler_not_implemented")
+    unsupported.append("dsl_compiler_not_integrated")
     return {
         "sourceType": source.type,
         "requirements": requirements,
@@ -423,6 +423,6 @@ async def activate_monitor(
         status_code=409,
         detail={
             "error": "activation_not_supported",
-            "reason": "dsl_compiler_not_implemented",
+            "reason": "dsl_execution_runtime_not_implemented",
         },
     )

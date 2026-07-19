@@ -1,6 +1,6 @@
 # Safe Monitor DSL Specification
 
-Status: Validation, draft persistence, immutable revision history, and preview attestations implemented; compiler/activation draft (`datawatch.io/v1alpha1`)
+Status: Validation, draft persistence, immutable revision history, preview attestations, and a non-executing relational compiler foundation implemented; compiler integration/activation pending (`datawatch.io/v1alpha1`)
 
 Tracking: Linear MOU-15 (parent), MOU-19 (runtime)
 Implementation plan: Notion “DataWatch Connector & Safe Monitor DSL Overhaul”
@@ -20,9 +20,21 @@ organization, asset, definition hash, latest schema fingerprint, and planner ver
 Revision history and the run audit collection are readable through tenant-scoped APIs.
 
 Execution remains deliberately disabled: `activationSupported=false` and
-`dsl_compiler_not_implemented` stay explicit until typed dialect compilers and the run
-orchestrator are implemented. The run table exists for that audit trail but no DSL runs
-are created yet.
+`dsl_compiler_not_integrated` stay explicit until schema-aware planning is wired to the
+API and the run orchestrator is implemented. The run table exists for that audit trail
+but no DSL runs are created yet.
+
+The first pure relational compiler constructs SQLGlot AST nodes programmatically for
+PostgreSQL, DuckDB, and SQLite. It emits one aggregate `SELECT`, short deterministic
+output aliases, ordered named placeholders, typed parameter metadata, output bindings,
+and a stable plan hash. Its rendered SQL is preview-only: each connector still needs a
+driver-specific binding adapter and execution controls before it can run.
+
+The deliberately narrow portable subset is row count, null count/rate, distinct
+count/rate, equality/inequality, membership, null checks, and nested boolean predicates.
+String matching, ordered numeric comparisons, missing/NaN semantics, stddev, freshness,
+and other typed metrics remain deferred until field existence and logical types are
+validated against a structured schema binding.
 
 ## Purpose
 
@@ -151,7 +163,7 @@ Implemented endpoints:
 - `GET /api/v2/monitors/{id}/revisions/{revision}`
 - `GET /api/v2/monitors/{id}/runs`
 - `POST /api/v2/monitors/{id}/activate` verifies preview context, then returns the
-  explicit compiler-not-implemented guard
+  explicit execution-runtime-not-implemented guard
 
 Planned endpoints and formats:
 

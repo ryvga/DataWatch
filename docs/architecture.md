@@ -269,6 +269,15 @@ with a five-minute TTL and bind organization, asset, definition hash, latest suc
 schema fingerprint, and planner version. Activation verifies that context but remains
 hard-disabled until typed connector compilers and the run orchestrator land.
 
+`services/monitor_compiler.py` is the first pure compiler layer. It builds a SQLGlot AST
+without parsing raw user SQL, quotes every schema/table/field identifier as one identifier,
+and places every user literal in an ordered parameter bag. PostgreSQL, DuckDB, and SQLite
+render deterministic preview SQL for a deliberately portable aggregate subset. Short
+ordinal aliases avoid database identifier truncation collisions. The rendered placeholder
+syntax is not a driver execution contract; schema/type binding, connector parameter
+adaptation, read-only execution, timeout/cost controls, and run persistence must land
+before the API can treat the plan as executable.
+
 ---
 
 ## Anomaly Detection Detail

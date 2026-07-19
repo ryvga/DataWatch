@@ -167,6 +167,6 @@ async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
         "sourceType": "postgres",
         "requirements": ["violations"],
         "compatible": False,
-        "unsupported": ["dsl_compiler_not_implemented"],
+        "unsupported": ["dsl_compiler_not_integrated"],
         "activationSupported": False,
     }

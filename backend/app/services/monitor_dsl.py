@@ -83,6 +83,18 @@ class Predicate(StrictModel):
                 raise ValueError(f"{self.op} requires value only")
         elif self.left is None or self.right is None or self.value is not None:
             raise ValueError(f"{self.op} requires left and right")
+        if self.op == "between" and not (
+            isinstance(self.right.literal, list) and len(self.right.literal) == 2
+        ):
+            raise ValueError("between requires a two-value literal list on the right")
+        if self.op in {"in", "not_in"} and not (
+            isinstance(self.right.literal, list) and self.right.literal
+        ):
+            raise ValueError(f"{self.op} requires a non-empty literal list on the right")
+        if self.op in {"contains", "starts_with", "ends_with"} and not isinstance(
+            self.right.literal, str
+        ):
+            raise ValueError(f"{self.op} requires a string literal on the right")
         return self
 
     def children(self) -> list["Predicate"]:
@@ -107,7 +119,16 @@ class Measurement(StrictModel):
         if self.type == "metric":
             if not self.metric or self.violation_when is not None or self.output is not None:
                 raise ValueError("metric measurement requires metric and no violation fields")
-        elif self.violation_when is None or not self.output or self.metric is not None:
+            if self.metric == "row_count" and self.field is not None:
+                raise ValueError("row_count does not accept a field")
+            if self.metric != "row_count" and self.field is None:
+                raise ValueError(f"{self.metric} requires a field")
+        elif (
+            self.violation_when is None
+            or not self.output
+            or self.metric is not None
+            or self.field is not None
+        ):
             raise ValueError("violations measurement requires violationWhen and output")
         if self.output and len(set(self.output)) != len(self.output):
             raise ValueError("measurement output values must be unique")
@@ -190,6 +211,8 @@ class MonitorSpec(StrictModel):
                     if inside_measurement:
                         raise ValueError("measurement predicates cannot reference measurements")
                     references.add(value.ref)
+                if value and value.field and not inside_measurement:
+                    raise ValueError("breach predicates cannot reference source fields")
             nodes.extend(
                 (child, depth + 1, inside_measurement)
                 for child in predicate.children()

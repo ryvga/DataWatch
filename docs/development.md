@@ -147,6 +147,10 @@ except Exception as e:
   revision through application code. Use `expectedRevision` when advancing a monitor.
 - DSL executions must persist an idempotent `monitor_runs` audit row tied to the exact
   revision before activation can be enabled.
+- Safe monitor SQL is built only from programmatic SQLGlot AST nodes. Keep SQLGlot pinned
+  while snapshots depend on its renderer; never interpolate a user literal or parse a
+  user-authored fragment in the typed compiler. Rendered placeholders are preview-only
+  until a connector-specific parameter adapter is tested.
 
 ### React / Frontend
 

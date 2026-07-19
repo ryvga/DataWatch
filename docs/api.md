@@ -355,9 +355,9 @@ inside the authenticated organization. The response includes `canonicalDefinitio
 stable `definitionHash`, predicate/measurement statistics, and `capabilityPlan`.
 
 Validation does not persist or execute the definition. A valid response reports
-`activationSupported: false` and `dsl_compiler_not_implemented` until typed connector
-compilers are available. Unknown fields and invalid grammar return FastAPI/Pydantic 422,
-while an asset outside the tenant returns 404.
+`activationSupported: false` and `dsl_compiler_not_integrated` until schema-aware plans
+and connector execution adapters are wired to the API. Unknown fields and invalid grammar
+return FastAPI/Pydantic 422, while an asset outside the tenant returns 404.
 
 ### `POST /api/v2/monitors/preview`
 
@@ -400,8 +400,8 @@ until the typed compiler/runtime begins recording execution audit rows.
 
 Requires `expectedRevision` and the matching `previewAttestation`. It verifies the
 current tenant, asset, definition, schema, and planner context, then currently returns
-409 `activation_not_supported` with reason `dsl_compiler_not_implemented`. This is an
-intentional hard gate; no valid DSL definition is executed yet.
+409 `activation_not_supported` with reason `dsl_execution_runtime_not_implemented`.
+This is an intentional hard gate; no valid DSL definition is executed yet.
 
 ---
 

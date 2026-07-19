@@ -63,8 +63,10 @@ documented in `docs/monitor-dsl.md`.
 The `datawatch.io/v1alpha1` runtime provides strict JSON validation, tenant asset
 resolution, canonical hashing, bounded predicates, capability planning, draft creation,
 append-only revision history, and short-lived preview attestations under `/api/v2`.
-Execution and activation remain explicitly disabled until typed connector compilers are
-ready; the run audit schema and read API are present but do not yet record DSL runs.
+An initial non-executing compiler produces deterministic, parameterized aggregate plans
+for a portable PostgreSQL/DuckDB/SQLite subset. Execution and activation remain explicitly
+disabled until schema binding and connector-specific parameter/read-only runtime adapters
+are ready; the run audit schema and read API are present but do not yet record DSL runs.
 
 ## Quick Start (local)
 
