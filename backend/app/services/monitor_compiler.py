@@ -477,7 +477,11 @@ def compile_relational_plan(
         statement=statement,
         parameters=tuple(binder.parameters),
         outputs=tuple(outputs),
-        breach_when=definition.spec.breach_when.model_dump(mode="json", by_alias=True),
+        breach_when=definition.spec.breach_when.model_dump(
+            mode="json",
+            by_alias=True,
+            exclude_unset=True,
+        ),
         policy=definition.spec.policy.model_dump(mode="json", by_alias=True),
         timeout_seconds=definition.spec.execution.timeout_seconds,
     )

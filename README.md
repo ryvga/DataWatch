@@ -72,9 +72,13 @@ deterministic parameterized PostgreSQL/DuckDB/SQLite aggregate plans only when e
 referenced field and operation is compatible. Internal PostgreSQL, DuckDB, and SQLite
 adapters now bind those parameters, enforce read-only/timeout controls, and validate the
 exact typed result contract; real DuckDB/SQLite file executions are covered by tests.
-Public execution and activation remain explicitly disabled until idempotent run
-persistence and deterministic policy evaluation are wired. The run audit schema and read
+Public execution and activation remain explicitly disabled until idempotent run and
+policy-state persistence are wired. The run audit schema and read
 API are present but do not yet record DSL runs.
+
+The internal evaluator already implements deterministic `breachWhen`, consecutive breach,
+recovery pass, and cooldown decisions; it remains side-effect-free until the idempotent
+run orchestrator persists every attempted transition.
 
 ## Quick Start (local)
 

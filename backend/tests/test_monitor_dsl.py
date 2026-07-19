@@ -187,7 +187,7 @@ async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
         "activationSupported": False,
         "activationBlockers": [
             "dsl_run_persistence_not_implemented",
-            "dsl_policy_evaluation_not_implemented",
+            "dsl_policy_state_persistence_not_implemented",
         ],
     }
 
@@ -278,7 +278,7 @@ async def test_preview_returns_bound_plan_without_enabling_execution():
     assert response["capabilityPlan"]["activationSupported"] is False
     assert response["capabilityPlan"]["activationBlockers"] == [
         "dsl_run_persistence_not_implemented",
-        "dsl_policy_evaluation_not_implemented",
+        "dsl_policy_state_persistence_not_implemented",
     ]
 
 

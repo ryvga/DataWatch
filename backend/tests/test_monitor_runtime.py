@@ -9,7 +9,12 @@ from app.connectors.postgres import PostgresConnector
 from app.connectors.sqlite import SQLiteConnector
 from app.services.monitor_compiler import compile_relational_plan
 from app.services.monitor_dsl import MonitorDefinition
-from app.services.monitor_runtime import MonitorExecutionError, execute_compiled_plan
+from app.services.monitor_evaluator import PolicyState
+from app.services.monitor_runtime import (
+    MonitorExecutionError,
+    execute_and_evaluate_compiled_plan,
+    execute_compiled_plan,
+)
 from app.services.schema_binding import build_relation_binding
 from tests.test_monitor_dsl import valid_definition
 
@@ -84,6 +89,47 @@ async def test_sqlite_compiled_monitor_executes_with_driver_bound_values(tmp_pat
         "invalid_orders.count": 1,
         "invalid_orders.rate": pytest.approx(1 / 3),
     }
+
+
+@pytest.mark.asyncio
+async def test_sqlite_vertical_slice_executes_and_advances_policy(tmp_path):
+    database_path = tmp_path / "policy.sqlite"
+    setup = sqlite3.connect(database_path)
+    setup.execute("CREATE TABLE orders (status TEXT, payment_reference TEXT)")
+    setup.executemany(
+        "INSERT INTO orders VALUES (?, ?)",
+        [("paid", None), ("paid", "ref-2"), ("pending", None)],
+    )
+    setup.commit()
+    setup.close()
+
+    connector = SQLiteConnector({"path": str(database_path)})
+    try:
+        result = await execute_and_evaluate_compiled_plan(
+            connector,
+            _plan("sqlite", "main", "orders"),
+            previous_policy_state=PolicyState(
+                phase="healthy",
+                breach_streak=1,
+            ),
+        )
+    finally:
+        await connector.close()
+
+    assert result["measurements"]["invalid_orders.rate"] == pytest.approx(1 / 3)
+    assert result["decision"] == {
+        "version": "monitor-evaluation/v1",
+        "rawState": "breached",
+        "runStatus": "failed",
+        "effectiveState": "breached",
+        "transition": "opened",
+        "incidentAction": "open",
+        "breachStreak": 2,
+        "recoveryStreak": 0,
+        "notificationEligible": True,
+        "cooldownUntil": result["decision"]["cooldownUntil"],
+    }
+    assert result["decision"]["cooldownUntil"] is not None
 
 
 @pytest.mark.asyncio

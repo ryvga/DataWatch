@@ -29,7 +29,7 @@ router = APIRouter(prefix="/api/v2/monitors", tags=["monitor_dsl"])
 asset_router = APIRouter(prefix="/api/v2/assets", tags=["monitor_dsl"])
 ACTIVATION_BLOCKERS = (
     "dsl_run_persistence_not_implemented",
-    "dsl_policy_evaluation_not_implemented",
+    "dsl_policy_state_persistence_not_implemented",
 )
 
 

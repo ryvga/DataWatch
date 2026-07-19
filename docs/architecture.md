@@ -272,7 +272,7 @@ the target through the tenant's data source and returns an explicit capability p
 Draft definitions are stored as immutable revisions. Preview attestations use HMAC-SHA256
 with a five-minute TTL and bind organization, asset, definition hash, latest successful
 schema fingerprint, and planner version. Activation verifies that context but remains
-hard-disabled until the run orchestrator and policy evaluator land.
+hard-disabled until the run orchestrator and policy-state persistence land.
 
 `services/schema_binding.py` parses generated connector DDL into an asset-scoped relation
 of exact field names, normalized physical types, logical types, nullability, and a schema
@@ -297,6 +297,14 @@ null accepted only for nullable outputs. Driver exceptions are mapped to stable 
 codes without leaking credential text. These adapters are internal capability only;
 idempotent `monitor_runs`, breach-policy evaluation, and lifecycle orchestration remain
 mandatory before activation.
+
+`services/monitor_evaluator.py` is a pure post-query boundary. It resolves only declared
+measurement references and JSON literals, performs no coercion, and deterministically
+advances consecutive-breach, recovery-pass, cooldown, and notification eligibility
+state. The compiled plan stores predicate fields with `exclude_unset=True`; this preserves
+the distinction between absent operands and explicit JSON null and allows strict model
+reconstruction before evaluation. The evaluator currently has no database or incident
+side effects; the upcoming run orchestrator must persist its decision atomically.
 
 ---
 

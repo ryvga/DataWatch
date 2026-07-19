@@ -9,6 +9,12 @@ from sqlglot import exp, parse
 
 from app.connectors.base import BaseConnector
 from app.services.monitor_compiler import RelationalMonitorPlan
+from app.services.monitor_dsl import Policy, Predicate
+from app.services.monitor_evaluator import (
+    PolicyState,
+    evaluate_breach,
+    evaluate_policy,
+)
 
 
 class MonitorExecutionError(ValueError):
@@ -160,3 +166,25 @@ async def execute_compiled_plan(
             )
         measurements[output.reference] = None if value is None else _finite_number(value)
     return measurements
+
+
+async def execute_and_evaluate_compiled_plan(
+    connector: BaseConnector,
+    plan: RelationalMonitorPlan,
+    *,
+    previous_policy_state: PolicyState | None = None,
+) -> dict:
+    """Execute one internal plan and return its deterministic policy decision."""
+    measurements = await execute_compiled_plan(connector, plan)
+    breach_when = Predicate.model_validate(plan.breach_when)
+    policy = Policy.model_validate(plan.policy)
+    breached = evaluate_breach(breach_when, measurements)
+    decision = evaluate_policy(
+        breached=breached,
+        policy=policy,
+        previous=previous_policy_state,
+    )
+    return {
+        "measurements": measurements,
+        "decision": decision.payload(),
+    }

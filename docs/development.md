@@ -147,6 +147,8 @@ except Exception as e:
   revision through application code. Use `expectedRevision` when advancing a monitor.
 - DSL executions must persist an idempotent `monitor_runs` audit row tied to the exact
   revision before activation can be enabled.
+- Breach and policy evaluation must use the pure `monitor_evaluator`; never coerce missing,
+  null, boolean, string, NaN, or infinite measurement values into a passing observation.
 - Safe monitor SQL is built only from programmatic SQLGlot AST nodes. Keep SQLGlot pinned
   while snapshots depend on its renderer; never interpolate a user literal or parse a
   user-authored fragment in the typed compiler. API plans remain preview-only; internal

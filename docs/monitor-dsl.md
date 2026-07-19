@@ -25,7 +25,8 @@ and operation/type compatibility, and reports structured compiler issues. Previe
 the deterministic plan only when compilation succeeds.
 
 Public execution remains deliberately disabled: `activationSupported=false` reports
-`dsl_run_persistence_not_implemented` and `dsl_policy_evaluation_not_implemented`.
+`dsl_run_persistence_not_implemented` and
+`dsl_policy_state_persistence_not_implemented`.
 The PostgreSQL, DuckDB, and SQLite parameter adapters now exist behind an internal-only
 service boundary, but the run table is not populated and no lifecycle transition can
 invoke them yet.
@@ -37,6 +38,13 @@ and a stable plan hash. API payloads remain preview-only. Internally,
 `monitor_runtime.py` re-parses the statement as exactly one `SELECT`, verifies the
 placeholder/output contract, calls a connector-specific named-parameter adapter, and
 accepts only one exact row of finite numeric-or-allowed-null results.
+
+`monitor_evaluator.py` evaluates `breachWhen` without coercion, dynamic expressions, or
+side effects. It advances explicit healthy/breached policy state using consecutive breach,
+recovery-pass, and cooldown rules and returns a stable decision payload. Missing outputs,
+wrong types, non-finite values, unsupported output operators, corrupt prior state, and
+naive timestamps fail closed. This evaluator is not yet connected to persisted runs or
+incidents.
 
 The schema-bound subset includes row/null/distinct metrics; numeric min/max/mean/sum;
 PostgreSQL/DuckDB stddev; timestamp/date freshness; typed equality and ordered
@@ -161,7 +169,8 @@ creates a new `monitor_revisions` row containing canonical `definition`,
 `definition_version`, `definition_hash`, revision number, validation status, and the
 schema fingerprint observed during validation. The application exposes no revision
 mutation or deletion path. `monitor_runs` is the append-only execution audit schema with
-tenant-scoped idempotency; the run orchestrator will populate it in the next phase.
+tenant-scoped idempotency; the run orchestrator will populate it in the next phase and
+persist the evaluator decision used for each transition.
 
 Implemented endpoints:
 

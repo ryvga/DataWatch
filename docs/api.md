@@ -359,8 +359,8 @@ Validation does not persist or execute the definition. It returns separate
 grammar can therefore report structured schema/compiler issues such as
 `field_not_found`, `field_type_not_supported`, or `schema_snapshot_missing` without
 being treated as malformed. Unknown grammar fields return 422, while an asset outside
-the tenant returns 404. Activation remains false until run persistence and policy
-evaluation land.
+the tenant returns 404. Activation remains false until run and policy-state persistence
+land.
 
 ### `POST /api/v2/monitors/preview`
 
