@@ -41,18 +41,23 @@ connector is not described as fully supported merely because it can connect.
 |---|---|---|---|
 | PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, restricted legacy SQL, internal typed-plan execution | DSL scheduling/incident bridge pending |
 | DuckDB | Beta | Connect, discover, schema, full profile, restricted legacy SQL, verified internal typed-plan execution | Local/in-process deployment model; DSL activation pending |
-| SQLite | Beta | Connect, discover, schema, core profile, restricted legacy SQL, verified internal typed-plan execution | No native stddev/percentiles or table sampling; DSL activation pending |
-| MySQL / MariaDB | Experimental | Connect, discover, schema, core scheduled profile; verified TLS by default | Live container/version conformance, percentiles, and restricted monitor execution pending |
+| SQLite | Beta | Connect, discover, native schema binding, typed freshness validation, core profile, restricted legacy SQL, verified internal typed-plan execution | Hosted SaaS file-path boundary, native stddev/percentiles, and DSL activation pending |
+| MySQL | Experimental | Connect, discover, native schema binding, typed freshness validation, core scheduled profile; verified TLS by default | Required live CI conformance, percentiles, and restricted monitor execution pending |
+| MariaDB | Experimental | First-class catalogue entry using the MySQL-family adapter; native schema binding, typed freshness validation, core scheduled profile; verified TLS by default | MariaDB 11.4 LTS lane is optional until Docker-backed CI is required; percentiles and restricted monitor execution pending |
 | Redshift | Experimental | Connect, discover, schema | Scheduled profile conformance pending |
 | BigQuery | Experimental | Connect, discover, schema | Async/cost-bounded profile planner pending |
 | ClickHouse | Experimental | Connect, discover, schema | Scheduled profile dialect pending |
 | Databricks | Experimental | Connect, discover, schema | Scheduled profile dialect pending |
 | Trino / Presto | Experimental | Connect, discover, schema | Auth and profile conformance pending |
-| SQL Server / Azure SQL | Experimental | Connect, discover, schema, core scheduled profile; production images package ODBC Driver 18 and enforce verified-TLS DSN defaults | Live TLS/container conformance and percentile metrics pending |
+| SQL Server / Azure SQL | Experimental | Connect, discover, native schema binding, typed freshness validation, core scheduled profile; production images package ODBC Driver 18 and enforce verified-TLS DSN defaults | Live TLS/container conformance, read-only execution budgets, and percentile metrics pending |
 | MongoDB | Experimental | Connect, discover, inferred schema, byte/document/field-bounded native profile, indexed scalar-date freshness; verified TLS and explicit sampling provenance | Live TLS container conformance, repeated-sample anomaly confirmation, and document DSL pending |
 | Cassandra | Experimental | Connect, discover, schema with verified-TLS and explicit server-name defaults; arbitrary CQL fails closed | Live TLS conformance, typed partition-bounded planner, and secure Astra bundle support pending |
 | Snowflake | Planned | Registry metadata only | Connector is a 501 stub |
 | Redis | Planned | Not yet a monitored source | Keyspace/TTL/stream adapter pending |
+| Oracle | Planned | Not yet registered as a source | Thin-driver connection/discovery/schema/profile vertical pending |
+
+The provider-by-provider completion gates and delivery order are maintained in
+[`docs/connector-catalogue.md`](docs/connector-catalogue.md).
 
 `GET /api/v1/sources/connector-types` returns this readiness plus machine-readable
 capabilities. Legacy custom SQL is a restricted, transitional escape hatch: definitions

@@ -104,11 +104,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import SourceConnectionDialog from '@/components/SourceConnectionDialog'
 import TableSetupDialog from '@/components/TableSetupDialog'
 
-const SOURCE_TYPES = ['postgres', 'mysql', 'mongodb', 'cassandra', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
+const SOURCE_TYPES = ['postgres', 'mysql', 'mariadb', 'mongodb', 'cassandra', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
 
 const SOURCE_TYPE_LABELS = {
   postgres: 'PostgreSQL',
-  mysql: 'MySQL / MariaDB',
+  mysql: 'MySQL',
+  mariadb: 'MariaDB',
   mongodb: 'MongoDB',
   cassandra: 'Cassandra',
   redshift: 'Amazon Redshift',
@@ -123,7 +124,8 @@ const SOURCE_TYPE_LABELS = {
 }
 const SOURCE_CONFIG_TEMPLATES = {
   postgres: '{\n  "host": "localhost",\n  "port": 5432,\n  "database": "mydb",\n  "username": "user",\n  "password": ""\n}',
-  mysql: '{\n  "host": "localhost",\n  "port": 3306,\n  "database": "mydb",\n  "username": "root",\n  "password": ""\n}',
+  mysql: '{\n  "host": "localhost",\n  "port": 3306,\n  "database": "mydb",\n  "username": "datawatch_monitor",\n  "password": ""\n}',
+  mariadb: '{\n  "host": "localhost",\n  "port": 3306,\n  "database": "mydb",\n  "username": "datawatch_monitor",\n  "password": ""\n}',
   redshift: '{\n  "host": "cluster.region.redshift.amazonaws.com",\n  "port": 5439,\n  "database": "dev",\n  "username": "awsuser",\n  "password": ""\n}',
   bigquery: '{\n  "project_id": "my-gcp-project",\n  "credentials_json": null\n}',
   snowflake: '{\n  "account": "xy12345.us-east-1",\n  "user": "MYUSER",\n  "password": "",\n  "database": "MYDB",\n  "warehouse": "COMPUTE_WH"\n}',

@@ -9,11 +9,19 @@ export const FALLBACK_CONNECTORS = [
   },
   {
     type: 'mysql',
-    label: 'MySQL / MariaDB',
-    description: 'MySQL 5.7+, MariaDB 10+',
-    required: ['host', 'database'],
-    optional: { port: 3306, username: 'root', password: '' },
-    versions: ['Auto-detect', 'MySQL 8', 'MySQL 5.7', 'MariaDB 11', 'MariaDB 10'],
+    label: 'MySQL',
+    description: 'MySQL 5.7+',
+    required: ['host', 'database', 'username'],
+    optional: { port: 3306, password: '', tls_mode: 'verify_identity', ssl_ca: null },
+    versions: ['Auto-detect', 'MySQL 8', 'MySQL 5.7'],
+  },
+  {
+    type: 'mariadb',
+    label: 'MariaDB',
+    description: 'MariaDB 10.11+ / 11.4 LTS',
+    required: ['host', 'database', 'username'],
+    optional: { port: 3306, password: '', tls_mode: 'verify_identity', ssl_ca: null },
+    versions: ['Auto-detect', 'MariaDB 11.4 LTS', 'MariaDB 10.11 LTS'],
   },
   {
     type: 'bigquery',
@@ -56,6 +64,8 @@ const FIELD_LABELS = {
   access_token: 'Access token',
   catalog: 'Catalog',
   http_scheme: 'HTTP scheme',
+  tls_mode: 'TLS mode',
+  ssl_ca: 'TLS CA certificate (PEM)',
 }
 
 const SECRET_FIELDS = new Set(['password', 'credentials_json', 'uri', 'access_token'])
@@ -151,4 +161,3 @@ export function freshnessCandidates(columns) {
     return ai - bi
   })
 }
-

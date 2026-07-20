@@ -134,8 +134,9 @@ Public API and persisted profile errors must also use `services/error_safety.py`
 messages may contain hosts, query text, or credentials.
 
 Run the optional connector services with `docker compose -f docker-compose.test-dbs.yml
-up -d`. MySQL listens on test-only port 3307 and MongoDB on 27018; connector integration
-tests skip explicitly when those services are unavailable. The local MySQL test passes
+up -d`. MySQL listens on test-only port 3307, MariaDB 11.4 LTS on 3308, and MongoDB on
+27018; connector integration tests skip explicitly when those services are unavailable.
+The MySQL-family tests pass
 `tls_mode=disabled` because that isolated container has no certificate; application
 connections default to certificate and hostname verification and accept an optional
 `ssl_ca` PEM bundle.

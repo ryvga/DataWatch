@@ -1,7 +1,12 @@
 import logging
 from typing import Any
 
-from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
+from app.connectors.base import (
+    BaseConnector,
+    ConnectorConfigurationError,
+    SchemaInfo,
+    TableInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +35,7 @@ class SQLServerConnector(BaseConnector):
     def __init__(self, config: dict):
         self._config = config
         self._conn: Any | None = None
+        self._column_cache: dict[tuple[str, str], list[Any]] = {}
 
     @staticmethod
     def _odbc_value(value: object) -> str:
@@ -160,7 +166,10 @@ class SQLServerConnector(BaseConnector):
             return f"{data_type}({datetime_precision})"
         return data_type
 
-    async def get_table_ddl(self, schema: str, table: str) -> str:
+    async def _get_columns(self, schema: str, table: str) -> list[Any]:
+        cache_key = (schema, table)
+        if cache_key in self._column_cache:
+            return self._column_cache[cache_key]
         conn = await self._get_conn()
         async with conn.cursor() as cur:
             await cur.execute(
@@ -179,7 +188,16 @@ class SQLServerConnector(BaseConnector):
                 """,
                 (schema, table),
             )
-            rows = await cur.fetchall()
+            rows = list(await cur.fetchall())
+        if not rows:
+            raise ConnectorConfigurationError(
+                "SQL Server table schema could not be verified."
+            )
+        self._column_cache[cache_key] = rows
+        return rows
+
+    async def get_table_ddl(self, schema: str, table: str) -> str:
+        rows = await self._get_columns(schema, table)
 
         lines = []
         for row in rows:
@@ -190,7 +208,39 @@ class SQLServerConnector(BaseConnector):
         safe_table = table.replace("]", "]]")
         return f"CREATE TABLE [{safe_schema}].[{safe_table}] (\n" + ",\n".join(lines) + "\n);"
 
+    async def get_table_schema(
+        self, schema: str, table: str
+    ) -> tuple[str, set[str] | None]:
+        rows = await self._get_columns(schema, table)
+        return await self.get_table_ddl(schema, table), {str(row[0]) for row in rows}
+
+    async def validate_profile_config(
+        self,
+        schema: str,
+        table: str,
+        freshness_column: str | None,
+    ) -> None:
+        if freshness_column is None:
+            return
+        rows = await self._get_columns(schema, table)
+        column = next((row for row in rows if row[0] == freshness_column), None)
+        if column is None:
+            raise ConnectorConfigurationError(
+                "SQL Server freshness_column must exist in the verified table schema."
+            )
+        if str(column[1]).lower() not in {
+            "date",
+            "datetime",
+            "datetime2",
+            "datetimeoffset",
+            "smalldatetime",
+        }:
+            raise ConnectorConfigurationError(
+                "SQL Server freshness_column must use a date or datetime type."
+            )
+
     async def close(self) -> None:
         if self._conn is not None and not getattr(self._conn, "closed", False):
             await self._conn.close()
         self._conn = None
+        self._column_cache.clear()

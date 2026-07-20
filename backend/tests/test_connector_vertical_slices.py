@@ -6,7 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.connectors.base import ConnectorConfigurationError
 from app.connectors.duckdb import DuckDBConnector
+from app.connectors.factory import ConnectorFactory
 from app.connectors.mysql import MySQLConnector
 from app.connectors.sqlite import SQLiteConnector
 from app.connectors.sqlserver import SQLServerConnector
@@ -109,6 +111,15 @@ async def test_sqlite_discover_and_profile_vertical_slice(tmp_path):
         assert result.column_metrics["status"]["empty_rate"] == pytest.approx(1 / 2)
         assert result.freshness_seconds is not None
 
+        snapshot, column_names = await connector.get_table_schema("main", "events")
+        assert snapshot.startswith('CREATE TABLE "events"')
+        assert column_names == {"id", "amount", "status", "order total", "created_at"}
+        await connector.validate_profile_config("main", "events", "created_at")
+        with pytest.raises(ConnectorConfigurationError, match="DATE, DATETIME, or TIMESTAMP"):
+            await connector.validate_profile_config("main", "events", "status")
+        with pytest.raises(ConnectorConfigurationError, match="main schema"):
+            await connector.get_table_schema("attached", "events")
+
         monitor_result = await connector.execute_monitor_query(
             "SELECT COUNT(*) AS violations FROM main.events WHERE amount IS NULL",
             timeout_seconds=2,
@@ -116,6 +127,30 @@ async def test_sqlite_discover_and_profile_vertical_slice(tmp_path):
         assert monitor_result == {"violations": 1}
         with pytest.raises(sqlite3.OperationalError):
             await connector.execute_profile_query("DELETE FROM main.events")
+    finally:
+        await connector.close()
+
+
+@pytest.mark.asyncio
+async def test_sqlite_rejects_misleading_or_malformed_freshness(tmp_path):
+    database_path = tmp_path / "invalid-freshness.sqlite"
+    setup = sqlite3.connect(database_path)
+    setup.execute("CREATE TABLE misleading (observed_at DATE_COUNTER)")
+    setup.execute("CREATE TABLE malformed (observed_at TIMESTAMP)")
+    setup.execute("INSERT INTO malformed VALUES ('not-a-date')")
+    setup.commit()
+    setup.close()
+
+    connector = SQLiteConnector({"path": str(database_path)})
+    try:
+        with pytest.raises(ConnectorConfigurationError, match="must declare"):
+            await connector.validate_profile_config(
+                "main", "misleading", "observed_at"
+            )
+        with pytest.raises(ConnectorConfigurationError, match="not parseable"):
+            await connector.validate_profile_config(
+                "main", "malformed", "observed_at"
+            )
     finally:
         await connector.close()
 
@@ -293,6 +328,15 @@ async def test_mysql_schema_to_core_profile_contract(monkeypatch):
     assert result.row_count == 3
     assert result.column_metrics["amount"]["mean"] == 6.25
     assert result.column_metrics["status"]["empty_rate"] == pytest.approx(1 / 3)
+    snapshot, column_names = await connector.get_table_schema("analytics", "orders")
+    assert snapshot.startswith("CREATE TABLE `analytics`.`orders`")
+    assert column_names == {"id", "amount", "status", "created_at"}
+    await connector.validate_profile_config("analytics", "orders", "created_at")
+    with pytest.raises(ConnectorConfigurationError, match="date, datetime, or timestamp"):
+        await connector.validate_profile_config("analytics", "orders", "status")
+    with pytest.raises(ConnectorConfigurationError, match="must exist"):
+        await connector.validate_profile_config("analytics", "orders", "missing")
+    assert sum("information_schema.columns" in query.lower() for query, _ in executed) == 1
     profile_query = executed[-1][0]
     assert "FROM `analytics`.`orders`" in profile_query
     assert "STDDEV_POP(`amount`)" in profile_query
@@ -303,11 +347,21 @@ async def test_mysql_schema_to_core_profile_contract(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_mysql_container_connection_discovery_schema_and_profile():
-    connector = MySQLConnector(
+@pytest.mark.parametrize(
+    ("source_type", "provider", "port", "server_marker"),
+    [
+        ("mysql", "MySQL 8.4", 3307, "mysql"),
+        ("mariadb", "MariaDB 11.4 LTS", 3308, "mariadb"),
+    ],
+)
+async def test_mysql_family_container_connection_discovery_schema_and_profile(
+    source_type, provider, port, server_marker
+):
+    connector = ConnectorFactory.create(
+        source_type,
         {
             "host": "127.0.0.1",
-            "port": 3307,
+            "port": port,
             "database": "datawatch_connector_test",
             "username": "datawatch",
             "password": "datawatch",
@@ -317,11 +371,16 @@ async def test_mysql_container_connection_discovery_schema_and_profile():
     if not await connector.test_connection():
         await connector.close()
         pytest.skip(
-            "MySQL test service unavailable; run docker compose -f "
-            "docker-compose.test-dbs.yml up -d test-mysql"
+            f"{provider} test service unavailable; run docker compose -f "
+            "docker-compose.test-dbs.yml up -d test-mysql test-mariadb"
         )
 
     try:
+        version = await connector.execute_profile_query(
+            "SELECT VERSION() AS version, @@version_comment AS version_comment"
+        )
+        assert server_marker in " ".join(str(value) for value in version.values()).lower()
+
         schemas = await connector.discover_schemas()
         database = next(
             schema for schema in schemas if schema.name == "datawatch_connector_test"
@@ -427,9 +486,21 @@ async def test_sqlserver_schema_to_core_profile_contract():
     assert result.row_count == 3
     assert result.column_metrics["amount"]["mean"] == 6.25
     assert result.column_metrics["status"]["empty_rate"] == 0.5
+    snapshot, column_names = await connector.get_table_schema("dbo", "orders")
+    assert snapshot.startswith("CREATE TABLE [dbo].[orders]")
+    assert column_names == {"id", "amount", "status", "created_at"}
+    await connector.validate_profile_config("dbo", "orders", "created_at")
+    with pytest.raises(ConnectorConfigurationError, match="date or datetime"):
+        await connector.validate_profile_config("dbo", "orders", "status")
+    with pytest.raises(ConnectorConfigurationError, match="must exist"):
+        await connector.validate_profile_config("dbo", "orders", "missing")
+    assert sum("information_schema.columns" in query.lower() for query, _ in executed) == 1
     profile_query = executed[-1][0]
     assert "FROM [dbo].[orders]" in profile_query
     assert "STDEVP(CAST([amount] AS FLOAT))" in profile_query
+
+    await connector.close()
+    assert connector._column_cache == {}
 
 
 def test_backend_image_packages_microsoft_odbc_driver_18():

@@ -3,7 +3,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.connectors.factory import CONNECTOR_REGISTRY
+from app.connectors.factory import CONNECTOR_REGISTRY, ConnectorFactory
+from app.connectors.mysql import MySQLConnector
 from app.routers import sources
 from app.routers import tables
 
@@ -38,12 +39,20 @@ async def test_connector_types_include_registry_fields_and_versions():
     )
     assert by_type["sqlite"]["capabilities"]["profiling"] == "core"
     assert by_type["mysql"]["capabilities"]["profiling"] == "core"
+    assert by_type["mariadb"]["capabilities"]["profiling"] == "core"
+    assert "username" in by_type["mysql"]["required"]
+    assert "username" in by_type["mariadb"]["required"]
     assert by_type["sqlserver"]["capabilities"]["profiling"] == "core"
     mysql_fields = {
         field["name"]: field for field in by_type["mysql"]["fields"]
     }
     assert mysql_fields["tls_mode"]["default"] == "verify_identity"
     assert mysql_fields["tls_mode"]["options"] == ["verify_identity", "disabled"]
+    assert by_type["mariadb"]["versions"] == [
+        "Auto-detect",
+        "MariaDB 11.4 LTS",
+        "MariaDB 10.11 LTS",
+    ]
     assert by_type["mongodb"]["capabilities"]["profiling"] == "core"
     assert by_type["mongodb"]["capabilities"]["sampling"] is True
     assert "database" in by_type["mongodb"]["required"]
@@ -53,6 +62,12 @@ async def test_connector_types_include_registry_fields_and_versions():
     assert cassandra_fields["tls_mode"]["default"] == "verify_identity"
     assert "Astra DB" not in by_type["cassandra"]["versions"]
     assert by_type["snowflake"]["readiness"] == "planned"
+
+    mariadb = ConnectorFactory.create(
+        "mariadb",
+        {"host": "db", "database": "analytics"},
+    )
+    assert isinstance(mariadb, MySQLConnector)
 
 
 @pytest.mark.asyncio

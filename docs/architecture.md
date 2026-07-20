@@ -256,8 +256,10 @@ the UI and API documentation from presenting experimental adapters as complete.
 | `none` | Connection/discovery may work, but scheduled profiling fails explicitly before SQL execution |
 
 The currently exercised local vertical slices are PostgreSQL, DuckDB, and SQLite core.
-MySQL has a parsed-query and mocked-driver core contract, but remains experimental until
-the container-backed connection/discovery/schema/profile path passes.
+MySQL and the first-class MariaDB source type share a parsed-query and mocked-driver core
+contract. Optional MySQL 8.4 and MariaDB 11.4 LTS lanes cover the same
+connection/discovery/schema/profile path when Docker is available; both remain
+experimental until those lanes become required CI gates.
 MongoDB uses a native sampled document profiler. Cassandra remains discovery/schema-only
 until a typed partition planner exists; arbitrary CQL is rejected before a driver call,
 and Cassandra transport defaults to certificate and hostname verification.
@@ -278,6 +280,11 @@ container/version conformance.
 MySQL creates a hostname-verifying, certificate-required TLS context by default. An
 explicit `tls_mode=disabled` exists for isolated development services and must not be
 used for remote databases.
+
+MySQL, MariaDB, SQLite, and SQL Server table onboarding returns driver-native column-name
+sets rather than relying only on DDL parsing. Their connector validation rejects missing
+freshness fields and fields without a date/time type before persisting an asset. SQLite
+also rejects non-`main` schema names instead of silently inspecting a different asset.
 
 Table onboarding and freshness updates bind against a connector-fetched, server-owned
 DDL snapshot. Client input cannot replace this snapshot; the legacy model column name

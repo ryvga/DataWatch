@@ -1,7 +1,12 @@
 import logging
 import ssl
 
-from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
+from app.connectors.base import (
+    BaseConnector,
+    ConnectorConfigurationError,
+    SchemaInfo,
+    TableInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +21,7 @@ class MySQLConnector(BaseConnector):
     def __init__(self, config: dict):
         self._config = config
         self._pool = None
+        self._column_cache: dict[tuple[str, str], list[tuple]] = {}
 
     @staticmethod
     def _quote_identifier(identifier: str) -> str:
@@ -98,7 +104,10 @@ class MySQLConnector(BaseConnector):
                 row = await cur.fetchone()
                 return dict(row) if row else {}
 
-    async def get_table_ddl(self, schema: str, table: str) -> str:
+    async def _get_columns(self, schema: str, table: str) -> list[tuple]:
+        cache_key = (schema, table)
+        if cache_key in self._column_cache:
+            return self._column_cache[cache_key]
         pool = await self._get_pool()
         async with pool.acquire() as conn:
             async with conn.cursor() as cur:
@@ -111,7 +120,16 @@ class MySQLConnector(BaseConnector):
                     """,
                     (schema, table),
                 )
-                rows = await cur.fetchall()
+                rows = list(await cur.fetchall())
+        if not rows:
+            raise ConnectorConfigurationError(
+                "MySQL/MariaDB table schema could not be verified."
+            )
+        self._column_cache[cache_key] = rows
+        return rows
+
+    async def get_table_ddl(self, schema: str, table: str) -> str:
+        rows = await self._get_columns(schema, table)
         lines = [
             f"  {self._quote_identifier(r[0])} {r[1]} "
             f"{'NULL' if r[2] == 'YES' else 'NOT NULL'}"
@@ -124,8 +142,35 @@ class MySQLConnector(BaseConnector):
             + "\n);"
         )
 
+    async def get_table_schema(
+        self, schema: str, table: str
+    ) -> tuple[str, set[str] | None]:
+        rows = await self._get_columns(schema, table)
+        return await self.get_table_ddl(schema, table), {str(row[0]) for row in rows}
+
+    async def validate_profile_config(
+        self,
+        schema: str,
+        table: str,
+        freshness_column: str | None,
+    ) -> None:
+        if freshness_column is None:
+            return
+        rows = await self._get_columns(schema, table)
+        column = next((row for row in rows if row[0] == freshness_column), None)
+        if column is None:
+            raise ConnectorConfigurationError(
+                "MySQL/MariaDB freshness_column must exist in the verified table schema."
+            )
+        data_type = str(column[1]).lower().split("(", 1)[0].strip()
+        if data_type not in {"date", "datetime", "timestamp"}:
+            raise ConnectorConfigurationError(
+                "MySQL/MariaDB freshness_column must use a date, datetime, or timestamp type."
+            )
+
     async def close(self) -> None:
         if self._pool:
             self._pool.close()
             await self._pool.wait_closed()
             self._pool = None
+        self._column_cache.clear()
