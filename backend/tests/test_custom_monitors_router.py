@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -25,7 +25,12 @@ async def _register_table(client, headers):
     )
     assert source.status_code == 201, source.text
 
-    with patch("app.scheduler.add_table_job"), \
+    with patch(
+        "app.routers.tables._verified_schema_snapshot",
+        new=AsyncMock(
+            return_value=("CREATE TABLE main.events (event_name varchar NULL);", {"event_name"})
+        ),
+    ), patch("app.scheduler.add_table_job"), \
          patch("app.tasks.profile_table") as profile_task, \
          patch("app.tasks.bootstrap_table_autopilot") as autopilot_task:
         profile_task.delay = MagicMock()
@@ -39,7 +44,6 @@ async def _register_table(client, headers):
                 "table_name": f"events_{uuid.uuid4().hex[:8]}",
                 "check_interval_minutes": 60,
                 "sensitivity": 3.0,
-                "dbt_model_yaml": "CREATE TABLE main.events (event_name varchar NULL);",
             },
         )
     assert table.status_code == 201, table.text

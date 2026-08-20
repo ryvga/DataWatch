@@ -130,7 +130,7 @@ async def test_generate_weekly_report_summarizes_org_activity(db_session):
     assert report["tables_monitored"] == 2
     assert report["tables_with_incidents"] == ["orders", "users"]
     assert report["top_failing_checks"] == [{"check_name": "Freshness SLA", "count": 2}]
-    assert report["ai_summary"] == "AI summary pending"
+    assert report["ai_summary"] is None
     assert report["health_grade"] in {"A", "B", "C", "D", "F"}
     assert any("open incident" in item.lower() for item in report["recommendations"])
 

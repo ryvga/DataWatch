@@ -22,7 +22,12 @@ from app.services.monitor_attestation import (
     verify_preview_attestation,
 )
 from app.services.monitor_compiler import PLANNER_VERSION, analyze_relational_support
-from app.services.monitor_dsl import MonitorDefinition, definition_hash, predicate_stats
+from app.services.monitor_dsl import (
+    MonitorDefinition,
+    definition_hash,
+    persisted_definition_payload,
+    predicate_stats,
+)
 from app.services.schema_binding import SchemaBindingError, build_relation_binding
 
 router = APIRouter(prefix="/api/v2/monitors", tags=["monitor_dsl"])
@@ -161,7 +166,7 @@ def _validation_payload(
         "valid": True,
         "apiVersion": definition.api_version,
         "definitionHash": definition_hash(definition),
-        "canonicalDefinition": definition.model_dump(mode="json", by_alias=True),
+        "canonicalDefinition": persisted_definition_payload(definition),
         "stats": {
             "measurements": len(definition.spec.measurements),
             **predicate_stats(definition),
@@ -349,7 +354,7 @@ async def create_monitor_draft(
         revision=1,
         definition_version=definition.api_version,
         definition_hash=digest,
-        definition=definition.model_dump(mode="json", by_alias=True),
+        definition=persisted_definition_payload(definition),
         validation_status="valid",
         schema_fingerprint=schema_fingerprint,
     )
@@ -500,7 +505,7 @@ async def create_monitor_revision(
         revision=next_revision,
         definition_version=body.definition.api_version,
         definition_hash=digest,
-        definition=body.definition.model_dump(mode="json", by_alias=True),
+        definition=persisted_definition_payload(body.definition),
         validation_status="valid",
         schema_fingerprint=schema_fingerprint,
     )

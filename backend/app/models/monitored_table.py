@@ -41,10 +41,20 @@ class MonitoredTable(Base):
     )
 
     data_source: Mapped["DataSource"] = relationship("DataSource", back_populates="monitored_tables")
-    profiles: Mapped[list["TableProfile"]] = relationship("TableProfile", back_populates="table")
-    check_results: Mapped[list["CheckResult"]] = relationship("CheckResult", back_populates="table")
-    incidents: Mapped[list["Incident"]] = relationship("Incident", back_populates="table")
-    alert_configs: Mapped[list["AlertConfig"]] = relationship("AlertConfig", back_populates="table")
-    custom_monitors: Mapped[list["CustomMonitor"]] = relationship("CustomMonitor", back_populates="table")
+    profiles: Mapped[list["TableProfile"]] = relationship(
+        "TableProfile", back_populates="table", passive_deletes="all"
+    )
+    check_results: Mapped[list["CheckResult"]] = relationship(
+        "CheckResult", back_populates="table", passive_deletes="all"
+    )
+    incidents: Mapped[list["Incident"]] = relationship(
+        "Incident", back_populates="table", passive_deletes="all"
+    )
+    alert_configs: Mapped[list["AlertConfig"]] = relationship(
+        "AlertConfig", back_populates="table", passive_deletes="all"
+    )
+    custom_monitors: Mapped[list["CustomMonitor"]] = relationship(
+        "CustomMonitor", back_populates="table", passive_deletes="all"
+    )
     owner_team: Mapped["Team | None"] = relationship("Team", foreign_keys=[owner_team_id], lazy="select")
     owner_user: Mapped["User | None"] = relationship("User", foreign_keys=[owner_user_id], lazy="select")

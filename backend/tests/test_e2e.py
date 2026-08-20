@@ -49,7 +49,14 @@ async def register_table(client, auth_headers, source_id: str, **kwargs):
         **kwargs,
     }
     # Patch scheduler.add_table_job to no-op
-    with patch("app.scheduler.add_table_job"), \
+    schema_snapshot = (
+        "CREATE TABLE main.orders (id integer NOT NULL, created_at timestamp NULL);",
+        {"id", "created_at"},
+    )
+    with patch(
+        "app.routers.tables._verified_schema_snapshot",
+        new=AsyncMock(return_value=schema_snapshot),
+    ), patch("app.scheduler.add_table_job"), \
          patch("app.tasks.profile_table") as mock_task, \
          patch("app.tasks.bootstrap_table_autopilot") as mock_autopilot:
         mock_task.delay = MagicMock()

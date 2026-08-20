@@ -15,7 +15,11 @@ from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
 from app.models.table_profile import TableProfile
 from app.services.monitor_compiler import compile_relational_plan
-from app.services.monitor_dsl import MonitorDefinition, definition_hash
+from app.services.monitor_dsl import (
+    MonitorDefinition,
+    definition_hash,
+    persisted_definition_payload,
+)
 from app.services.monitor_run_service import (
     MonitorRunError,
     RunRequest,
@@ -104,7 +108,7 @@ async def _runtime_fixture(db_session):
         revision=1,
         definition_version=definition.api_version,
         definition_hash=definition_hash(definition),
-        definition=definition.model_dump(mode="json", by_alias=True),
+        definition=persisted_definition_payload(definition),
         schema_fingerprint=None,
     )
     db_session.add(revision)

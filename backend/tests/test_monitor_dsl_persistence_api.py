@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -24,7 +24,10 @@ async def _create_asset(client, headers):
         },
     )
     assert source.status_code == 201, source.text
-    with patch("app.scheduler.add_table_job"), patch("app.tasks.profile_table") as profile, patch(
+    with patch(
+        "app.routers.tables._verified_schema_snapshot",
+        new=AsyncMock(return_value=("CREATE TABLE main.orders (id integer NOT NULL);", {"id"})),
+    ), patch("app.scheduler.add_table_job"), patch("app.tasks.profile_table") as profile, patch(
         "app.tasks.bootstrap_table_autopilot"
     ) as autopilot:
         profile.delay = MagicMock()
@@ -36,7 +39,6 @@ async def _create_asset(client, headers):
                 "source_id": source.json()["id"],
                 "schema_name": "main",
                 "table_name": f"orders_{uuid.uuid4().hex[:8]}",
-                "dbt_model_yaml": "CREATE TABLE main.orders (id integer NOT NULL);",
             },
         )
     assert table.status_code == 201, table.text

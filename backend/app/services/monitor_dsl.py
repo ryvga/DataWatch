@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import re
+from copy import deepcopy
 from typing import Any, Literal
 from uuid import UUID
 
@@ -251,6 +252,45 @@ def canonical_json(definition: MonitorDefinition) -> str:
         separators=(",", ":"),
         ensure_ascii=False,
     )
+
+
+def persisted_definition_payload(definition: MonitorDefinition) -> dict[str, Any]:
+    """Return the minimal canonical payload used for immutable revision storage."""
+    return definition.model_dump(mode="json", by_alias=True, exclude_unset=True)
+
+
+def load_persisted_definition(payload: dict[str, Any]) -> MonitorDefinition:
+    """Load both canonical revisions and legacy dumps containing redundant nulls.
+
+    Early DSL revisions used Pydantic's full model dump, which expanded every
+    value expression to ``field/literal/ref`` and made strict reconstruction
+    ambiguous. Prefer the one non-null field/ref; otherwise preserve authored
+    JSON null as the literal value. New revisions are stored canonically.
+    """
+    normalized = deepcopy(payload)
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            if {"field", "literal", "ref"}.issubset(value):
+                selected = (
+                    {"field": value["field"]}
+                    if value.get("field") is not None
+                    else {"ref": value["ref"]}
+                    if value.get("ref") is not None
+                    else {"literal": value.get("literal")}
+                )
+                value.pop("field", None)
+                value.pop("literal", None)
+                value.pop("ref", None)
+                value.update(selected)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(normalized)
+    return MonitorDefinition.model_validate(normalized)
 
 
 def definition_hash(definition: MonitorDefinition) -> str:

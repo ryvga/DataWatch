@@ -20,7 +20,12 @@ from app.services.monitor_compiler import (
     RelationalMonitorPlan,
     compile_relational_plan,
 )
-from app.services.monitor_dsl import MonitorDefinition, Policy, Predicate, definition_hash
+from app.services.monitor_dsl import (
+    Policy,
+    Predicate,
+    definition_hash,
+    load_persisted_definition,
+)
 from app.services.monitor_evaluator import PolicyState, evaluate_breach, evaluate_policy
 from app.services.schema_binding import build_relation_binding
 
@@ -122,7 +127,7 @@ async def reserve_run(
     if row is None:
         raise MonitorRunError("run_context_invalid", "Monitor target is outside the tenant")
     table, source = row
-    definition = MonitorDefinition.model_validate(revision.definition)
+    definition = load_persisted_definition(revision.definition)
     if (
         definition.spec.target.asset_id != table.id
         or definition_hash(definition) != revision.definition_hash
@@ -490,7 +495,7 @@ async def finalize_error(
     )
     if revision is None:
         raise MonitorRunError("run_context_invalid", "Run revision no longer exists")
-    policy = MonitorDefinition.model_validate(revision.definition).spec.policy
+    policy = load_persisted_definition(revision.definition).spec.policy
     run.status = "error"
     run.error_code = error_code
     run.error = SAFE_ERROR_MESSAGES[error_code]

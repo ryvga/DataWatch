@@ -1,4 +1,5 @@
 import logging
+import re
 from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
@@ -64,7 +65,11 @@ if settings.is_production:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins,
-    allow_origin_regex=r"https://[a-z0-9-]+\.panopta\.app" if settings.is_production else None,
+    allow_origin_regex=(
+        rf"https://[a-z0-9-]+\.{re.escape(settings.BASE_DOMAIN)}"
+        if settings.is_production
+        else None
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,6 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -23,7 +23,14 @@ async def _register_source(client, auth_headers):
 async def test_create_table_initializes_autopilot_and_queues_bootstrap(client, auth_headers):
     source = await _register_source(client, auth_headers)
 
-    with patch("app.scheduler.add_table_job"), \
+    schema_snapshot = (
+        "CREATE TABLE main.orders (id integer NOT NULL, created_at timestamp NULL, status varchar NULL);",
+        {"id", "created_at", "status"},
+    )
+    with patch(
+        "app.routers.tables._verified_schema_snapshot",
+        new=AsyncMock(return_value=schema_snapshot),
+    ), patch("app.scheduler.add_table_job"), \
          patch("app.tasks.profile_table") as profile_task, \
          patch("app.tasks.bootstrap_table_autopilot") as autopilot_task:
         profile_task.delay = MagicMock()
@@ -37,13 +44,6 @@ async def test_create_table_initializes_autopilot_and_queues_bootstrap(client, a
                 "table_name": "orders",
                 "check_interval_minutes": 60,
                 "sensitivity": 3.0,
-                "dbt_model_yaml": (
-                    "CREATE TABLE main.orders (\n"
-                    "  id integer NOT NULL,\n"
-                    "  created_at timestamp NULL,\n"
-                    "  status varchar NULL\n"
-                    ");"
-                ),
             },
             headers=auth_headers,
         )
@@ -69,7 +69,14 @@ async def test_bootstrap_autopilot_infers_freshness_and_stages_risky_monitors(
     from app.tasks import _bootstrap_table_autopilot_async
 
     source = await _register_source(client, auth_headers)
-    with patch("app.scheduler.add_table_job"), \
+    schema_snapshot = (
+        "CREATE TABLE main.orders (order_id integer NOT NULL, created_at timestamp NULL, email varchar NULL);",
+        {"order_id", "created_at", "email"},
+    )
+    with patch(
+        "app.routers.tables._verified_schema_snapshot",
+        new=AsyncMock(return_value=schema_snapshot),
+    ), patch("app.scheduler.add_table_job"), \
          patch("app.tasks.profile_table") as profile_task, \
          patch("app.tasks.bootstrap_table_autopilot") as autopilot_task:
         profile_task.delay = MagicMock()
@@ -82,13 +89,6 @@ async def test_bootstrap_autopilot_infers_freshness_and_stages_risky_monitors(
                 "table_name": "orders",
                 "check_interval_minutes": 60,
                 "sensitivity": 3.0,
-                "dbt_model_yaml": (
-                    "CREATE TABLE main.orders (\n"
-                    "  order_id integer NOT NULL,\n"
-                    "  created_at timestamp NULL,\n"
-                    "  email varchar NULL\n"
-                    ");"
-                ),
             },
             headers=auth_headers,
         )
