@@ -35,7 +35,7 @@ curl -X POST http://localhost:8000/auth/register \
 
 # 6. Start frontend (separate terminal)
 cd frontend && npm install && npm run dev
-# → http://localhost:3000
+# → http://localhost:5173
 ```
 
 ### Running without Docker (API only)

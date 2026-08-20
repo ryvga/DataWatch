@@ -5,12 +5,11 @@
 ```bash
 # First time
 cp .env.example .env          # fill SECRET_KEY, FERNET_MASTER_KEY, STAFF_PASSWORD=admin1234
-docker-compose up -d
-cd backend && venv/bin/alembic upgrade head
-python scripts/seed_demo.py --full
+docker compose up -d
+backend/venv/bin/python scripts/quickstart.py --reset --local
 
 # Subsequent starts
-docker-compose up -d
+docker compose up -d
 ```
 
 Frontend: `http://localhost:5173` (landing) or `http://<slug>.localhost:5173` (workspace)
@@ -96,11 +95,11 @@ curl http://localhost:8000/orgs/me/members -H "Authorization: Bearer $TOKEN"
 
 ```bash
 # Wipe all data and re-seed with fresh demo state
-python scripts/seed_demo.py --clean --full
+backend/venv/bin/python scripts/quickstart.py --reset --local
 ```
 
 Flags:
-- `--clean` — drop and recreate all demo orgs/sources/tables/incidents
-- `--full` — seed all workspaces (default is acme-corp only)
-- `--history` — generate 30 days of historical profiles (needed for IsoForest/STL/CUSUM)
-- `--scenario spike` — inject a live anomaly scenario for demo purposes
+- `--reset` — drop and recreate all demo workspaces, history, and incidents
+- `--inject` — inject anomalies and trigger profiles without reseeding
+- `--status` — print the current demo database state
+- `--local` — store localhost source hosts instead of Docker service names

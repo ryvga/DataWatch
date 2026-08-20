@@ -112,35 +112,26 @@ git clone <repo-url> && cd DataWatch
 cp .env.example .env
 # Edit .env — set SECRET_KEY, FERNET_MASTER_KEY, OPENROUTER_API_KEY
 
-# 3. Start stack
-docker-compose up -d
+# 3. Start stack (the migrate service applies Alembic before API/worker start)
+docker compose up -d
 
-# 4. Run migrations
-docker-compose exec api alembic upgrade head
+# 4. Seed all demo workspaces (optional)
+backend/venv/bin/python scripts/quickstart.py --reset --local
 
-# 5. Seed demo data (optional)
-export DATABASE_URL=postgresql://datawatch:datawatch@localhost:5432/datawatch
-python scripts/seed_demo.py --clean
-
-# 6. Register org + get API key
+# 5. Register org + get API key
 curl -X POST http://localhost:8000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"org_name":"Demo","org_slug":"demo","email":"admin@demo.com","password":"secret"}'
 ```
 
-Frontend: http://localhost:3000 (run `cd frontend && npm install && npm run dev`)
+Frontend: http://localhost:5173 (run `cd frontend && npm ci && npm run dev`)
 API docs: http://localhost:8000/docs
 
 ## Demo Walkthrough
 
 ```bash
-# Seed 90 days of e-commerce data
-export DATABASE_URL=postgresql://datawatch:datawatch@localhost:5432/datawatch
-export DATAWATCH_API_URL=http://localhost:8000
-export DATAWATCH_API_KEY=dw_<your-key>
-
-python scripts/seed_demo.py --clean    # creates demo.orders/users/products
-python scripts/seed_demo.py --history  # injects 90-day profile history
+# Reset and seed all workspaces, users, tables, history, and incidents
+backend/venv/bin/python scripts/quickstart.py --reset --local
 
 # In the UI:
 # 1. Settings → Data Sources → Add (type: postgres, host: postgres, db: datawatch)
@@ -148,7 +139,7 @@ python scripts/seed_demo.py --history  # injects 90-day profile history
 # 3. Overview → should show healthy
 
 # Inject anomaly
-python scripts/seed_demo.py --scenario pipeline_failure
+backend/venv/bin/python scripts/quickstart.py --inject --local
 
 # Trigger profile run
 curl -X POST http://localhost:8000/api/v1/tables/<orders-id>/run \

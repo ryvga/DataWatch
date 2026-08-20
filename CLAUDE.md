@@ -82,7 +82,7 @@ DataWatch/
 │   └── nginx.conf             ← SPA fallback + /api proxy
 │
 ├── scripts/
-│   ├── seed_demo.py           ← demo data + anomaly injection (--clean/--history/--scenario)
+│   ├── quickstart.py          ← demo setup + anomaly injection (--reset/--inject/--status)
 │   └── test_llm_prompt.py     ← standalone LLM prompt tester (--fixture / --incident-id)
 │
 └── docs/
@@ -426,7 +426,7 @@ The project is in **MVP SaaS state**. Completed milestones:
 4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
 5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)
 6. **AI features** — incident explanations, monitor recommender, natural language → SQL rule builder
-7. **Frontend** — Overview, Tables, Monitors, Incidents, Incident Detail, Reports, Settings (with Billing + Team placeholders)
+7. **Frontend** — Overview, Tables, Monitors, Incidents, Incident Detail, Reports, Billing, Teams, assignments, notifications, and natural-language monitor UI
 8. **Security** — HKDF per-org Fernet keys, login never reveals workspace existence, admin subdomain env-only
 
 **To run locally:**
@@ -438,18 +438,18 @@ The project is in **MVP SaaS state**. Completed milestones:
 5. `cd backend && venv/bin/alembic upgrade head`
 6. `venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000` (with all env vars set)
 7. `cd frontend && npm install && npm run dev`
-8. `python scripts/seed_demo.py --full`
+8. `backend/venv/bin/python scripts/quickstart.py --reset --local`
 9. **Workspace**: `http://acme-corp.localhost:5173` → `mounir@acme.io` / `demo1234`
 10. **Landing**: `http://localhost:5173`
 11. **Admin**: `http://admin.localhost:5173` → `admin@datawatch.io` / `admin1234`
 12. Tests: `cd backend && pytest tests/test_anomaly.py tests/test_llm.py -v`
 
 **What's next:**
-- Stripe billing (placeholder UI in Settings → Billing)
-- Team invites backend (placeholder UI in Settings → Team)
-- Webhook + MS Teams alert channels
+- Complete typed-DSL activation, scheduling, and monitor-specific incident bridge
+- Replace the remaining assignment-notification task stub
+- Finish production conformance for experimental and planned connectors
+- Webhook alert channel and production verification for MS Teams
 - PDF report export
-- NL rule builder UI in table detail
 - SSO / SAML
 - CI/CD pipeline
 

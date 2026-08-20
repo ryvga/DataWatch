@@ -7,24 +7,22 @@
 cp .env.example .env
 # Fill in all required vars (see CLAUDE.md env var table)
 
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml up -d
 
-# Run migrations
-docker-compose -f docker-compose.prod.yml exec api alembic upgrade head
+# The one-shot migrate service must complete successfully before API/worker start.
+docker compose -f docker-compose.prod.yml ps
 
-# Seed demo data
-export DATABASE_URL=postgresql://datawatch:<password>@localhost:5432/datawatch
-export DATAWATCH_API_URL=http://localhost:8000
-export DATAWATCH_API_KEY=dw_<your-key>
-python scripts/seed_demo.py --clean
-python scripts/seed_demo.py --history
+# Demo data is intended for local/demo environments, not production.
+# Locally: backend/venv/bin/python scripts/quickstart.py --reset --local
 ```
 
 ---
 
 ## Railway Deploy
 
-Railway hosts 4 services: Postgres plugin, Redis plugin, API service, Worker service.
+Railway hosts Postgres and Redis plugins plus API and Worker services. The
+repository's `railway.toml` does not define a frontend service; create and
+configure that service separately if Railway will host the SPA.
 
 ### Step 1 — Create Railway project
 
@@ -150,8 +148,7 @@ curl https://<url>/health
 export DATABASE_URL=<prod-or-local-db>
 export DATAWATCH_API_URL=https://<url>
 export DATAWATCH_API_KEY=dw_<key>
-python scripts/seed_demo.py --clean
-python scripts/seed_demo.py --history
+backend/venv/bin/python scripts/quickstart.py --reset --local
 
 # 3. Verify profiles in UI (Overview should show 3 healthy tables)
 
@@ -163,13 +160,13 @@ curl -X POST https://<url>/api/v1/alerts/<config-id>/test \
   -H "Authorization: Bearer <jwt>"
 
 # 6. Run through demo scenario once completely:
-python scripts/seed_demo.py --scenario pipeline_failure
+backend/venv/bin/python scripts/quickstart.py --inject --local
 curl -X POST https://<url>/api/v1/tables/<orders-id>/run \
   -H "x-api-key: dw_<key>"
 # Wait ~30s, then open UI → verify P1 incident appears with LLM narration
 
 # 7. Reset again before the real demo
-python scripts/seed_demo.py --clean && python scripts/seed_demo.py --history
+backend/venv/bin/python scripts/quickstart.py --reset --local
 ```
 
 ---

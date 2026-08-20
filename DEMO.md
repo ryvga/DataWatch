@@ -9,7 +9,7 @@
 docker compose up -d
 
 # 2. Seed demo data (run once, or after --reset to wipe and re-seed)
-python scripts/seed_demo.py --full
+backend/venv/bin/python scripts/quickstart.py --reset --local
 
 # 3. Open the app
 open http://acme-corp.localhost:5173
@@ -61,7 +61,7 @@ open http://acme-corp.localhost:5173
 
 ## What Gets Seeded
 
-Running `python scripts/seed_demo.py --full` creates:
+Running `backend/venv/bin/python scripts/quickstart.py --reset --local` creates:
 
 - **3 organizations** (acme-corp/growth, startup-io/growth, retail-demo/starter) with plan enforcement
 - **Multiple users per org** — owner + admin + member (see credentials above)
@@ -207,10 +207,10 @@ docker compose logs -f api
 docker compose logs -f worker
 
 # Re-seed (wipe demo orgs + re-run full seed)
-python scripts/seed_demo.py --reset
+backend/venv/bin/python scripts/quickstart.py --reset --local
 
 # Check what's seeded (counts by severity/status)
-python scripts/seed_demo.py --status
+backend/venv/bin/python scripts/quickstart.py --status
 
 # Run tests (no DB required)
 cd backend && venv/bin/pytest tests/test_anomaly.py tests/test_llm.py -v
@@ -242,8 +242,8 @@ docker compose build worker && docker compose up -d worker
 | Staff login fails during seed | Ensure `STAFF_PASSWORD=admin1234` is in `.env` |
 | Email alerts not arriving | Check MailHog at http://localhost:8025 — SMTP listens on port 1025 |
 | Worker not processing tasks | `docker compose logs worker` — check Celery can reach Redis |
-| Seed fails with import error | Run from the project root with the venv active: `venv/bin/python scripts/seed_demo.py --full` |
-| Profile history missing | Seed ran but `--full` flag was omitted. Run `python scripts/seed_demo.py --reset` to wipe and re-seed. |
+| Seed fails with import error | Run from the project root: `backend/venv/bin/python scripts/quickstart.py --reset --local` |
+| Profile history missing | Run `backend/venv/bin/python scripts/quickstart.py --reset --local` to wipe and re-seed. |
 | Migration errors | May need: `cd backend && venv/bin/alembic downgrade base && venv/bin/alembic upgrade head` |
 
 ---
