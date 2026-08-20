@@ -25,7 +25,7 @@ def classify_severity(failed_checks: list[AnomalyResult]) -> str:
     custom_severities = [
         c.details.get("severity")
         for c in failed_checks
-        if c.check_type == "custom_sql" and isinstance(c.details, dict)
+        if c.check_type in {"custom_sql", "monitor_dsl"} and isinstance(c.details, dict)
     ]
 
     if "P1" in custom_severities:
@@ -43,10 +43,14 @@ def classify_severity(failed_checks: list[AnomalyResult]) -> str:
 def generate_title(table_name: str, failed_checks: list[AnomalyResult]) -> str:
     names = {c.check_name for c in failed_checks}
     severity = classify_severity(failed_checks)
-    custom_failures = [c for c in failed_checks if c.check_type == "custom_sql"]
+    custom_failures = [
+        c for c in failed_checks if c.check_type in {"custom_sql", "monitor_dsl"}
+    ]
 
     if custom_failures:
-        monitor_name = custom_failures[0].check_name.replace("custom_monitor:", "", 1)
+        monitor_name = custom_failures[0].check_name
+        for prefix in ("custom_monitor:", "dsl_monitor:"):
+            monitor_name = monitor_name.replace(prefix, "", 1)
         if len(custom_failures) == 1:
             return f"[{severity}] {table_name} — custom monitor failed: {monitor_name}"
         return f"[{severity}] {table_name} — {len(custom_failures)} custom monitors failed"

@@ -25,19 +25,15 @@ from app.services.monitor_compiler import PLANNER_VERSION, analyze_relational_su
 from app.services.monitor_dsl import (
     MonitorDefinition,
     definition_hash,
+    load_persisted_definition,
     persisted_definition_payload,
     predicate_stats,
 )
+from app.services.monitor_run_service import MonitorRunError, RunRequest, reserve_run
 from app.services.schema_binding import SchemaBindingError, build_relation_binding
 
 router = APIRouter(prefix="/api/v2/monitors", tags=["monitor_dsl"])
 asset_router = APIRouter(prefix="/api/v2/assets", tags=["monitor_dsl"])
-ACTIVATION_BLOCKERS = (
-    "dsl_scheduler_not_implemented",
-    "dsl_incident_bridge_not_implemented",
-)
-
-
 class RevisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: int = Field(alias="expectedRevision", ge=1)
@@ -48,6 +44,13 @@ class ActivationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: int = Field(alias="expectedRevision", ge=1)
     preview_attestation: str = Field(alias="previewAttestation", min_length=20, max_length=4096)
+
+
+class ManualRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    client_idempotency_key: str = Field(
+        alias="clientIdempotencyKey", min_length=1, max_length=512
+    )
 
 
 async def _resolve_target(
@@ -115,6 +118,19 @@ def _planning_result(
             }
         )
     unsupported = [issue["code"] for issue in issues]
+    compiled_runtime_supported = (
+        compilation["compilationSupported"]
+        and capabilities.get("compiled_monitors") == "internal_read_only"
+    )
+    activation_issues = list(issues)
+    if compilation["compilationSupported"] and not compiled_runtime_supported:
+        activation_issues.append(
+            {
+                "code": "connector_compiled_runtime_not_supported",
+                "path": "source.type",
+                "message": f"{source.type} has no safe compiled monitor runtime",
+            }
+        )
     payload = {
         "sourceType": source.type,
         "requirements": requirements,
@@ -123,8 +139,8 @@ def _planning_result(
         "compatible": compilation["compilationSupported"] and not unsupported,
         "unsupported": unsupported,
         "issues": issues,
-        "activationSupported": False,
-        "activationBlockers": list(ACTIVATION_BLOCKERS),
+        "activationSupported": compiled_runtime_supported and not activation_issues,
+        "activationBlockers": [issue["code"] for issue in activation_issues],
     }
     return payload, plan, binding_fingerprint
 
@@ -455,6 +471,49 @@ async def list_monitor_runs(
     return [_run_payload(run) for run in runs]
 
 
+@router.post("/{monitor_id}/run", status_code=202)
+async def run_monitor_now(
+    monitor_id: UUID,
+    body: ManualRunRequest,
+    org: Organization = Depends(get_current_org_from_jwt),
+    db: AsyncSession = Depends(get_db),
+):
+    """Queue one idempotent manual run of the active revision."""
+    monitor = await _get_monitor(monitor_id, org.id, db)
+    if monitor.status != "active" or monitor.active_revision_id is None:
+        raise HTTPException(status_code=409, detail="Monitor is not active")
+    revision = await db.get(MonitorRevision, monitor.active_revision_id)
+    if revision is None:
+        raise HTTPException(status_code=500, detail="Monitor active revision is inconsistent")
+    try:
+        reservation = await reserve_run(
+            db,
+            RunRequest(
+                org_id=org.id,
+                monitor_id=monitor.id,
+                revision_id=revision.id,
+                trigger_type="manual",
+                profile_id=None,
+                client_idempotency_key=body.client_idempotency_key,
+            ),
+            now=datetime.now(UTC),
+        )
+    except MonitorRunError as exc:
+        status = 422 if exc.code in {"idempotency_key_invalid", "run_context_invalid"} else 409
+        raise HTTPException(status_code=status, detail={"error": exc.code, "message": str(exc)}) from exc
+    await db.commit()
+    from app.tasks import run_dsl_monitor
+
+    task = run_dsl_monitor.delay(str(monitor.id), body.client_idempotency_key)
+    run = await db.get(MonitorRun, reservation.run_id)
+    return {
+        "queued": reservation.status in {"queued", "running"},
+        "acquired": reservation.acquired,
+        "taskId": task.id,
+        "run": _run_payload(run),
+    }
+
+
 @router.put("/{monitor_id}")
 async def create_monitor_revision(
     monitor_id: UUID,
@@ -548,10 +607,32 @@ async def activate_monitor(
         )
     except AttestationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    raise HTTPException(
-        status_code=409,
-        detail={
-            "error": "activation_not_supported",
-            "reason": ACTIVATION_BLOCKERS[0],
-        },
+    definition = load_persisted_definition(revision.definition)
+    capability_plan, compiled_plan, _ = _planning_result(
+        definition, source, table, schema_fingerprint
     )
+    if not capability_plan["activationSupported"] or compiled_plan is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "activation_not_supported",
+                "reasons": capability_plan["activationBlockers"],
+            },
+        )
+
+    now = datetime.now(UTC)
+    monitor.active_revision_id = revision.id
+    monitor.status = "active"
+    monitor.activated_at = now
+    monitor.updated_at = now
+    await db.commit()
+    await db.refresh(monitor)
+    return {
+        **_monitor_payload(monitor, revision),
+        "activation": {
+            "status": "active",
+            "trigger": "on_profile",
+            "schedule": "existing_table_profile_cadence",
+            "plannerVersion": PLANNER_VERSION,
+        },
+    }

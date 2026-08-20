@@ -220,6 +220,10 @@ async def _profile_table_async(table_id: str) -> dict:
         from app.tasks import run_custom_monitors
         run_custom_monitors.delay(table_id, str(profile.id))
 
+        # Enqueue typed DSL monitors on the same successful profile cadence.
+        from app.tasks import run_dsl_monitors
+        run_dsl_monitors.delay(table_id, str(profile.id))
+
         log_payload = {
             "table_id": table_id,
             "profile_id": str(profile.id),
@@ -647,6 +651,216 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
 
         await db.commit()
         return {"status": "ok", "run": ran, "failed": failed}
+
+
+def _monitor_execution_error_code(error) -> str:
+    """Map internal execution failures to the persisted, secret-free contract."""
+    code = getattr(error, "code", None)
+    if code == "execution_timeout":
+        return "execution_timeout"
+    if code == "connector_execution_not_supported":
+        return "connector_execution_not_supported"
+    return "execution_failed"
+
+
+async def _bridge_dsl_incident(db, *, source, table, monitor, run, profile_id):
+    """Translate a typed policy transition into the existing incident lifecycle."""
+    from app.models.monitor import MonitorRevision
+    from app.services.anomaly import AnomalyResult
+    from app.services.incident import IncidentService
+    from app.services.monitor_dsl import load_persisted_definition
+
+    result = run.result or {}
+    action = result.get("incidentAction")
+    if action not in {"open", "reminder_due", "resolve"}:
+        return None
+
+    definition = load_persisted_definition(
+        (await db.get(MonitorRevision, run.revision_id)).definition
+    )
+    severity = definition.spec.policy.severity
+    check_name = f"dsl_monitor:{monitor.name}"
+    check = AnomalyResult(
+        check_type="monitor_dsl",
+        check_name=check_name,
+        column_name=None,
+        status="failed" if result.get("rawState") == "breached" else "passed",
+        observed_value=None,
+        expected_range=None,
+        deviation_score=None,
+        details={"monitor_id": str(monitor.id), "severity": severity},
+    )
+    service = IncidentService()
+    if action == "resolve":
+        await service.auto_resolve(db, table, [check])
+        return None
+    incident = await service.create_or_update(
+        db, source.org_id, table, [check], profile_id
+    )
+    if incident and incident.status == "open":
+        from app.tasks import generate_llm_narration
+
+        generate_llm_narration.delay(str(incident.id))
+    return incident
+
+
+async def _run_one_dsl_monitor(
+    monitor_id: str,
+    *,
+    profile_id: str | None = None,
+    client_idempotency_key: str | None = None,
+) -> dict:
+    """Reserve, execute, finalize, and bridge one active typed monitor."""
+    from app.connectors.factory import ConnectorFactory
+    from app.database import AsyncSessionLocal
+    from app.models.data_source import DataSource
+    from app.models.monitor import Monitor, MonitorRevision
+    from app.models.monitored_table import MonitoredTable
+    from app.services.crypto import decrypt_config
+    from app.services.monitor_compiler import compile_relational_plan
+    from app.services.monitor_dsl import load_persisted_definition
+    from app.services.monitor_run_service import (
+        MonitorRunError,
+        RunRequest,
+        claim_next_run,
+        finalize_error,
+        finalize_success,
+        reserve_run,
+    )
+    from app.services.monitor_runtime import execute_compiled_plan
+    from app.services.schema_binding import build_relation_binding
+
+    async with AsyncSessionLocal() as db:
+        monitor = await db.get(Monitor, monitor_id)
+        if not monitor or monitor.mode != "dsl" or monitor.status != "active" or not monitor.active_revision_id:
+            return {"status": "skipped", "reason": "monitor_not_active", "monitor_id": monitor_id}
+        revision = await db.get(MonitorRevision, monitor.active_revision_id)
+        table = await db.get(MonitoredTable, monitor.table_id)
+        source = await db.get(DataSource, table.source_id) if table else None
+        if not revision or not table or not source:
+            return {"status": "error", "reason": "monitor_context_invalid", "monitor_id": monitor_id}
+
+        now = datetime.now(UTC)
+        request = RunRequest(
+            org_id=monitor.org_id,
+            monitor_id=monitor.id,
+            revision_id=revision.id,
+            trigger_type="on_profile" if profile_id else "manual",
+            profile_id=uuid.UUID(profile_id) if profile_id else None,
+            client_idempotency_key=client_idempotency_key,
+        )
+        try:
+            reservation = await reserve_run(db, request, now=now)
+        except MonitorRunError as exc:
+            logger.warning("DSL monitor reservation failed for %s: %s", monitor_id, exc.code)
+            return {"status": "error", "reason": exc.code, "monitor_id": monitor_id}
+        await db.commit()
+
+        claim = await claim_next_run(db, org_id=monitor.org_id, run_id=reservation.run_id, now=now)
+        if claim is None:
+            run = await db.get(__import__("app.models.monitor", fromlist=["MonitorRun"]).MonitorRun, reservation.run_id)
+            return {"status": "skipped", "reason": "not_claimed", "run_id": str(run.id)}
+        await db.commit()
+
+        connector = None
+        try:
+            config = decrypt_config(source.connection_config["encrypted"], str(source.org_id))
+            connector = ConnectorFactory.create(source.type, config)
+            profile_schema_fingerprint = None
+            if profile_id:
+                from app.models.table_profile import TableProfile
+
+                profile = await db.get(TableProfile, profile_id)
+                profile_schema_fingerprint = profile.schema_fingerprint if profile else None
+            relation = build_relation_binding(
+                asset_id=table.id,
+                source_type=source.type,
+                schema_name=table.schema_name,
+                table_name=table.table_name,
+                ddl=table.dbt_model_yaml,
+                latest_schema_fingerprint=profile_schema_fingerprint,
+            )
+            plan = compile_relational_plan(load_persisted_definition(revision.definition), relation=relation)
+            measurements = await execute_compiled_plan(connector, plan)
+        except Exception as exc:
+            try:
+                await finalize_error(
+                    db,
+                    org_id=monitor.org_id,
+                    claim=claim,
+                    error_code=_monitor_execution_error_code(exc),
+                    now=datetime.now(UTC),
+                )
+                await db.commit()
+            except MonitorRunError:
+                await db.rollback()
+            return {"status": "error", "reason": _monitor_execution_error_code(exc), "run_id": str(claim.run_id)}
+        finally:
+            if connector is not None:
+                try:
+                    await connector.close()
+                except Exception:
+                    logger.warning("DSL monitor connector close failed for %s", monitor_id)
+
+        run = await finalize_success(
+            db,
+            org_id=monitor.org_id,
+            claim=claim,
+            plan=plan,
+            definition_hash=revision.definition_hash,
+            measurements=measurements,
+            now=datetime.now(UTC),
+        )
+        await _bridge_dsl_incident(
+            db,
+            source=source,
+            table=table,
+            monitor=monitor,
+            run=run,
+            profile_id=profile_id,
+        )
+        await db.commit()
+        return {"status": run.status, "run_id": str(run.id), "result": run.result}
+
+
+@celery_app.task(name="tasks.run_dsl_monitor")
+def run_dsl_monitor(monitor_id: str, client_idempotency_key: str):
+    """Execute one manually requested active DSL monitor."""
+    try:
+        return _run(_run_one_dsl_monitor(monitor_id, client_idempotency_key=client_idempotency_key))
+    except Exception as exc:
+        logger.error("run_dsl_monitor failed for monitor=%s: %s", monitor_id, type(exc).__name__)
+        raise
+
+
+@celery_app.task(name="tasks.run_dsl_monitors")
+def run_dsl_monitors(table_id: str, profile_id: str):
+    """Execute all active typed DSL monitors after a successful profile."""
+    try:
+        return _run(_run_dsl_monitors_async(table_id, profile_id))
+    except Exception as exc:
+        logger.error("run_dsl_monitors failed for table=%s: %s", table_id, type(exc).__name__)
+        raise
+
+
+async def _run_dsl_monitors_async(table_id: str, profile_id: str) -> dict:
+    from sqlalchemy import select
+    from app.database import AsyncSessionLocal
+    from app.models.monitor import Monitor
+
+    async with AsyncSessionLocal() as db:
+        monitor_ids = (await db.scalars(
+            select(Monitor.id).where(
+                Monitor.table_id == table_id,
+                Monitor.mode == "dsl",
+                Monitor.status == "active",
+            )
+        )).all()
+    results = [
+        await _run_one_dsl_monitor(str(monitor_id), profile_id=profile_id)
+        for monitor_id in monitor_ids
+    ]
+    return {"status": "ok", "table_id": table_id, "profile_id": profile_id, "runs": results}
 
 
 @celery_app.task(name="tasks.cleanup_old_profiles")

@@ -184,11 +184,8 @@ async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
         "compatible": True,
         "unsupported": [],
         "issues": [],
-        "activationSupported": False,
-        "activationBlockers": [
-            "dsl_scheduler_not_implemented",
-            "dsl_incident_bridge_not_implemented",
-        ],
+        "activationSupported": True,
+        "activationBlockers": [],
     }
 
 
@@ -275,11 +272,8 @@ async def test_preview_returns_bound_plan_without_enabling_execution():
     assert response["preview"]["status"] == "compiled_validation_only"
     assert len(response["compiledPlan"]["relation"]["schemaFingerprint"]) == 32
     assert response["compiledPlan"]["statementMode"] == "preview_only"
-    assert response["capabilityPlan"]["activationSupported"] is False
-    assert response["capabilityPlan"]["activationBlockers"] == [
-        "dsl_scheduler_not_implemented",
-        "dsl_incident_bridge_not_implemented",
-    ]
+    assert response["capabilityPlan"]["activationSupported"] is True
+    assert response["capabilityPlan"]["activationBlockers"] == []
 
 
 @pytest.mark.asyncio

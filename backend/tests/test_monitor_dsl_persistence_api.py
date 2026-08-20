@@ -132,12 +132,33 @@ async def test_dsl_draft_revision_preview_and_tenant_isolation(client, auth_head
             "expectedRevision": 2,
             "previewAttestation": revised_preview.json()["preview"]["attestation"],
         },
+        )
+    assert activation.status_code == 200, activation.text
+    assert activation.json()["status"] == "active"
+    assert activation.json()["activeRevisionId"]
+    assert activation.json()["activation"]["schedule"] == "existing_table_profile_cadence"
+
+    # Editing an active monitor creates a draft head; manual execution remains
+    # pinned to the attested active revision until the new revision is activated.
+    head_definition = _definition(asset_id, name="zero-orders-v3", threshold=2)
+    head = await client.put(
+        f"/api/v2/monitors/{monitor_id}",
+        headers=auth_headers,
+        json={"expectedRevision": 2, "definition": head_definition},
     )
-    assert activation.status_code == 409
-    assert activation.json()["detail"] == {
-        "error": "activation_not_supported",
-        "reason": "dsl_scheduler_not_implemented",
-    }
+    assert head.status_code == 200, head.text
+
+    with patch("app.tasks.run_dsl_monitor") as run_dsl_monitor:
+        run_dsl_monitor.delay = MagicMock(return_value=MagicMock(id="task-1"))
+        manual = await client.post(
+            f"/api/v2/monitors/{monitor_id}/run",
+            headers=auth_headers,
+            json={"clientIdempotencyKey": "manual-1"},
+        )
+    assert manual.status_code == 202, manual.text
+    assert manual.json()["run"]["triggerType"] == "manual"
+    assert manual.json()["run"]["status"] == "queued"
+    assert manual.json()["run"]["revisionId"] == activation.json()["activeRevisionId"]
 
     listed = await client.get(f"/api/v2/assets/{asset_id}/monitors", headers=auth_headers)
     assert listed.status_code == 200

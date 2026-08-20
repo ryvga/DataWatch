@@ -1,6 +1,6 @@
 # Safe Monitor DSL Specification
 
-Status: Validation, immutable revisions, schema-bound previews, attestations, internal relational execution, evaluation, and persisted run state machine implemented; scheduling/incident integration/activation pending (`datawatch.io/v1alpha1`)
+Status: Validation, immutable revisions, schema-bound previews, attestations, internal relational execution, evaluation, persisted run state machine, activation, profile scheduling, manual runs, and incident integration implemented for PostgreSQL, DuckDB, and SQLite (`datawatch.io/v1alpha1`)
 
 Tracking: Linear MOU-15 (parent), MOU-19 (runtime)
 Implementation plan: Notion “DataWatch Connector & Safe Monitor DSL Overhaul”
@@ -24,11 +24,18 @@ parses the asset's connector DDL snapshot into a typed relation, checks field ex
 and operation/type compatibility, and reports structured compiler issues. Preview emits
 the deterministic plan only when compilation succeeds.
 
-Public execution remains deliberately disabled: `activationSupported=false` reports
-`dsl_scheduler_not_implemented` and `dsl_incident_bridge_not_implemented`.
-The PostgreSQL, DuckDB, and SQLite parameter adapters now exist behind an internal-only
-service boundary. The persisted run service is also internal-only; no scheduler or API
-lifecycle transition invokes it yet.
+Activation is supported only when the connector capability contract advertises the
+internal read-only compiled runtime. Activating a revision binds that immutable
+snapshot to the table's existing profile cadence; each successful profile enqueues
+typed DSL runs with the persisted idempotency/lease state machine. `POST
+/api/v2/monitors/{id}/run` provides the same lifecycle for an operator-triggered
+manual run and requires a client idempotency key.
+
+The PostgreSQL, DuckDB, and SQLite parameter adapters execute one compiler-produced
+read-only statement with a bounded timeout and exact result contract. A breach that
+passes its policy threshold is bridged to the existing incident service using a
+typed `monitor_dsl` check; recovery transitions auto-resolve the matching incident.
+Execution errors remain persisted and never auto-resolve an incident.
 
 The first pure relational compiler constructs SQLGlot AST nodes programmatically for
 PostgreSQL, DuckDB, and SQLite. It emits one aggregate `SELECT`, short deterministic
@@ -187,8 +194,9 @@ Implemented endpoints:
 - `GET /api/v2/monitors/{id}/revisions`
 - `GET /api/v2/monitors/{id}/revisions/{revision}`
 - `GET /api/v2/monitors/{id}/runs`
-- `POST /api/v2/monitors/{id}/activate` verifies preview context, then returns the
-  explicit scheduler-not-implemented guard
+- `POST /api/v2/monitors/{id}/activate` verifies preview context and activates the
+  attested revision on the existing table-profile cadence
+- `POST /api/v2/monitors/{id}/run` queues one manual run with client idempotency
 
 Planned endpoints and formats:
 

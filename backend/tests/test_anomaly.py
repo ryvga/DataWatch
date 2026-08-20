@@ -345,3 +345,23 @@ def test_severity_p3_one_failure():
     from app.services.incident import classify_severity
     checks = [AnomalyResult("z_score", "z_score_row_count", None, "failed", 0, None, 3.5)]
     assert classify_severity(checks) == "P3"
+
+
+def test_dsl_monitor_failure_uses_policy_severity_and_title():
+    from app.services.anomaly import AnomalyResult
+    from app.services.incident import classify_severity, generate_title
+
+    checks = [
+        AnomalyResult(
+            "monitor_dsl",
+            "dsl_monitor:orders-valid",
+            None,
+            "failed",
+            None,
+            None,
+            None,
+            details={"severity": "P1"},
+        )
+    ]
+    assert classify_severity(checks) == "P1"
+    assert generate_title("orders", checks) == "[P1] orders — custom monitor failed: orders-valid"
