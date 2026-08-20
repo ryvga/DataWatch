@@ -41,3 +41,6 @@ postgres_data/
 .vscode/
 *.swp
 *.swo
+
+# Ephemeral Claude/Codex worktrees must never be committed as gitlinks
+.claude/worktrees/
