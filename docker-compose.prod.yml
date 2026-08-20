@@ -1,12 +1,10 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-datawatch}
       POSTGRES_USER: ${POSTGRES_USER:-datawatch}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -25,6 +23,17 @@ services:
       timeout: 3s
       retries: 5
 
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.api
+    command: alembic upgrade head
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: ./backend
@@ -38,6 +47,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -50,11 +61,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_BASE_DOMAIN: ${VITE_BASE_DOMAIN:-panopta.app}
+        VITE_ADMIN_SUBDOMAIN: ${VITE_ADMIN_SUBDOMAIN:-admin}
+        VITE_PAYPAL_CLIENT_ID: ${VITE_PAYPAL_CLIENT_ID:-sb}
     ports:
       - "80:80"
     depends_on:

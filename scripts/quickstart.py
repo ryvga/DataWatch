@@ -1102,7 +1102,7 @@ if __name__ == "__main__":
     parser.add_argument("--status",  action="store_true",
                         help="Show current DB state")
     parser.add_argument("--local",   action="store_true",
-                        help="Use localhost:5434/5435 for data-source host configs")
+                        help="Connect to demo databases through localhost:5434/5435 when run from the host")
     args = parser.parse_args()
 
     if args.reset:

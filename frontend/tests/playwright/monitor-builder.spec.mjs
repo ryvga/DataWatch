@@ -2,28 +2,43 @@ import { chromium } from 'playwright'
 
 const BASE_URL = 'http://acme-corp.localhost:5173'
 const API_URL = 'http://localhost:8000'
-const TABLE_ID = 'e3c05414-dc5b-4865-9241-2c330b97e861'
-const TABLE_URL = `${BASE_URL}/tables/${TABLE_ID}`
 const EMAIL = 'mounir@acme.io'
 const PASSWORD = 'demo1234'
+let tableId
+let tokenPromise
 
 const unique = Date.now()
 const AI_MONITOR_NAME = `PW AI event name monitor ${unique}`
 const NL_MONITOR_NAME = `PW NL event name monitor ${unique}`
 
 async function apiToken() {
-  const response = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ org_slug: 'acme-corp', email: EMAIL, password: PASSWORD }),
+  tokenPromise ??= (async () => {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ org_slug: 'acme-corp', email: EMAIL, password: PASSWORD }),
+    })
+    if (!response.ok) throw new Error(`Login failed: ${response.status} ${await response.text()}`)
+    return (await response.json()).access_token
+  })()
+  return tokenPromise
+}
+
+async function discoverTableId() {
+  const token = await apiToken()
+  const response = await fetch(`${API_URL}/api/v1/tables`, {
+    headers: { Authorization: `Bearer ${token}` },
   })
-  if (!response.ok) throw new Error(`Login failed: ${response.status} ${await response.text()}`)
-  return (await response.json()).access_token
+  if (!response.ok) throw new Error(`Table discovery failed: ${response.status} ${await response.text()}`)
+  const tables = await response.json()
+  const table = tables.find((candidate) => candidate.schema_name === 'public' && candidate.table_name === 'events')
+  if (!table) throw new Error('Seeded public.events table was not found; run quickstart.py --reset --local')
+  return table.id
 }
 
 async function cleanupMonitorNames(names) {
   const token = await apiToken()
-  const list = await fetch(`${API_URL}/api/v1/tables/${TABLE_ID}/custom-monitors`, {
+  const list = await fetch(`${API_URL}/api/v1/tables/${tableId}/custom-monitors`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!list.ok) return
@@ -31,7 +46,7 @@ async function cleanupMonitorNames(names) {
   await Promise.all(
     monitors
       .filter((monitor) => names.includes(monitor.name))
-      .map((monitor) => fetch(`${API_URL}/api/v1/tables/${TABLE_ID}/custom-monitors/${monitor.id}`, {
+      .map((monitor) => fetch(`${API_URL}/api/v1/tables/${tableId}/custom-monitors/${monitor.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })),
@@ -43,7 +58,7 @@ function assert(condition, message) {
 }
 
 async function login(page) {
-  await page.goto(TABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`${BASE_URL}/tables/${tableId}`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForTimeout(1000)
   if ((await page.locator('body').innerText()).includes('Welcome back')) {
     await page.getByLabel('Email address').fill(EMAIL)
@@ -54,12 +69,13 @@ async function login(page) {
 }
 
 async function openTable(page) {
-  await page.goto(TABLE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 })
+  await page.goto(`${BASE_URL}/tables/${tableId}`, { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForFunction(() => document.body.innerText.toLowerCase().includes('natural language rule builder'), null, { timeout: 30000 })
   await page.waitForFunction(() => document.body.innerText.toLowerCase().includes('custom sql monitors'), null, { timeout: 30000 })
 }
 
 async function run() {
+  tableId = await discoverTableId()
   await cleanupMonitorNames([AI_MONITOR_NAME, NL_MONITOR_NAME])
 
   const browser = await chromium.launch({ headless: true })

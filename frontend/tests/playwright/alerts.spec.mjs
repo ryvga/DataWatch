@@ -5,15 +5,19 @@ const API_URL = 'http://localhost:8000'
 const EMAIL = 'mounir@acme.io'
 const PASSWORD = 'demo1234'
 const TEST_RECIPIENT = `playwright-alerts-${Date.now()}@example.com`
+let tokenPromise
 
 async function apiToken() {
-  const response = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ org_slug: 'acme-corp', email: EMAIL, password: PASSWORD }),
-  })
-  if (!response.ok) throw new Error(`Login failed: ${response.status} ${await response.text()}`)
-  return (await response.json()).access_token
+  tokenPromise ??= (async () => {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ org_slug: 'acme-corp', email: EMAIL, password: PASSWORD }),
+    })
+    if (!response.ok) throw new Error(`Login failed: ${response.status} ${await response.text()}`)
+    return (await response.json()).access_token
+  })()
+  return tokenPromise
 }
 
 async function cleanupAlerts(recipient) {

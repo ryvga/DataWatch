@@ -31,6 +31,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -172,7 +174,7 @@ services:
     environment:
       API_TARGET: http://api:8000
       VITE_ADMIN_SUBDOMAIN: ${VITE_ADMIN_SUBDOMAIN:-admin}
-      VITE_BASE_DOMAIN: ${VITE_BASE_DOMAIN:-datawatch.io}
+      VITE_BASE_DOMAIN: ${VITE_BASE_DOMAIN:-panopta.app}
     depends_on:
       - api
 

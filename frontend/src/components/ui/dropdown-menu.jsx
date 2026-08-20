@@ -49,14 +49,15 @@ function DropdownMenuGroup({
   return (<DropdownMenuPrimitive.Group data-slot="dropdown-menu-group" {...props} />);
 }
 
-function DropdownMenuItem({
+const DropdownMenuItem = React.forwardRef(function DropdownMenuItem({
   className,
   inset,
   variant = "default",
   ...props
-}) {
+}, ref) {
   return (
     <DropdownMenuPrimitive.Item
+      ref={ref}
       data-slot="dropdown-menu-item"
       data-inset={inset}
       data-variant={variant}
@@ -66,7 +67,7 @@ function DropdownMenuItem({
       )}
       {...props} />
   );
-}
+})
 
 function DropdownMenuCheckboxItem({
   className,
