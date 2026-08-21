@@ -118,6 +118,51 @@ jobs:
         if: failure()
         run: docker compose -f docker-compose.test-dbs.yml logs --no-color test-clickhouse test-trino
 
+  managed-warehouse-smoke:
+    runs-on: ubuntu-latest
+    env:
+      BIGQUERY_SMOKE_CONFIG: ${{ secrets.BIGQUERY_SMOKE_CONFIG }}
+      SNOWFLAKE_SMOKE_CONFIG: ${{ secrets.SNOWFLAKE_SMOKE_CONFIG }}
+      REDSHIFT_SMOKE_CONFIG: ${{ secrets.REDSHIFT_SMOKE_CONFIG }}
+      DATABRICKS_SMOKE_CONFIG: ${{ secrets.DATABRICKS_SMOKE_CONFIG }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+      - name: Explain credential gate
+        run: echo 'Managed warehouse smokes run only when their repository secrets are configured.'
+      - name: BigQuery smoke
+        if: ${{ env.BIGQUERY_SMOKE_CONFIG != '' }}
+        env:
+          BIGQUERY_SMOKE_SCHEMA: ${{ secrets.BIGQUERY_SMOKE_SCHEMA }}
+          BIGQUERY_SMOKE_TABLE: ${{ secrets.BIGQUERY_SMOKE_TABLE }}
+        run: python backend/scripts/smoke_managed_warehouse.py --type bigquery --config-env BIGQUERY_SMOKE_CONFIG --schema-env BIGQUERY_SMOKE_SCHEMA --table-env BIGQUERY_SMOKE_TABLE
+      - name: Snowflake smoke
+        if: ${{ env.SNOWFLAKE_SMOKE_CONFIG != '' }}
+        env:
+          SNOWFLAKE_SMOKE_SCHEMA: ${{ secrets.SNOWFLAKE_SMOKE_SCHEMA }}
+          SNOWFLAKE_SMOKE_TABLE: ${{ secrets.SNOWFLAKE_SMOKE_TABLE }}
+        run: python backend/scripts/smoke_managed_warehouse.py --type snowflake --config-env SNOWFLAKE_SMOKE_CONFIG --schema-env SNOWFLAKE_SMOKE_SCHEMA --table-env SNOWFLAKE_SMOKE_TABLE
+      - name: Redshift smoke
+        if: ${{ env.REDSHIFT_SMOKE_CONFIG != '' }}
+        env:
+          REDSHIFT_SMOKE_SCHEMA: ${{ secrets.REDSHIFT_SMOKE_SCHEMA }}
+          REDSHIFT_SMOKE_TABLE: ${{ secrets.REDSHIFT_SMOKE_TABLE }}
+        run: python backend/scripts/smoke_managed_warehouse.py --type redshift --config-env REDSHIFT_SMOKE_CONFIG --schema-env REDSHIFT_SMOKE_SCHEMA --table-env REDSHIFT_SMOKE_TABLE
+      - name: Databricks smoke
+        if: ${{ env.DATABRICKS_SMOKE_CONFIG != '' }}
+        env:
+          DATABRICKS_SMOKE_SCHEMA: ${{ secrets.DATABRICKS_SMOKE_SCHEMA }}
+          DATABRICKS_SMOKE_TABLE: ${{ secrets.DATABRICKS_SMOKE_TABLE }}
+        run: python backend/scripts/smoke_managed_warehouse.py --type databricks --config-env DATABRICKS_SMOKE_CONFIG --schema-env DATABRICKS_SMOKE_SCHEMA --table-env DATABRICKS_SMOKE_TABLE
+
   fullstack-browser:
     runs-on: ubuntu-latest
     steps:
