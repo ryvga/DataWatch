@@ -54,7 +54,7 @@ connector is not described as fully supported merely because it can connect.
 | Cassandra | Experimental | Connect, scoped discovery, deterministic partition metadata, and immutable manual typed monitors using exact partition bindings, prepared statements, mandatory row ceilings, and the shared incident/recovery path; Cassandra 5 is a required CI service; verified TLS is the default | Scheduled profiling, live trusted-certificate TLS, Cassandra 4 compatibility, controlled scale, and secure Astra bundle support remain pending |
 | Snowflake | Experimental | Official thin client path, scoped discovery, deterministic schema, native core profile, async SDK boundary, login/network/socket/statement timeouts, query tag and cleanup | Managed-service smoke is credential-gated; key-pair/SSO auth and measured credit consumption remain pending |
 | Redis | Experimental | Connect, bounded keyspace discovery/profile, and immutable typed monitors over key type, TTL, memory, Hash, and Streams metadata; configured pattern is fingerprint-bound, incomplete scans fail closed, stored values/key names are not returned, and Redis 7 plus incident recovery are required CI proofs | Live trusted-certificate TLS, Redis 8 compatibility, concurrent-mutation characterization, and controlled scale remain pending |
-| Oracle | Planned | Not yet registered as a source | Thin-driver connection/discovery/schema/profile vertical pending |
+| Oracle Database | Experimental | First-class dynamic UI/registry entry using `python-oracledb` async thin mode; verified-identity TLS by default, optional PEM wallet, bounded connect/call timeouts, one configured owner, catalogue estimates, deterministic quoted DDL, typed freshness, one Oracle-native aggregate in a read-only transaction, failed-session cancellation/discard, and API-to-worker persisted retrieval proof | The Oracle Database Free lane is opt-in because its image is about 1.2 GB; controlled scale, live verified-TLS/wallet, and typed monitor execution remain promotion gates |
 
 The provider-by-provider completion gates and delivery order are maintained in
 [`docs/connector-catalogue.md`](docs/connector-catalogue.md).
@@ -69,6 +69,9 @@ report-chapter mapping are in
 The generated capability contract and warehouse provider limitations are in
 [`docs/evidence/connector-capabilities.generated.json`](docs/evidence/connector-capabilities.generated.json)
 and [`docs/evidence/warehouse-conformance-2026-08-21.md`](docs/evidence/warehouse-conformance-2026-08-21.md).
+The Oracle thin-driver contract, API/worker persistence proof, optional live lane, and
+explicit evidence boundary are in
+[`docs/evidence/oracle-connector-conformance-2026-08-21.md`](docs/evidence/oracle-connector-conformance-2026-08-21.md).
 
 `GET /api/v1/sources/connector-types` returns this readiness plus machine-readable
 capabilities. Legacy custom SQL is a restricted, transitional escape hatch: definitions
@@ -180,6 +183,7 @@ Available scenarios: `pipeline_failure` · `null_spike` · `schema_drift` · `ro
 | `REDIS_URL` | Redis URL | ✅ |
 | `SOURCE_ALLOW_PRIVATE_NETWORKS` | Explicit production opt-in for private database targets | No (default `false`) |
 | `SOURCE_LOCAL_PATH_ROOT` | Allowed production root for SQLite/DuckDB files | No (disabled when empty) |
+| `ORACLE_WALLET_ROOT` | Approved production root for Oracle thin-mode `ewallet.pem` directories | No (wallet connections disabled when empty) |
 | `OPENROUTER_API_KEY` | OpenRouter API key for LLM narration | Optional |
 | `LLM_MODEL` | Model to use (default: `nvidia/nemotron-3-ultra-550b-a55b:free`) | Optional |
 | `LLM_BASE_URL` | LLM API base URL (default: `https://openrouter.ai/api/v1`) | Optional |

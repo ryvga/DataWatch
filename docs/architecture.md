@@ -263,6 +263,19 @@ services so family/version drift is visible. SQL Server's isolated self-signed l
 an explicit insecure test mode; verified identity remains the runtime default.
 The environment, commands, claim boundary, and 20-run measurements are preserved in
 `docs/evidence/sql-connector-conformance-2026-08-21.md` and its JSON companion.
+Oracle Database is an experimental core adapter using the async `python-oracledb` thin
+API. Connection parameters are structured rather than concatenated into a DSN. TCPS with
+server identity verification is the default; PEM wallet directories are confined to
+`ORACLE_WALLET_ROOT` in production. Discovery binds one configured owner against
+`ALL_TABLES`, uses `NUM_ROWS` catalogue estimates, and schema snapshots bind owner/table
+against `ALL_TAB_COLUMNS`. Profiling performs no preliminary table count: it rolls back
+prior state, starts `SET TRANSACTION READ ONLY`, executes one Oracle-native aggregate,
+then rolls back. Driver `call_timeout` bounds every round trip; failed calls are cancelled
+where supported and the connection is discarded. Oracle empty strings are NULL, so an
+independent empty-rate metric is intentionally absent; LOBs omit unsupported DISTINCT
+operations and expose only safe length summaries. The required mock/API-worker tests and
+optional Oracle Free boundary are recorded in
+`docs/evidence/oracle-connector-conformance-2026-08-21.md`.
 MongoDB uses a native sampled document profiler. Cassandra exposes scoped discovery and
 deterministic schema snapshots plus manual typed partition monitors. The Cassandra
 planner requires every partition key, binds values through a driver-prepared statement,
@@ -284,7 +297,7 @@ not advertise them.
 SQL Server has a separate T-SQL core dialect using bracket escaping, `DATEDIFF_BIG`,
 `STDEVP`, and explicit floating-point casts; it also omits percentiles because the core
 capability contract does not advertise them.
-BigQuery, Snowflake, Redshift, ClickHouse, Databricks, and Trino each declare an explicit
+BigQuery, Snowflake, Redshift, ClickHouse, Databricks, Trino, and Oracle each declare an explicit
 core dialect. BigQuery estimates bytes with a dry run before submitting a query and also
 sets `maximum_bytes_billed`; ClickHouse applies read-only and execution-time settings.
 Managed SDK calls are kept off the event loop, and catalogue/schema filters are bound as

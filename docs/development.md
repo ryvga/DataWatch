@@ -139,6 +139,20 @@ up -d`. MySQL listens on test-only port 3307, MariaDB 11.4 LTS on 3308, and Mong
 For release/CI validation, set `REQUIRE_TEST_SERVICES=1`; an unavailable
 PostgreSQL, MySQL-family, or MongoDB service then fails the test run instead of
 being reported as a green skip.
+Oracle Database Free is deliberately outside the ordinary connector matrix because the
+image is about 1.2 GB. Run its exact vertical locally with:
+
+```bash
+docker compose -f docker-compose.test-dbs.yml --profile oracle up -d --wait test-oracle
+RUN_ORACLE_CONTAINER_TESTS=1 backend/venv/bin/python -m pytest -q \
+  backend/tests/test_oracle_connector.py -k database_free_container_vertical
+docker compose -f docker-compose.test-dbs.yml --profile oracle down
+```
+
+The GitHub Actions `workflow_dispatch` input `run_oracle=true` runs the same test with
+`gvenzl/setup-oracle-free@v1`. Oracle production connections default to TCPS identity
+verification. Thin wallets must contain `ewallet.pem`, be mounted read-only, and resolve
+under `ORACLE_WALLET_ROOT`; `tls_mode=disabled` is limited to the isolated local lane.
 The MySQL-family tests pass
 `tls_mode=disabled` because that isolated container has no certificate; application
 connections default to certificate and hostname verification and accept an optional
@@ -270,7 +284,7 @@ python scripts/test_llm_prompt.py --incident-id <uuid>
 
 ## Adding a New Connector
 
-1. Create `app/connectors/<name>.py` implementing all 4 `BaseConnector` methods
+1. Create `app/connectors/<name>.py` implementing the applicable `BaseConnector` methods
 2. Add the registry entry, readiness, and truthful capability metadata in `factory.py`
 3. Implement and declare a profile dialect only when its generated query has a direct execution test
 4. Add connection/discovery/schema tests plus a real discover → profile vertical slice

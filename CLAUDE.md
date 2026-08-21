@@ -8,7 +8,7 @@
 
 ## What This Project Is
 
-DataWatch is a **multi-tenant data quality monitoring SaaS**. Its registry covers PostgreSQL, MySQL/MariaDB, MongoDB, Cassandra, Redis, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Databricks, Trino, DuckDB, and SQLite. Support is capability-based and generated from executable connector contracts: PostgreSQL is stable; DuckDB/SQLite are beta; the remaining implemented adapters are experimental; Oracle is planned. The app detects anomalies, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
+DataWatch is a **multi-tenant data quality monitoring SaaS**. Its registry covers PostgreSQL, MySQL/MariaDB, MongoDB, Cassandra, Redis, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Oracle Database, Databricks, Trino, DuckDB, and SQLite. Support is capability-based and generated from executable connector contracts: PostgreSQL is stable; DuckDB/SQLite are beta; the remaining implemented adapters are experimental. The app detects anomalies, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
 
 The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions.
 
@@ -30,7 +30,7 @@ The primary differentiator is the **LLM narration layer**: every P1/P2 incident 
 | Database | PostgreSQL 16 (JSONB for metrics/narration) |
 | Cache | Redis (discovery, IsoForest models, LLM narration) |
 | AI | OpenRouter API (per-org key set via admin portal; global fallback via `OPENROUTER_API_KEY`) |
-| Connectors | psycopg3, aiomysql, clickhouse-connect, aiosqlite, databricks-sql-connector, trino, bigquery, duckdb |
+| Connectors | psycopg3, aiomysql, python-oracledb thin, clickhouse-connect, aiosqlite, databricks-sql-connector, trino, bigquery, duckdb |
 | Frontend | React 18, Vite, Tailwind CSS, Recharts |
 | Infra | Docker Compose (dev), Railway (production) |
 | Testing | pytest-asyncio, httpx AsyncClient |
@@ -60,7 +60,7 @@ DataWatch/
 │   │   ├── models/            ← SQLAlchemy ORM models (19 tables)
 │   │   ├── routers/           ← FastAPI routers (auth, orgs, sources, tables, incidents, alerts)
 │   │   ├── services/          ← Business logic (profiler, anomaly, incident, LLM, alert, crypto, plans)
-│   │   └── connectors/        ← Warehouse connectors (postgres, bigquery, duckdb, snowflake stub)
+│   │   └── connectors/        ← Capability-derived SQL, warehouse, document, wide-column, and key/value adapters
 │   ├── alembic/               ← DB migrations (001 initial, 002 last_profiled_at)
 │   ├── tests/                 ← pytest suite (conftest, test_e2e, test_anomaly, test_llm)
 │   ├── requirements.txt       ← all Python deps
@@ -422,7 +422,7 @@ When working on this project with Claude Code, these skills are relevant:
 The project is in **MVP SaaS state**. Completed milestones:
 
 1. **Subdomain-first multi-tenancy** — `localhost` = landing, `slug.localhost` = workspace, `admin.localhost` = admin (env-configured subdomain, never guessable)
-2. **Capability-aware connector registry and safe DSL runtime** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and the stable `datawatch.io/v1alpha1` protocol namespace provides strict validation, immutable revisions, schema-bound previews, attestations, activation, scheduled/manual execution, policy evaluation, run persistence, and a typed incident bridge for supported runtimes
+2. **Capability-aware connector registry and safe DSL runtime** — 16 source types are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, Oracle has an experimental thin-driver profile vertical, and the stable `datawatch.io/v1alpha1` protocol namespace provides strict validation, immutable revisions, schema-bound previews, attestations, activation, scheduled/manual execution, policy evaluation, run persistence, and a typed incident bridge for supported runtimes
 3. **7 anomaly detection methods** — Z-Score, Isolation Forest, STL Seasonal, Cardinality Drop, Row Growth Rate, Rule-Based, **Enum/Category Drift** (new)
 4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
 5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)

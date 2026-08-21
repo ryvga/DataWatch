@@ -12,7 +12,7 @@ describe only paths backed by executable evidence.
 | Relational | MySQL | Tier-1 operational database | Experimental/core; required MySQL 8.4 lane and database-read-only typed monitor execution | Add API/worker-persisted live profile proof and percentile capability |
 | Relational | MariaDB | Tier-1 operational database | Experimental/core; required MariaDB 11.4 LTS lane sharing the MySQL-family read-only monitor adapter | Add API/worker-persisted live profile proof and percentile capability |
 | Relational | SQL Server / Azure SQL | Enterprise operational database | Experimental/core; required SQL Server 2022 lane, packaged ODBC Driver 18, read-only-principal typed monitor execution | Add trusted-certificate live TLS and API/worker-persisted profile proofs; add percentile capability |
-| Relational | Oracle | Enterprise operational database | Planned, not implemented | `python-oracledb` thin-mode connection, discovery, deterministic schema, Oracle core dialect, live Oracle Free lane |
+| Relational | Oracle | Enterprise operational database | Experimental/core: async thin driver, verified TLS/wallet configuration, bounded connection and call timeouts, exact owner scope, catalogue estimates, deterministic quoted schema, Oracle-native one-query read-only profile, failure cancellation/discard, mocked driver contracts, API/worker persistence, optional Oracle Free lane | Run the opt-in Oracle Free job to record real-engine evidence; add verified TLS/wallet and controlled scale measurements plus typed monitor execution |
 | Embedded SQL | SQLite | Application/local source | Beta/core | Restrict hosted paths to a managed allowlist/upload boundary and add persisted API profile test |
 | Document | MongoDB | Tier-1 document source | Experimental bounded sampled profile plus immutable typed aggregation monitors; required real Mongo lane and incident recovery vertical | Add trusted-certificate live TLS, repeated-sample drift confirmation, scale evidence, filter/distinct/string-pattern semantics |
 | Wide-column | Cassandra | Partition-scoped source | Experimental scoped discovery/schema plus manual immutable monitors with complete partition bindings, prepared statements, a hard row ceiling, required Cassandra 5 lane, and incident recovery proof | Add scheduled native profiling, trusted-certificate TLS, Cassandra 4 compatibility, controlled scale, and Astra bundles |
@@ -25,8 +25,10 @@ describe only paths backed by executable evidence.
 | Federated query engine | Trino / Presto | Multi-catalog query engine | Experimental scoped/bound discovery/schema, native core profile, and required real Trino memory-catalog vertical | Add TLS/auth/catalog matrix, federated cost policy, and persisted API/worker proof |
 | Embedded analytics | DuckDB | Managed local analytical file | Beta/full | Move blocking calls off the event loop and enforce the same hosted file boundary as SQLite |
 
-ClickHouse and Trino have reproducible real-engine lanes. BigQuery, Snowflake, Redshift,
-and Databricks use deterministic fake-driver tests plus explicit secret-backed smoke steps;
+ClickHouse and Trino have reproducible real-engine lanes. Oracle Database Free has an
+explicit opt-in Compose profile and manual GitHub Actions job because its image is about
+1.2 GB; its mocked and API/worker tests remain required in the ordinary backend suite.
+BigQuery, Snowflake, Redshift, and Databricks use deterministic fake-driver tests plus explicit secret-backed smoke steps;
 those managed smokes do not claim execution when repository credentials are absent.
 
 ## Readiness gates
@@ -59,7 +61,8 @@ A connector cannot move beyond experimental until all applicable gates pass:
    connector-level warehouse planners and real ClickHouse/Trino lanes.
 4. Extend the completed Redis metadata-monitor slice with trusted TLS, Redis 8 and
    controlled mutation/scale evidence.
-5. Implement Oracle as the next driver-to-persisted-profile vertical.
+5. Execute and archive the completed Oracle optional real-engine lane, then add live
+   verified-TLS/wallet and controlled-scale evidence.
 6. Extend Cassandra from the completed manual partition-monitor slice to scheduled native
    profiling, then harden hosted DuckDB/SQLite file access.
 

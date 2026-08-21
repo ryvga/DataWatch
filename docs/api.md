@@ -215,6 +215,12 @@ separately reports `connection_test`, `discovery`, `schema`, `profiling`
 `sampling`. Only PostgreSQL, DuckDB, and SQLite currently expose the restricted legacy
 SQL monitor path.
 
+Oracle is returned as `experimental` with `profiling=core`. Its dynamic form includes
+`host`, `port`, `service_name`, `username`, secret `password`, optional exact `schema`,
+verified TLS mode, optional secret wallet password, and bounded connect/call timeouts.
+The API never returns a saved connection configuration. In production, any Oracle wallet
+directory must resolve under the deployment's `ORACLE_WALLET_ROOT`.
+
 ---
 
 ### `GET /api/v1/sources`
