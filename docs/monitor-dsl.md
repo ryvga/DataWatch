@@ -66,6 +66,15 @@ Planner version `datawatch-v1alpha1-relational-2` binds the compiled preview to 
 latest successful profile fingerprint, or a deterministic DDL fingerprint before the
 first profile. The version bump invalidates attestations created by the unbound planner.
 
+MongoDB uses the separate `datawatch-v1alpha1-mongodb-1` planner and the connector's
+sampled SHA-256 field/type/required fingerprint. Every Mongo definition must set
+`maxDocumentsScanned` between 1 and 100,000. The generated pipeline limits at
+`maxDocumentsScanned + 1`, aggregates once, projects one scalar row, disables disk use,
+and fails rather than evaluating if the extra document is observed. Preview literals
+are structural `$literal` values, never user-authored stages or field references.
+`maxBytesScanned`, distinct/duplicate metrics, metric filters, and string-pattern
+predicates remain fail-closed for this planner.
+
 ## Authoring model (2026-08-21)
 
 The authoring language is intentionally declarative YAML/JSON. DataWatch does **not**

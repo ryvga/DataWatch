@@ -14,6 +14,10 @@ class ScanBudgetUnsupported(NotImplementedError):
     """The connector cannot enforce a requested scan bound."""
 
 
+class DocumentScanBudgetExceeded(ValueError):
+    """A native document plan reached its mandatory document ceiling."""
+
+
 @dataclass
 class TableInfo:
     name: str
@@ -48,18 +52,14 @@ class BaseConnector(ABC):
     async def execute_profile_query(self, query: str) -> dict:
         """Execute an aggregate SQL query and return a flat dict of results."""
 
-    async def execute_monitor_query(
-        self, query: str, *, timeout_seconds: int = 30
-    ) -> dict:
+    async def execute_monitor_query(self, query: str, *, timeout_seconds: int = 30) -> dict:
         """Execute a restricted scalar monitor query.
 
         Connectors must opt in with database-enforced read-only and timeout controls.
         Returning the first row from a general query method is insufficient because
         the monitor result contract must detect zero or multiple rows.
         """
-        raise NotImplementedError(
-            f"{type(self).__name__} has no restricted monitor execution path"
-        )
+        raise NotImplementedError(f"{type(self).__name__} has no restricted monitor execution path")
 
     async def execute_compiled_monitor(
         self,
@@ -69,9 +69,11 @@ class BaseConnector(ABC):
         timeout_seconds: int = 30,
     ) -> dict:
         """Execute an internally compiled aggregate plan with driver-bound values."""
-        raise NotImplementedError(
-            f"{type(self).__name__} has no compiled monitor execution path"
-        )
+        raise NotImplementedError(f"{type(self).__name__} has no compiled monitor execution path")
+
+    async def execute_document_monitor(self, plan) -> dict:
+        """Execute an internally generated, connector-native document plan."""
+        raise NotImplementedError(f"{type(self).__name__} has no document monitor execution path")
 
     async def enforce_monitor_scan_budget(
         self,
@@ -80,9 +82,7 @@ class BaseConnector(ABC):
         max_bytes_scanned: int,
     ) -> None:
         """Fail unless the adapter can enforce a conservative scan upper bound."""
-        raise ScanBudgetUnsupported(
-            f"{type(self).__name__} cannot enforce maxBytesScanned"
-        )
+        raise ScanBudgetUnsupported(f"{type(self).__name__} cannot enforce maxBytesScanned")
 
     @abstractmethod
     async def get_table_ddl(self, schema: str, table: str) -> str:
@@ -111,9 +111,7 @@ class BaseConnector(ABC):
         freshness_column: str | None,
     ) -> dict:
         """Return a bounded native profile for non-relational connectors."""
-        raise NotImplementedError(
-            f"{type(self).__name__} has no native profiling path"
-        )
+        raise NotImplementedError(f"{type(self).__name__} has no native profiling path")
 
     async def close(self) -> None:
         """Release any held connections/pools. Override if needed."""

@@ -11,6 +11,7 @@ from uuid import UUID
 from app.connectors.base import (
     BaseConnector,
     ConnectorConfigurationError,
+    DocumentScanBudgetExceeded,
     SchemaInfo,
     TableInfo,
 )
@@ -78,22 +79,14 @@ class MongoDBConnector(BaseConnector):
         if "\x00" in configured:
             raise ConnectorConfigurationError("MongoDB database name is invalid.")
         if configured.lower() in _SYSTEM_DATABASES:
-            raise ConnectorConfigurationError(
-                "MongoDB system databases cannot be monitored."
-            )
+            raise ConnectorConfigurationError("MongoDB system databases cannot be monitored.")
         return configured
 
     def _collection(self, database: str, collection: str):
         configured_database = self._database_name()
         if database != configured_database:
-            raise ConnectorConfigurationError(
-                "MongoDB operations are restricted to the configured database."
-            )
-        if (
-            not collection
-            or "\x00" in collection
-            or collection.lower().startswith("system.")
-        ):
+            raise ConnectorConfigurationError("MongoDB operations are restricted to the configured database.")
+        if not collection or "\x00" in collection or collection.lower().startswith("system."):
             raise ConnectorConfigurationError("MongoDB collection name is invalid.")
         return self._get_client()[configured_database][collection]
 
@@ -103,9 +96,7 @@ class MongoDBConnector(BaseConnector):
         except (TypeError, ValueError) as exc:
             raise ValueError("profile_sample_size must be an integer") from exc
         if size < _MIN_SAMPLE_SIZE or size > _MAX_SAMPLE_SIZE:
-            raise ValueError(
-                f"profile_sample_size must be between {_MIN_SAMPLE_SIZE} and {_MAX_SAMPLE_SIZE}"
-            )
+            raise ValueError(f"profile_sample_size must be between {_MIN_SAMPLE_SIZE} and {_MAX_SAMPLE_SIZE}")
         return size
 
     async def test_connection(self) -> bool:
@@ -143,21 +134,52 @@ class MongoDBConnector(BaseConnector):
                 )
 
             tables = list(
-                await asyncio.gather(
-                    *(
-                        _table_info(collection_name)
-                        for collection_name in sorted(collection_names)
-                    )
-                )
+                await asyncio.gather(*(_table_info(collection_name) for collection_name in sorted(collection_names)))
             )
             schemas.append(SchemaInfo(name=database_name, tables=tables))
 
         return schemas
 
     async def execute_profile_query(self, query: str) -> dict:
-        raise NotImplementedError(
-            "MongoDB does not execute caller-provided aggregation pipelines"
+        raise NotImplementedError("MongoDB does not execute caller-provided aggregation pipelines")
+
+    async def execute_document_monitor(self, plan) -> dict:
+        from app.services.document_monitor import DocumentMonitorPlan
+
+        if not isinstance(plan, DocumentMonitorPlan):
+            raise ConnectorConfigurationError("MongoDB monitor plan type is invalid.")
+        collection = self._collection(
+            plan.relation.schema_name,
+            plan.relation.table_name,
         )
+        if not 1 <= plan.timeout_seconds <= 120:
+            raise ConnectorConfigurationError("MongoDB monitor timeout is invalid.")
+        pipeline = plan.pipeline()
+        _validate_monitor_pipeline(plan, pipeline)
+        cursor = await collection.aggregate(
+            pipeline,
+            maxTimeMS=plan.timeout_seconds * 1000,
+            allowDiskUse=False,
+            batchSize=1,
+        )
+        try:
+            rows = await cursor.to_list(length=2)
+        finally:
+            await cursor.close()
+        if len(rows) > 1:
+            raise ConnectorConfigurationError("MongoDB monitor aggregation returned multiple rows.")
+        if not rows:
+            return {output.column: None if output.nullable else 0 for output in plan.outputs}
+        row = rows[0]
+        scanned = _monitor_int(row.get("dw_documents_scanned"))
+        if scanned is None or scanned < 0:
+            raise ConnectorConfigurationError("MongoDB monitor aggregation omitted its scan attestation.")
+        if scanned > plan.max_documents_scanned:
+            raise DocumentScanBudgetExceeded("MongoDB monitor reached maxDocumentsScanned.")
+        expected = {output.column for output in plan.outputs}
+        if set(row) != expected | {"dw_documents_scanned"}:
+            raise ConnectorConfigurationError("MongoDB monitor aggregation returned unexpected fields.")
+        return {output.column: row[output.column] for output in plan.outputs}
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
         snapshot, _column_names = await self.get_table_schema(schema, table)
@@ -184,15 +206,10 @@ class MongoDBConnector(BaseConnector):
             inferred_type = _format_type_distribution(stats["type_distribution"])
             nullable = "NOT NULL" if stats["required"] else "NULL"
             presence = _format_percent(stats["presence_rate"] * 100)
-            lines.append(
-                f"  {_quote_identifier(field_path)} {inferred_type} {nullable} {presence}"
-            )
+            lines.append(f"  {_quote_identifier(field_path)} {inferred_type} {nullable} {presence}")
 
         snapshot = (
-            f"CREATE COLLECTION {_quote_identifier(schema)}."
-            f"{_quote_identifier(table)} (\n"
-            + ",\n".join(lines)
-            + "\n);"
+            f"CREATE COLLECTION {_quote_identifier(schema)}.{_quote_identifier(table)} (\n" + ",\n".join(lines) + "\n);"
         )
         return snapshot, set(field_stats)
 
@@ -317,18 +334,19 @@ class MongoDBConnector(BaseConnector):
         collection = self._collection(schema, table)
         index_information = await collection.index_information()
         if not _has_leading_index(index_information, freshness_column):
-            raise ConnectorConfigurationError(
-                "MongoDB freshness_column must be the leading field of an index."
+            raise ConnectorConfigurationError("MongoDB freshness_column must be the leading field of an index.")
+        cursor = (
+            collection.find(
+                {freshness_column: {"$type": "date"}},
+                {freshness_column: 1, "_id": 0},
             )
-        cursor = collection.find(
-            {freshness_column: {"$type": "date"}},
-            {freshness_column: 1, "_id": 0},
-        ).sort(freshness_column, -1).limit(1).max_time_ms(10_000)
+            .sort(freshness_column, -1)
+            .limit(1)
+            .max_time_ms(10_000)
+        )
         rows = await cursor.to_list(length=1)
         if not rows or not isinstance(_nested_value(rows[0], freshness_column), datetime):
-            raise ConnectorConfigurationError(
-                "MongoDB freshness_column must contain an indexed scalar BSON date."
-            )
+            raise ConnectorConfigurationError("MongoDB freshness_column must contain an indexed scalar BSON date.")
 
     async def collect_native_profile(
         self,
@@ -348,9 +366,7 @@ class MongoDBConnector(BaseConnector):
             }
             for field_path in sorted(field_stats)
         ]
-        fingerprint = hashlib.sha256(
-            json.dumps(fingerprint_payload, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, sort_keys=True).encode("utf-8")).hexdigest()
 
         column_metrics: dict[str, dict] = {
             "_collection": {
@@ -360,11 +376,7 @@ class MongoDBConnector(BaseConnector):
         }
         for field_path, field in field_stats.items():
             present_count = sum(field["type_distribution"].values())
-            metrics = {
-                key: value
-                for key, value in field.items()
-                if key != "required" and value is not None
-            }
+            metrics = {key: value for key, value in field.items() if key != "required" and value is not None}
             metrics["type_rates"] = {
                 type_name: count / present_count if present_count else 0.0
                 for type_name, count in field["type_distribution"].items()
@@ -375,21 +387,22 @@ class MongoDBConnector(BaseConnector):
         freshness_seconds = None
         if freshness_column is not None:
             collection = self._collection(schema, table)
-            cursor = collection.find(
-                {freshness_column: {"$type": "date"}},
-                {freshness_column: 1, "_id": 0},
-            ).sort(freshness_column, -1).limit(1).max_time_ms(10_000)
+            cursor = (
+                collection.find(
+                    {freshness_column: {"$type": "date"}},
+                    {freshness_column: 1, "_id": 0},
+                )
+                .sort(freshness_column, -1)
+                .limit(1)
+                .max_time_ms(10_000)
+            )
             rows = await cursor.to_list(length=1)
             newest = _nested_value(rows[0], freshness_column) if rows else None
             if not isinstance(newest, datetime):
-                raise ConnectorConfigurationError(
-                    "MongoDB freshness_column did not return a scalar BSON date."
-                )
+                raise ConnectorConfigurationError("MongoDB freshness_column did not return a scalar BSON date.")
             if newest.tzinfo is None:
                 newest = newest.replace(tzinfo=timezone.utc)
-            freshness_seconds = (
-                datetime.now(timezone.utc) - newest.astimezone(timezone.utc)
-            ).total_seconds()
+            freshness_seconds = (datetime.now(timezone.utc) - newest.astimezone(timezone.utc)).total_seconds()
 
         return {
             "row_count": stats["document_count"],
@@ -417,14 +430,106 @@ class MongoDBConnector(BaseConnector):
         }
 
 
+_MONITOR_EXPRESSION_OPERATORS = {
+    "$and",
+    "$avg",
+    "$cond",
+    "$divide",
+    "$eq",
+    "$gte",
+    "$gt",
+    "$ifNull",
+    "$in",
+    "$lte",
+    "$lt",
+    "$literal",
+    "$max",
+    "$min",
+    "$ne",
+    "$not",
+    "$or",
+    "$stdDevPop",
+    "$strLenCP",
+    "$subtract",
+    "$sum",
+    "$trim",
+}
+
+
+def _monitor_int(value) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        return None
+    parsed = int(value)
+    return parsed if value == parsed else None
+
+
+def _validate_monitor_pipeline(plan, pipeline: list[dict]) -> None:
+    if (
+        len(pipeline) != 3
+        or list(pipeline[0]) != ["$limit"]
+        or list(pipeline[1]) != ["$group"]
+        or list(pipeline[2]) != ["$project"]
+        or pipeline[0]["$limit"] != plan.max_documents_scanned + 1
+    ):
+        raise ConnectorConfigurationError("MongoDB monitor pipeline stages are outside the immutable allowlist.")
+    group = pipeline[1]["$group"]
+    project = pipeline[2]["$project"]
+    if (
+        not isinstance(group, dict)
+        or group.get("_id", object()) is not None
+        or group.get("dw_documents_scanned") != {"$sum": 1}
+        or not isinstance(project, dict)
+        or project.get("_id") != 0
+        or project.get("dw_documents_scanned") != 1
+    ):
+        raise ConnectorConfigurationError("MongoDB monitor pipeline omitted its bounded result contract.")
+    expected_outputs = {output.column for output in plan.outputs}
+    if not expected_outputs or not expected_outputs.issubset(project):
+        raise ConnectorConfigurationError("MongoDB monitor pipeline outputs do not match the plan.")
+    known_fields = {f"${column.name}" for column in plan.relation.columns}
+    _validate_monitor_expression(group, known_fields, aliases_allowed=False)
+    _validate_monitor_expression(project, known_fields, aliases_allowed=True)
+
+
+def _validate_monitor_expression(value, known_fields: set[str], *, aliases_allowed: bool) -> None:
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if key.startswith("$") and key not in _MONITOR_EXPRESSION_OPERATORS:
+                raise ConnectorConfigurationError("MongoDB monitor pipeline contains a forbidden operator.")
+            if not key.startswith("$") and key not in {"_id", "input"} and not key.startswith("dw_"):
+                raise ConnectorConfigurationError("MongoDB monitor pipeline contains a forbidden field.")
+            if key == "$literal":
+                continue
+            _validate_monitor_expression(
+                nested,
+                known_fields,
+                aliases_allowed=aliases_allowed,
+            )
+        return
+    if isinstance(value, list):
+        for nested in value:
+            _validate_monitor_expression(
+                nested,
+                known_fields,
+                aliases_allowed=aliases_allowed,
+            )
+        return
+    if isinstance(value, str) and value.startswith("$"):
+        if value == "$$NOW":
+            return
+        if value in known_fields:
+            return
+        if aliases_allowed and value.startswith("$dw_"):
+            return
+        raise ConnectorConfigurationError("MongoDB monitor pipeline contains an unbound field reference.")
+
+
 def _summarize_fields(documents: list[dict]) -> dict:
     total_documents = len(documents)
     summaries: dict[str, dict] = {}
 
     for document in documents:
-        flattened = dict(
-            _flatten_document(document, max_depth=_MAX_NESTING_DEPTH)
-        )
+        flattened = dict(_flatten_document(document, max_depth=_MAX_NESTING_DEPTH))
         for field_path, value in flattened.items():
             if field_path not in summaries:
                 if len(summaries) >= _MAX_FIELD_PATHS:
@@ -455,63 +560,33 @@ def _summarize_fields(documents: list[dict]) -> dict:
                 summary["numeric_count"] += 1
                 summary["numeric_sum"] += numeric_value
                 summary["numeric_min"] = (
-                    numeric_value
-                    if summary["numeric_min"] is None
-                    else min(summary["numeric_min"], numeric_value)
+                    numeric_value if summary["numeric_min"] is None else min(summary["numeric_min"], numeric_value)
                 )
                 summary["numeric_max"] = (
-                    numeric_value
-                    if summary["numeric_max"] is None
-                    else max(summary["numeric_max"], numeric_value)
+                    numeric_value if summary["numeric_max"] is None else max(summary["numeric_max"], numeric_value)
                 )
             if isinstance(value, str):
                 length = len(value)
                 summary["string_count"] += 1
                 summary["string_length_sum"] += length
-                summary["min_len"] = (
-                    length
-                    if summary["min_len"] is None
-                    else min(summary["min_len"], length)
-                )
-                summary["max_len"] = (
-                    length
-                    if summary["max_len"] is None
-                    else max(summary["max_len"], length)
-                )
+                summary["min_len"] = length if summary["min_len"] is None else min(summary["min_len"], length)
+                summary["max_len"] = length if summary["max_len"] is None else max(summary["max_len"], length)
 
     result = {}
     for field_path, summary in summaries.items():
-        presence_rate = (
-            summary["present_count"] / total_documents
-            if total_documents
-            else 0.0
-        )
+        presence_rate = summary["present_count"] / total_documents if total_documents else 0.0
         result[field_path] = {
             "type_distribution": dict(summary["types"]),
             "presence_rate": presence_rate,
-            "null_rate": (
-                summary["null_count"] / total_documents
-                if total_documents
-                else 0.0
-            ),
+            "null_rate": (summary["null_count"] / total_documents if total_documents else 0.0),
             "numeric_min": summary["numeric_min"],
             "numeric_max": summary["numeric_max"],
-            "numeric_mean": (
-                summary["numeric_sum"] / summary["numeric_count"]
-                if summary["numeric_count"]
-                else None
-            ),
+            "numeric_mean": (summary["numeric_sum"] / summary["numeric_count"] if summary["numeric_count"] else None),
             "min_len": summary["min_len"],
             "max_len": summary["max_len"],
-            "avg_len": (
-                summary["string_length_sum"] / summary["string_count"]
-                if summary["string_count"]
-                else None
-            ),
+            "avg_len": (summary["string_length_sum"] / summary["string_count"] if summary["string_count"] else None),
             "required": (
-                total_documents > 0
-                and summary["present_count"] == total_documents
-                and summary["null_count"] == 0
+                total_documents > 0 and summary["present_count"] == total_documents and summary["null_count"] == 0
             ),
         }
     return result
@@ -599,7 +674,7 @@ def _infer_type(value) -> str:
         if not value:
             return "array"
         item_types = sorted({_infer_type(item) for item in value[:_MAX_ARRAY_ITEMS]})
-        return f"array<{ '|'.join(item_types) }>"
+        return f"array<{'|'.join(item_types)}>"
     if isinstance(value, dict):
         return "object"
 

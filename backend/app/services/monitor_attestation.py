@@ -1,4 +1,5 @@
 """Short-lived HMAC attestations for validated monitor previews."""
+
 from __future__ import annotations
 
 import base64
@@ -45,6 +46,7 @@ def create_preview_attestation(
     asset_id: str,
     definition_hash: str,
     schema_fingerprint: str | None,
+    planner_version: str = PLANNER_VERSION,
     now: int | None = None,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
 ) -> tuple[str, AttestationClaims]:
@@ -56,7 +58,7 @@ def create_preview_attestation(
         asset_id=str(asset_id),
         definition_hash=definition_hash,
         schema_fingerprint=schema_fingerprint,
-        planner_version=PLANNER_VERSION,
+        planner_version=planner_version,
         issued_at=issued_at,
         expires_at=issued_at + ttl_seconds,
     )
@@ -70,9 +72,7 @@ def create_preview_attestation(
         "iat": claims.issued_at,
         "exp": claims.expires_at,
     }
-    encoded_payload = _encode(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    )
+    encoded_payload = _encode(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8"))
     signature = hmac.new(
         settings.SECRET_KEY.encode("utf-8"),
         encoded_payload.encode("ascii"),
@@ -88,6 +88,7 @@ def verify_preview_attestation(
     asset_id: str,
     definition_hash: str,
     schema_fingerprint: str | None,
+    planner_version: str = PLANNER_VERSION,
     now: int | None = None,
 ) -> AttestationClaims:
     try:
@@ -127,7 +128,7 @@ def verify_preview_attestation(
         str(asset_id),
         definition_hash,
         schema_fingerprint,
-        PLANNER_VERSION,
+        planner_version,
     )
     actual = (
         claims.org_id,

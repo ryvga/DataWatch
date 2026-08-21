@@ -2,6 +2,7 @@
 Celery tasks for Panopta.
 Tasks are synchronous entry points; async logic is wrapped with asyncio.run().
 """
+
 import asyncio
 import inspect
 import logging
@@ -90,16 +91,19 @@ async def _profile_connector_safely(
 async def _dispose_engine():
     """Dispose SQLAlchemy asyncpg pool so it closes cleanly before the event loop exits."""
     from app.database import engine
+
     await engine.dispose()
 
 
 def _run(coro):
     """Run a coroutine from a synchronous Celery task, then dispose the DB engine."""
+
     async def _wrapped():
         try:
             return await coro
         finally:
             await _dispose_engine()
+
     return asyncio.run(_wrapped())
 
 
@@ -123,9 +127,7 @@ def profile_table(self, table_id: str):
         return _run(_profile_table_async(table_id))
     except Exception as exc:
         logger.error("profile_table failed for %s: %s", table_id, type(exc).__name__)
-        raise self.retry(
-            exc=RuntimeError(f"profile task failed ({type(exc).__name__})")
-        )
+        raise self.retry(exc=RuntimeError(f"profile task failed ({type(exc).__name__})"))
 
 
 async def _profile_table_async(table_id: str) -> dict:
@@ -140,9 +142,7 @@ async def _profile_table_async(table_id: str) -> dict:
 
     async with AsyncSessionLocal() as db:
         # Load table
-        table = await db.scalar(
-            select(MonitoredTable).where(MonitoredTable.id == table_id)
-        )
+        table = await db.scalar(select(MonitoredTable).where(MonitoredTable.id == table_id))
         if not table:
             logger.error("MonitoredTable %s not found", table_id)
             return {"status": "error", "error": "table not found"}
@@ -157,6 +157,7 @@ async def _profile_table_async(table_id: str) -> dict:
         import redis as _redis_sync
         from app.config import settings
         from app.services.plans import check_and_increment_rate
+
         r_sync = _redis_sync.from_url(settings.REDIS_URL)
         org = await db.get(__import__("app.models.organization", fromlist=["Organization"]).Organization, source.org_id)
         allowed = check_and_increment_rate("profile_runs", str(source.org_id), org.plan if org else "free", r_sync)
@@ -213,14 +214,17 @@ async def _profile_table_async(table_id: str) -> dict:
 
         # Enqueue anomaly checks (Day 4)
         from app.tasks import run_anomaly_checks
+
         run_anomaly_checks.delay(table_id, str(profile.id))
 
         # Enqueue custom monitors run
         from app.tasks import run_custom_monitors
+
         run_custom_monitors.delay(table_id, str(profile.id))
 
         # Enqueue typed DSL monitors on the same successful profile cadence.
         from app.tasks import run_dsl_monitors
+
         run_dsl_monitors.delay(table_id, str(profile.id))
 
         log_payload = {
@@ -361,16 +365,18 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
 
         # Load 30-day history (excluding current)
         cutoff = profile.collected_at - timedelta(days=30)
-        history = (await db.scalars(
-            select(TableProfile)
-            .where(
-                TableProfile.table_id == table_id,
-                TableProfile.collected_at >= cutoff,
-                TableProfile.id != profile_id,
-                TableProfile.error.is_(None),
+        history = (
+            await db.scalars(
+                select(TableProfile)
+                .where(
+                    TableProfile.table_id == table_id,
+                    TableProfile.collected_at >= cutoff,
+                    TableProfile.id != profile_id,
+                    TableProfile.error.is_(None),
+                )
+                .order_by(TableProfile.collected_at)
             )
-            .order_by(TableProfile.collected_at)
-        )).all()
+        ).all()
 
         prev_profile = history[-1] if history else None
 
@@ -386,10 +392,7 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         disabled_cols = set(check_config.get("disabled_columns", []))
 
         all_checks = []
-        sampled_native = (
-            (getattr(profile, "profile_provenance", None) or {}).get("profile_mode")
-            == "sampled_native"
-        )
+        sampled_native = (getattr(profile, "profile_provenance", None) or {}).get("profile_mode") == "sampled_native"
         if not sampled_native:
             if "z_score" not in disabled:
                 all_checks += run_z_score_checks(profile, list(history), table.sensitivity)
@@ -449,11 +452,10 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         auto_resolved = False
         if failed:
             auto_resolved = await svc.auto_resolve(db, table, all_checks)
-            incident = await svc.create_or_update(
-                db, source.org_id, table, failed, profile_id
-            )
+            incident = await svc.create_or_update(db, source.org_id, table, failed, profile_id)
             if incident and incident.status == "open":
                 from app.tasks import generate_llm_narration
+
                 generate_llm_narration.delay(str(incident.id))
         else:
             auto_resolved = await svc.auto_resolve(db, table, all_checks)
@@ -469,7 +471,12 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
             await publish_event(
                 str(source.org_id),
                 "incident.updated",
-                {"incidentId": str(incident.id), "tableId": str(table.id), "status": incident.status, "severity": incident.severity},
+                {
+                    "incidentId": str(incident.id),
+                    "tableId": str(table.id),
+                    "status": incident.status,
+                    "severity": incident.severity,
+                },
             )
         elif auto_resolved:
             await publish_event(
@@ -520,6 +527,7 @@ async def _generate_llm_narration_async(incident_id: str) -> dict:
         from app.models.incident import Incident as IncidentModel
         from app.models.organization import Organization
         from app.services.crypto import CryptoService
+
         inc = await db.get(IncidentModel, incident_id)
         if inc:
             org = await db.get(Organization, inc.org_id)
@@ -581,13 +589,15 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
         if not table:
             return {"status": "error", "error": "table not found"}
 
-        monitors = (await db.scalars(
-            select(CustomMonitor).where(
-                CustomMonitor.table_id == table_id,
-                CustomMonitor.is_active.is_(True),
-                CustomMonitor.run_on_profile.is_(True),
+        monitors = (
+            await db.scalars(
+                select(CustomMonitor).where(
+                    CustomMonitor.table_id == table_id,
+                    CustomMonitor.is_active.is_(True),
+                    CustomMonitor.run_on_profile.is_(True),
+                )
             )
-        )).all()
+        ).all()
 
         if not monitors:
             return {"status": "ok", "run": 0}
@@ -636,17 +646,19 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
                         details={"monitor_id": str(m.id), "severity": m.severity},
                     )
                     check_results.append(check)
-                    db.add(CheckResult(
-                        table_id=table.id,
-                        profile_id=profile_uuid,
-                        check_type=check.check_type,
-                        check_name=check.check_name,
-                        column_name=check.column_name,
-                        status=check.status,
-                        observed_value=check.observed_value,
-                        expected_range=check.expected_range,
-                        deviation_score=check.deviation_score,
-                    ))
+                    db.add(
+                        CheckResult(
+                            table_id=table.id,
+                            profile_id=profile_uuid,
+                            check_type=check.check_type,
+                            check_name=check.check_name,
+                            column_name=check.column_name,
+                            status=check.status,
+                            observed_value=check.observed_value,
+                            expected_range=check.expected_range,
+                            deviation_score=check.deviation_score,
+                        )
+                    )
                     ran += 1
                     if not passed:
                         failed += 1
@@ -666,6 +678,7 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
             incident = await svc.create_or_update(db, source.org_id, table, failed_checks, profile_id)
             if incident and incident.status == "open":
                 from app.tasks import generate_llm_narration
+
                 generate_llm_narration.delay(str(incident.id))
         elif check_results:
             await svc.auto_resolve(db, table, check_results)
@@ -685,6 +698,7 @@ def _monitor_execution_error_code(error) -> str:
         "query_lease_unavailable",
         "scan_budget_exceeded",
         "scan_budget_not_supported",
+        "document_scan_budget_exceeded",
     }:
         return code
     return "execution_failed"
@@ -702,9 +716,7 @@ async def _bridge_dsl_incident(db, *, source, table, monitor, run, profile_id):
     if action not in {"open", "reminder_due", "resolve"}:
         return None
 
-    definition = load_persisted_definition(
-        (await db.get(MonitorRevision, run.revision_id)).definition
-    )
+    definition = load_persisted_definition((await db.get(MonitorRevision, run.revision_id)).definition)
     severity = definition.spec.policy.severity
     check_name = f"dsl_monitor:{monitor.name}"
     check = AnomalyResult(
@@ -721,9 +733,7 @@ async def _bridge_dsl_incident(db, *, source, table, monitor, run, profile_id):
     if action == "resolve":
         await service.auto_resolve(db, table, [check])
         return None
-    incident = await service.create_or_update(
-        db, source.org_id, table, [check], profile_id
-    )
+    incident = await service.create_or_update(db, source.org_id, table, [check], profile_id)
     if incident and incident.status == "open":
         from app.tasks import generate_llm_narration
 
@@ -744,8 +754,8 @@ async def _run_one_dsl_monitor(
     from app.models.monitor import Monitor, MonitorRevision
     from app.models.monitored_table import MonitoredTable
     from app.services.crypto import decrypt_config
-    from app.services.monitor_compiler import compile_relational_plan
     from app.services.monitor_dsl import load_persisted_definition
+    from app.services.monitor_planning import compile_monitor_plan
     from app.services.monitor_run_service import (
         MonitorRunError,
         RunRequest,
@@ -754,7 +764,7 @@ async def _run_one_dsl_monitor(
         finalize_success,
         reserve_run,
     )
-    from app.services.monitor_runtime import execute_compiled_plan
+    from app.services.monitor_runtime import execute_monitor_plan
     from app.services.query_lease import source_query_lease
     from app.services.realtime import publish_event
     from app.services.schema_binding import build_relation_binding
@@ -809,13 +819,16 @@ async def _run_one_dsl_monitor(
                 ddl=table.dbt_model_yaml,
                 latest_schema_fingerprint=profile_schema_fingerprint,
             )
-            plan = compile_relational_plan(load_persisted_definition(revision.definition), relation=relation)
+            plan = compile_monitor_plan(
+                load_persisted_definition(revision.definition),
+                relation=relation,
+            )
             async with source_query_lease(
                 str(source.org_id),
                 str(source.id),
                 ttl_seconds=plan.timeout_seconds + 30,
             ):
-                measurements = await execute_compiled_plan(connector, plan)
+                measurements = await execute_monitor_plan(connector, plan)
         except Exception as exc:
             try:
                 await finalize_error(
@@ -857,7 +870,13 @@ async def _run_one_dsl_monitor(
         await publish_event(
             str(source.org_id),
             "monitor.run.completed",
-            {"monitorId": str(monitor.id), "tableId": str(table.id), "runId": str(run.id), "status": run.status, "profileId": profile_id},
+            {
+                "monitorId": str(monitor.id),
+                "tableId": str(table.id),
+                "runId": str(run.id),
+                "status": run.status,
+                "profileId": profile_id,
+            },
         )
         return {"status": run.status, "run_id": str(run.id), "result": run.result}
 
@@ -888,28 +907,26 @@ async def _run_dsl_monitors_async(table_id: str, profile_id: str) -> dict:
     from app.models.monitor import Monitor, MonitorRevision
 
     async with AsyncSessionLocal() as db:
-        rows = (await db.execute(
-            select(Monitor.id, MonitorRevision.definition)
-            .join(
-                MonitorRevision,
-                (MonitorRevision.monitor_id == Monitor.id)
-                & (MonitorRevision.revision == Monitor.current_revision),
+        rows = (
+            await db.execute(
+                select(Monitor.id, MonitorRevision.definition)
+                .join(
+                    MonitorRevision,
+                    (MonitorRevision.monitor_id == Monitor.id) & (MonitorRevision.revision == Monitor.current_revision),
+                )
+                .where(
+                    Monitor.table_id == table_id,
+                    Monitor.mode == "dsl",
+                    Monitor.status == "active",
+                )
             )
-            .where(
-                Monitor.table_id == table_id,
-                Monitor.mode == "dsl",
-                Monitor.status == "active",
-            )
-        )).all()
+        ).all()
         monitor_ids = [
             monitor_id
             for monitor_id, definition_payload in rows
             if definition_payload.get("spec", {}).get("trigger", {}).get("type", "on_profile") == "on_profile"
         ]
-    results = [
-        await _run_one_dsl_monitor(str(monitor_id), profile_id=profile_id)
-        for monitor_id in monitor_ids
-    ]
+    results = [await _run_one_dsl_monitor(str(monitor_id), profile_id=profile_id) for monitor_id in monitor_ids]
     return {"status": "ok", "table_id": table_id, "profile_id": profile_id, "runs": results}
 
 
@@ -930,7 +947,8 @@ async def _cleanup_old_profiles_async() -> dict:
             retention = limits["retention_days"]
             if retention == -1:
                 continue
-            result = await db.execute(text(f"""
+            result = await db.execute(
+                text(f"""
                 DELETE FROM table_profiles
                 WHERE collected_at < NOW() - INTERVAL '{retention} days'
                   AND table_id IN (
@@ -939,7 +957,8 @@ async def _cleanup_old_profiles_async() -> dict:
                     JOIN organizations o ON ds.org_id = o.id
                     WHERE o.plan = '{plan}'
                   )
-            """))
+            """)
+            )
             deleted = result.rowcount
             deleted_total += deleted
             if deleted:
@@ -1017,16 +1036,18 @@ async def _send_alerts_async(incident_id: str) -> dict:
         narration = get_cached_narration(incident_id) or incident.llm_narration
 
         # Get matching configs: org-wide OR table-specific
-        configs = (await db.scalars(
-            select(AlertConfig).where(
-                AlertConfig.org_id == incident.org_id,
-                AlertConfig.is_active.is_(True),
-                or_(
-                    AlertConfig.table_id == incident.table_id,
-                    AlertConfig.table_id.is_(None),
-                ),
+        configs = (
+            await db.scalars(
+                select(AlertConfig).where(
+                    AlertConfig.org_id == incident.org_id,
+                    AlertConfig.is_active.is_(True),
+                    or_(
+                        AlertConfig.table_id == incident.table_id,
+                        AlertConfig.table_id.is_(None),
+                    ),
+                )
             )
-        )).all()
+        ).all()
 
         results = []
         for cfg in configs:

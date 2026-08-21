@@ -1,7 +1,9 @@
 """Structured relational schema bindings derived from connector DDL snapshots."""
+
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -176,17 +178,11 @@ def logical_type_for(data_type: str) -> LogicalType:
         base,
     ):
         return LogicalType.INTEGER
-    if any(
-        token in base
-        for token in ("numeric", "decimal", "number", "real", "float", "double", "money")
-    ):
+    if any(token in base for token in ("numeric", "decimal", "number", "real", "float", "double", "money")):
         return LogicalType.NUMBER
     if any(token in base for token in ("binary", "blob", "bytea", "bytes", "varbinary")):
         return LogicalType.BINARY
-    if any(
-        token in base
-        for token in ("char", "text", "string", "uuid", "json", "xml", "enum")
-    ):
+    if any(token in base for token in ("char", "text", "string", "uuid", "json", "xml", "enum")):
         return LogicalType.STRING
     return LogicalType.UNKNOWN
 
@@ -206,11 +202,7 @@ def parse_ddl_columns(ddl: str | None) -> tuple[SchemaColumn, ...]:
             continue
         name, remainder = split
         upper_remainder = f" {remainder.upper()}"
-        boundaries = [
-            upper_remainder.find(token)
-            for token in _INLINE_CONSTRAINTS
-            if upper_remainder.find(token) >= 0
-        ]
+        boundaries = [upper_remainder.find(token) for token in _INLINE_CONSTRAINTS if upper_remainder.find(token) >= 0]
         boundary = min(boundaries) if boundaries else len(upper_remainder)
         data_type = re.sub(r"\s+", " ", remainder[: max(0, boundary - 1)].strip()).lower()
         if not name or not data_type or name in seen:
@@ -229,10 +221,21 @@ def parse_ddl_columns(ddl: str | None) -> tuple[SchemaColumn, ...]:
 
 
 def schema_fingerprint(columns: tuple[SchemaColumn, ...]) -> str:
-    canonical = "|".join(
-        sorted(f"{column.name}:{column.data_type}" for column in columns)
-    )
+    canonical = "|".join(sorted(f"{column.name}:{column.data_type}" for column in columns))
     return hashlib.md5(canonical.encode("utf-8")).hexdigest()
+
+
+def document_schema_fingerprint(columns: tuple[SchemaColumn, ...]) -> str:
+    """Match the MongoDB connector's sampled field/type/required fingerprint."""
+    payload = [
+        {
+            "field": column.name,
+            "types": sorted(column.data_type.split("|")),
+            "required": not column.nullable,
+        }
+        for column in sorted(columns, key=lambda item: item.name)
+    ]
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def build_relation_binding(
@@ -250,18 +253,18 @@ def build_relation_binding(
             "schema_snapshot_missing",
             "A structured schema snapshot is required before this monitor can compile",
         )
-    computed_fingerprint = schema_fingerprint(columns)
-    if (
-        latest_schema_fingerprint
-        and latest_schema_fingerprint != computed_fingerprint
-    ):
+    normalized_source = source_type.lower()
+    computed_fingerprint = (
+        document_schema_fingerprint(columns) if normalized_source == "mongodb" else schema_fingerprint(columns)
+    )
+    if latest_schema_fingerprint and latest_schema_fingerprint != computed_fingerprint:
         raise SchemaBindingError(
             "schema_snapshot_stale",
             "The stored DDL snapshot does not match the latest successful profile",
         )
     return RelationBinding(
         asset_id=asset_id,
-        source_type=source_type.lower(),
+        source_type=normalized_source,
         schema_name=schema_name,
         table_name=table_name,
         columns=columns,

@@ -7,6 +7,7 @@ import {
   getAllCustomMonitors,
   getSafeMonitorRuns,
   getSafeMonitors,
+  getSources,
   getTables,
   previewSafeMonitorDefinition,
   runSafeMonitorNow,
@@ -102,9 +103,10 @@ const INITIAL_DSL_FORM = {
   filterValue: '',
   consecutiveBreaches: '1',
   recoveryPasses: '1',
+  maxDocumentsScanned: '10000',
 }
 
-function BuildDslDefinition({ form }) {
+function BuildDslDefinition({ form, sourceType }) {
   const metadataName = slugify(form.name)
   const threshold = parseLiteral(form.threshold)
   const isRowCount = form.kind === 'row_count'
@@ -164,7 +166,13 @@ function BuildDslDefinition({ form }) {
         cooldownMinutes: 60,
         notifyOnExecutionError: true,
       },
-      execution: { timeoutSeconds: 30, sampling: { mode: 'auto' } },
+      execution: sourceType === 'mongodb'
+        ? {
+          timeoutSeconds: 30,
+          maxDocumentsScanned: Number(form.maxDocumentsScanned),
+          sampling: { mode: 'off' },
+        }
+        : { timeoutSeconds: 30, sampling: { mode: 'auto' } },
     },
   }
 }
@@ -175,6 +183,9 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
   const [definition, setDefinition] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
+  const selectedTable = tables.find((table) => table.id === form.tableId)
+  const sourceType = selectedTable?.source_type
+  const isMongo = sourceType === 'mongodb'
 
   useEffect(() => {
     if (!open) return
@@ -193,6 +204,14 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
     if (!slugify(form.name)) return 'Add a name using lowercase letters, numbers, or hyphens.'
     if (!form.threshold.trim() || !Number.isFinite(Number(form.threshold))) return 'Enter a numeric breach threshold.'
     if (!['row_count'].includes(form.kind) && !form.field.trim()) return 'Choose the column this rule should inspect.'
+    if (isMongo && (!Number.isInteger(Number(form.maxDocumentsScanned)) || Number(form.maxDocumentsScanned) < 1 || Number(form.maxDocumentsScanned) > 100000)) {
+      return 'MongoDB max documents scanned must be an integer between 1 and 100,000.'
+    }
+    if (isMongo && form.kind === 'duplicate_rate') return 'MongoDB distinct/duplicate aggregation is not supported by the bounded planner yet.'
+    if (isMongo && form.kind === 'violations' && ['contains', 'starts_with', 'ends_with'].includes(form.predicateOperator)) {
+      return 'MongoDB string pattern predicates are not supported by the bounded planner yet.'
+    }
+    if (isMongo && form.filterField.trim()) return 'MongoDB metric filters are not supported by the bounded planner yet.'
     if (form.kind === 'violations' && !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative', 'is_empty', 'is_whitespace', 'is_true', 'is_false', 'is_future', 'is_past'].includes(form.predicateOperator) && !form.predicateValue.trim()) {
       return 'Enter the value the column should be compared with.'
     }
@@ -208,7 +227,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
       setError(validationError)
       return
     }
-    const nextDefinition = BuildDslDefinition({ form })
+    const nextDefinition = BuildDslDefinition({ form, sourceType })
     setBusy('preview')
     setError('')
     try {
@@ -304,7 +323,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                   <SelectItem value="row_count">Volume · row count</SelectItem>
                   <SelectItem value="freshness">Freshness · seconds since update</SelectItem>
                   <SelectItem value="null_rate">Completeness · null rate</SelectItem>
-                  <SelectItem value="duplicate_rate">Uniqueness · duplicate count</SelectItem>
+                  {!isMongo && <SelectItem value="duplicate_rate">Uniqueness · duplicate count</SelectItem>}
                   <SelectItem value="negative_rate">Validity · negative values</SelectItem>
                   <SelectItem value="empty_string_rate">Completeness · empty strings</SelectItem>
                   <SelectItem value="violations">Validation · row predicate</SelectItem>
@@ -352,7 +371,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                       <SelectItem value="gte">at least</SelectItem>
                       <SelectItem value="lt">less than</SelectItem>
                       <SelectItem value="lte">at most</SelectItem>
-                      <SelectItem value="contains">contains</SelectItem>
+                      {!isMongo && <SelectItem value="contains">contains</SelectItem>}
                       <SelectItem value="is_empty">is empty</SelectItem>
                       <SelectItem value="is_whitespace">is whitespace-only</SelectItem>
                       <SelectItem value="is_true">is true</SelectItem>
@@ -441,7 +460,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
             </div>
           </div>
 
-          {form.kind !== 'violations' && form.kind !== 'row_count' && (
+          {form.kind !== 'violations' && form.kind !== 'row_count' && !isMongo && (
             <div className="grid gap-3 rounded-md border bg-muted/20 p-4">
               <div>
                 <p className="text-sm font-medium">Optional metric filter</p>
@@ -461,6 +480,24 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                 </Select>
                 <Input aria-label="Metric filter value" value={form.filterValue} onChange={set('filterValue')} placeholder="paid" disabled={form.filterOperator === 'none' || ['is_null', 'is_not_null'].includes(form.filterOperator)} />
               </div>
+            </div>
+          )}
+
+          {isMongo && (
+            <div className="grid gap-2 rounded-md border bg-muted/20 p-4 sm:max-w-md">
+              <Label htmlFor="dsl-max-documents">Maximum documents scanned</Label>
+              <Input
+                id="dsl-max-documents"
+                type="number"
+                min="1"
+                max="100000"
+                step="1"
+                value={form.maxDocumentsScanned}
+                onChange={set('maxDocumentsScanned')}
+              />
+              <p className="text-xs text-muted-foreground">
+                Required hard ceiling. The run fails closed if the collection exceeds it; disk use stays disabled.
+              </p>
             </div>
           )}
 
@@ -638,10 +675,19 @@ export default function Monitors() {
     else setLoading(true)
     setError('')
     try {
-      const [tablesResponse, legacyResponse] = await Promise.all([getTables(), getAllCustomMonitors()])
+      const [tablesResponse, sourcesResponse, legacyResponse] = await Promise.all([
+        getTables(),
+        getSources(),
+        getAllCustomMonitors(),
+      ])
       const nextTables = tablesResponse.data || []
-      const tableById = Object.fromEntries(nextTables.map((table) => [table.id, table]))
-      const dslResults = await Promise.allSettled(nextTables.map((table) => getSafeMonitors(table.id)))
+      const sourceById = Object.fromEntries((sourcesResponse.data || []).map((source) => [source.id, source]))
+      const typedTables = nextTables.map((table) => ({
+        ...table,
+        source_type: sourceById[table.source_id]?.type,
+      }))
+      const tableById = Object.fromEntries(typedTables.map((table) => [table.id, table]))
+      const dslResults = await Promise.allSettled(typedTables.map((table) => getSafeMonitors(table.id)))
       const dslMonitors = []
       let dslFailures = 0
       dslResults.forEach((result, index) => {
@@ -650,7 +696,7 @@ export default function Monitors() {
           return
         }
         for (const monitor of result.value.data || []) {
-          const tableId = monitor.assetId || nextTables[index].id
+          const tableId = monitor.assetId || typedTables[index].id
           dslMonitors.push({
             ...monitor,
             kind: 'dsl',
@@ -674,7 +720,7 @@ export default function Monitors() {
         kind: 'legacy',
         tableLabel: tableLabel(tableById[monitor.table_id]),
       }))
-      setTables(nextTables)
+      setTables(typedTables)
       setMonitors([...dslMonitors, ...legacyMonitors])
       if (dslFailures && dslFailures === nextTables.length) {
         setError('Typed DSL monitor data is temporarily unavailable. Legacy SQL monitors are still shown.')

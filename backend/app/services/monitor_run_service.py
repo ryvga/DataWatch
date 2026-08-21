@@ -1,4 +1,5 @@
 """Idempotent, ordered state machine for persisted typed-monitor executions."""
+
 from __future__ import annotations
 
 import hashlib
@@ -15,11 +16,6 @@ from app.models.data_source import DataSource
 from app.models.monitor import Monitor, MonitorEvaluationState, MonitorRevision, MonitorRun
 from app.models.monitored_table import MonitoredTable
 from app.models.table_profile import TableProfile
-from app.services.monitor_compiler import (
-    PLANNER_VERSION,
-    RelationalMonitorPlan,
-    compile_relational_plan,
-)
 from app.services.monitor_dsl import (
     Policy,
     Predicate,
@@ -27,6 +23,7 @@ from app.services.monitor_dsl import (
     load_persisted_definition,
 )
 from app.services.monitor_evaluator import PolicyState, evaluate_breach, evaluate_policy
+from app.services.monitor_planning import MonitorPlan, compile_monitor_plan
 from app.services.schema_binding import build_relation_binding
 
 TERMINAL_STATUSES = {"passed", "failed", "error", "cancelled"}
@@ -37,6 +34,7 @@ SAFE_ERROR_MESSAGES = {
     "query_lease_unavailable": "Shared query capacity control is unavailable",
     "scan_budget_exceeded": "Compiled monitor exceeds maxBytesScanned",
     "scan_budget_not_supported": "Connector cannot enforce maxBytesScanned",
+    "document_scan_budget_exceeded": "Document monitor reached maxDocumentsScanned",
     "execution_failed": "Compiled monitor execution failed",
     "evaluation_failed": "Compiled monitor evaluation failed",
     "plan_context_mismatch": "Compiled plan no longer matches the reserved run",
@@ -105,9 +103,7 @@ async def reserve_run(
 ) -> RunReservation:
     """Atomically reserve one audit row; duplicates never acquire execution ownership."""
     _validate_request(request, now)
-    monitor = await db.scalar(
-        select(Monitor).where(Monitor.id == request.monitor_id, Monitor.org_id == request.org_id)
-    )
+    monitor = await db.scalar(select(Monitor).where(Monitor.id == request.monitor_id, Monitor.org_id == request.org_id))
     revision = await db.scalar(
         select(MonitorRevision).where(
             MonitorRevision.id == request.revision_id,
@@ -132,10 +128,7 @@ async def reserve_run(
         raise MonitorRunError("run_context_invalid", "Monitor target is outside the tenant")
     table, source = row
     definition = load_persisted_definition(revision.definition)
-    if (
-        definition.spec.target.asset_id != table.id
-        or definition_hash(definition) != revision.definition_hash
-    ):
+    if definition.spec.target.asset_id != table.id or definition_hash(definition) != revision.definition_hash:
         raise MonitorRunError("definition_hash_mismatch", "Stored revision context is invalid")
 
     if request.trigger_type == "on_profile":
@@ -170,7 +163,7 @@ async def reserve_run(
         ddl=table.dbt_model_yaml,
         latest_schema_fingerprint=latest_fingerprint,
     )
-    plan = compile_relational_plan(definition, relation=relation)
+    plan = compile_monitor_plan(definition, relation=relation)
     plan_payload = plan.payload()
 
     run_id = uuid.uuid4()
@@ -187,7 +180,7 @@ async def reserve_run(
             profile_id=request.profile_id,
             sequence_at=sequence_at,
             plan_hash=plan_payload["planHash"],
-            planner_version=PLANNER_VERSION,
+            planner_version=plan_payload["plannerVersion"],
             definition_hash=revision.definition_hash,
             schema_fingerprint=relation.schema_fingerprint,
             status="queued",
@@ -226,7 +219,7 @@ async def reserve_run(
         request.profile_id,
         existing.sequence_at if request.trigger_type == "manual" else sequence_at,
         plan_payload["planHash"],
-        PLANNER_VERSION,
+        plan_payload["plannerVersion"],
         revision.definition_hash,
         relation.schema_fingerprint,
     )
@@ -255,9 +248,7 @@ async def claim_next_run(
     if now.tzinfo is None or not 1 <= lease_seconds <= 900:
         raise MonitorRunError("claim_contract_invalid", "Claim time or lease is invalid")
     run = await db.scalar(
-        select(MonitorRun)
-        .where(MonitorRun.id == run_id, MonitorRun.org_id == org_id)
-        .with_for_update()
+        select(MonitorRun).where(MonitorRun.id == run_id, MonitorRun.org_id == org_id).with_for_update()
     )
     if run is None:
         raise MonitorRunError("run_not_found", "Run was not found")
@@ -271,9 +262,7 @@ async def claim_next_run(
         raise MonitorRunError("run_state_invalid", "Run cannot be claimed from its state")
 
     monitor = await db.scalar(
-        select(Monitor)
-        .where(Monitor.id == run.monitor_id, Monitor.org_id == org_id)
-        .with_for_update()
+        select(Monitor).where(Monitor.id == run.monitor_id, Monitor.org_id == org_id).with_for_update()
     )
     if monitor is None or monitor.status != "active" or monitor.active_revision_id != run.revision_id:
         _cancel(run, "inactive_or_stale_revision", now)
@@ -367,9 +356,7 @@ async def _claimed_run(
     if now.tzinfo is None:
         raise MonitorRunError("finalization_time_invalid", "Finalization time must be timezone-aware")
     run = await db.scalar(
-        select(MonitorRun)
-        .where(MonitorRun.id == claim.run_id, MonitorRun.org_id == org_id)
-        .with_for_update()
+        select(MonitorRun).where(MonitorRun.id == claim.run_id, MonitorRun.org_id == org_id).with_for_update()
     )
     if run is None:
         raise MonitorRunError("run_not_found", "Run was not found")
@@ -380,9 +367,7 @@ async def _claimed_run(
     if run.lease_expires_at is None or run.lease_expires_at <= now:
         raise MonitorRunError("claim_expired", "Run claim lease has expired")
     monitor = await db.scalar(
-        select(Monitor)
-        .where(Monitor.id == run.monitor_id, Monitor.org_id == org_id)
-        .with_for_update()
+        select(Monitor).where(Monitor.id == run.monitor_id, Monitor.org_id == org_id).with_for_update()
     )
     if monitor is None or monitor.status != "active" or monitor.active_revision_id != run.revision_id:
         _cancel(run, "inactive_or_stale_revision", now)
@@ -414,7 +399,7 @@ async def finalize_success(
     *,
     org_id: uuid.UUID,
     claim: RunClaim,
-    plan: RelationalMonitorPlan,
+    plan: MonitorPlan,
     definition_hash: str,
     measurements: dict,
     now: datetime,

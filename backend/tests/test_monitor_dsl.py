@@ -81,24 +81,12 @@ def test_v1alpha1_example_is_canonical_and_stably_hashed():
         lambda definition: definition.update({"apiVersion": "datawatch.io/v2"}),
         lambda definition: definition["metadata"].update({"name": "Not Valid"}),
         lambda definition: definition["spec"]["measurements"][0].update({"extra": "no"}),
-        lambda definition: definition["spec"]["measurements"].append(
-            deepcopy(definition["spec"]["measurements"][0])
-        ),
-        lambda definition: definition["spec"]["breachWhen"]["left"].update(
-            {"ref": "missing.rate"}
-        ),
-        lambda definition: definition["spec"]["breachWhen"]["left"].update(
-            {"ref": "invalid_orders.unknown"}
-        ),
-        lambda definition: definition["spec"]["breachWhen"]["right"].update(
-            {"field": "also_invalid"}
-        ),
-        lambda definition: definition["spec"]["execution"].update(
-            {"timeoutSeconds": 121}
-        ),
-        lambda definition: definition["spec"]["breachWhen"]["right"].update(
-            {"literal": float("nan")}
-        ),
+        lambda definition: definition["spec"]["measurements"].append(deepcopy(definition["spec"]["measurements"][0])),
+        lambda definition: definition["spec"]["breachWhen"]["left"].update({"ref": "missing.rate"}),
+        lambda definition: definition["spec"]["breachWhen"]["left"].update({"ref": "invalid_orders.unknown"}),
+        lambda definition: definition["spec"]["breachWhen"]["right"].update({"field": "also_invalid"}),
+        lambda definition: definition["spec"]["execution"].update({"timeoutSeconds": 121}),
+        lambda definition: definition["spec"]["breachWhen"]["right"].update({"literal": float("nan")}),
     ],
 )
 def test_dsl_rejects_unknown_versions_fields_refs_and_invalid_bounds(mutate):
@@ -121,9 +109,7 @@ def test_dsl_rejects_predicates_deeper_than_limit():
 
 def test_metric_measurement_has_strict_type_contract():
     definition = valid_definition()
-    definition["spec"]["measurements"] = [
-        {"id": "rows", "type": "metric", "metric": "row_count"}
-    ]
+    definition["spec"]["measurements"] = [{"id": "rows", "type": "metric", "metric": "row_count"}]
     definition["spec"]["breachWhen"] = {
         "op": "eq",
         "left": {"ref": "rows"},
@@ -209,11 +195,7 @@ async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
         source_id="source-1",
         schema_name="public",
         table_name="orders",
-        dbt_model_yaml=(
-            "CREATE TABLE public.orders ("
-            "status text NULL, payment_reference text NULL"
-            ");"
-        ),
+        dbt_model_yaml=("CREATE TABLE public.orders (status text NULL, payment_reference text NULL);"),
     )
     source = SimpleNamespace(id="source-1", type="postgres")
 
@@ -279,9 +261,7 @@ async def test_validation_distinguishes_valid_grammar_from_schema_incompatibilit
             return None
 
     body = valid_definition()
-    body["spec"]["measurements"] = [
-        {"id": "average", "type": "metric", "metric": "mean", "field": "amount"}
-    ]
+    body["spec"]["measurements"] = [{"id": "average", "type": "metric", "metric": "mean", "field": "amount"}]
     body["spec"]["breachWhen"] = {
         "op": "gt",
         "left": {"ref": "average"},
@@ -297,9 +277,7 @@ async def test_validation_distinguishes_valid_grammar_from_schema_incompatibilit
     assert response["capabilityPlan"]["compilationSupported"] is False
     assert response["capabilityPlan"]["compatible"] is False
     assert response["capabilityPlan"]["unsupported"] == ["field_type_not_supported"]
-    assert response["capabilityPlan"]["issues"][0]["message"] == (
-        "mean does not support amount (string)"
-    )
+    assert response["capabilityPlan"]["issues"][0]["message"] == ("mean does not support amount (string)")
 
 
 @pytest.mark.asyncio
@@ -310,11 +288,7 @@ async def test_preview_returns_bound_plan_without_enabling_execution():
         id=UUID(ASSET_ID),
         schema_name="public",
         table_name="orders",
-        dbt_model_yaml=(
-            "CREATE TABLE public.orders ("
-            "status text NULL, payment_reference text NULL"
-            ");"
-        ),
+        dbt_model_yaml=("CREATE TABLE public.orders (status text NULL, payment_reference text NULL);"),
     )
     source = SimpleNamespace(type="postgres")
 
@@ -343,6 +317,49 @@ async def test_preview_returns_bound_plan_without_enabling_execution():
 
 
 @pytest.mark.asyncio
+async def test_mongodb_preview_uses_native_bounded_planner_and_attestation():
+    from app.routers.monitor_dsl import preview_monitor_definition
+
+    table = SimpleNamespace(
+        id=UUID(ASSET_ID),
+        schema_name="analytics",
+        table_name="events",
+        dbt_model_yaml=(
+            'CREATE COLLECTION "analytics"."events" ("status" string NULL, "payment_reference" string NULL);'
+        ),
+    )
+    source = SimpleNamespace(type="mongodb")
+
+    class Database:
+        async def execute(self, statement):
+            class Result:
+                def one_or_none(self):
+                    return (table, source)
+
+            return Result()
+
+        async def scalar(self, statement):
+            return None
+
+    body = valid_definition()
+    body["spec"]["execution"].pop("maxBytesScanned")
+    body["spec"]["execution"]["maxDocumentsScanned"] = 100
+    body["spec"]["execution"]["sampling"] = {"mode": "off"}
+    response = await preview_monitor_definition(
+        MonitorDefinition.model_validate(body),
+        org=SimpleNamespace(id="org-1"),
+        db=Database(),
+    )
+
+    assert response["preview"]["status"] == "compiled_validation_only"
+    assert response["preview"]["plannerVersion"] == ("datawatch-v1alpha1-mongodb-1")
+    assert response["compiledPlan"]["kind"] == "mongodb_bounded_aggregate"
+    assert response["compiledPlan"]["pipeline"][0] == {"$limit": 101}
+    assert len(response["compiledPlan"]["relation"]["schemaFingerprint"]) == 64
+    assert response["capabilityPlan"]["activationSupported"] is True
+
+
+@pytest.mark.asyncio
 async def test_incompatible_preview_does_not_issue_activation_attestation():
     from app.routers.monitor_dsl import preview_monitor_definition
 
@@ -366,9 +383,7 @@ async def test_incompatible_preview_does_not_issue_activation_attestation():
             return None
 
     body = valid_definition()
-    body["spec"]["measurements"] = [
-        {"id": "average", "type": "metric", "metric": "mean", "field": "amount"}
-    ]
+    body["spec"]["measurements"] = [{"id": "average", "type": "metric", "metric": "mean", "field": "amount"}]
     body["spec"]["breachWhen"] = {
         "op": "gt",
         "left": {"ref": "average"},

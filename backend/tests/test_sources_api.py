@@ -31,24 +31,21 @@ async def test_connector_types_include_registry_fields_and_versions():
         assert item["capabilities"]["compiled_monitors"] in {
             "none",
             "internal_read_only",
+            "internal_document_read_only",
         }
         field_names = {field["name"] for field in item["fields"]}
         assert set(item["required"]).issubset(field_names)
 
     by_type = {item["type"]: item for item in metadata}
     assert by_type["postgres"]["capabilities"]["profiling"] == "full"
-    assert by_type["postgres"]["capabilities"]["compiled_monitors"] == (
-        "internal_read_only"
-    )
+    assert by_type["postgres"]["capabilities"]["compiled_monitors"] == ("internal_read_only")
     assert by_type["sqlite"]["capabilities"]["profiling"] == "core"
     assert by_type["mysql"]["capabilities"]["profiling"] == "core"
     assert by_type["mariadb"]["capabilities"]["profiling"] == "core"
     assert "username" in by_type["mysql"]["required"]
     assert "username" in by_type["mariadb"]["required"]
     assert by_type["sqlserver"]["capabilities"]["profiling"] == "core"
-    mysql_fields = {
-        field["name"]: field for field in by_type["mysql"]["fields"]
-    }
+    mysql_fields = {field["name"]: field for field in by_type["mysql"]["fields"]}
     assert mysql_fields["tls_mode"]["default"] == "verify_identity"
     assert mysql_fields["tls_mode"]["options"] == ["verify_identity", "disabled"]
     assert by_type["mariadb"]["versions"] == [
@@ -57,15 +54,14 @@ async def test_connector_types_include_registry_fields_and_versions():
         "MariaDB 10.11 LTS",
     ]
     assert by_type["mongodb"]["capabilities"]["profiling"] == "core"
+    assert by_type["mongodb"]["capabilities"]["compiled_monitors"] == ("internal_document_read_only")
     assert by_type["mongodb"]["capabilities"]["sampling"] is True
     assert "database" in by_type["mongodb"]["required"]
     assert by_type["redis"]["capabilities"]["profiling"] == "core"
     assert by_type["redis"]["capabilities"]["sampling"] is True
     assert by_type["redis"]["readiness"] == "experimental"
     assert by_type["redis"]["versions"] == ["Auto-detect", "Redis 7", "Redis 8"]
-    cassandra_fields = {
-        field["name"]: field for field in by_type["cassandra"]["fields"]
-    }
+    cassandra_fields = {field["name"]: field for field in by_type["cassandra"]["fields"]}
     assert cassandra_fields["tls_mode"]["default"] == "verify_identity"
     assert "Astra DB" not in by_type["cassandra"]["versions"]
     assert by_type["snowflake"]["readiness"] == "planned"
@@ -129,9 +125,7 @@ async def test_connection_preview_requires_owner_or_admin():
 
 
 @pytest.mark.asyncio
-async def test_connection_preview_member_is_rejected_by_api(
-    client, db_session, test_org
-):
+async def test_connection_preview_member_is_rejected_by_api(client, db_session, test_org):
     org = await db_session.get(Organization, test_org["org_id"])
     member = User(
         org_id=org.id,
@@ -472,9 +466,7 @@ async def test_create_table_validates_freshness_against_live_schema(monkeypatch)
 
     monkeypatch.setattr(tables, "_resolve_org_from_source", fake_resolve)
     monkeypatch.setattr(tables, "decrypt_config", lambda encrypted, org_id: {})
-    monkeypatch.setattr(
-        tables.ConnectorFactory, "create", lambda source_type, config: Connector()
-    )
+    monkeypatch.setattr(tables.ConnectorFactory, "create", lambda source_type, config: Connector())
     monkeypatch.setattr("app.services.plans.enforce_table_limit", allow_table_limit)
 
     with pytest.raises(HTTPException) as exc_info:
@@ -524,9 +516,7 @@ async def test_update_table_cannot_replace_or_bypass_live_schema(monkeypatch):
 
     monkeypatch.setattr(tables, "_get_table_or_404", fake_get_table)
     monkeypatch.setattr(tables, "decrypt_config", lambda encrypted, org_id: {})
-    monkeypatch.setattr(
-        tables.ConnectorFactory, "create", lambda source_type, config: Connector()
-    )
+    monkeypatch.setattr(tables.ConnectorFactory, "create", lambda source_type, config: Connector())
 
     with pytest.raises(HTTPException, match="read-only"):
         await tables.update_table(
@@ -648,6 +638,7 @@ async def test_pause_source_archives_source_and_deactivates_tables(monkeypatch):
             return None
 
     monkeypatch.setattr("app.scheduler.remove_table_job", lambda table_id: removed_jobs.append(table_id))
+
     async def fake_invalidate(org_id, source_id):
         invalidated.append((org_id, source_id))
 

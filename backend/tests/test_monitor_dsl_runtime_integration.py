@@ -1,4 +1,6 @@
 import uuid
+import os
+import socket
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -17,6 +19,7 @@ from app.models.organization import Organization
 from app.models.table_profile import TableProfile
 from app.services.crypto import encrypt_config
 from app.services.monitor_dsl import MonitorDefinition, definition_hash, persisted_definition_payload
+from app.services.schema_binding import build_relation_binding
 
 
 def _row_count_definition(table_id: uuid.UUID) -> MonitorDefinition:
@@ -50,6 +53,18 @@ def _row_count_definition(table_id: uuid.UUID) -> MonitorDefinition:
             },
         }
     )
+
+
+def _mongo_row_count_definition(table_id: uuid.UUID) -> MonitorDefinition:
+    payload = _row_count_definition(table_id).model_dump(
+        mode="json",
+        by_alias=True,
+        exclude_unset=True,
+    )
+    payload["spec"]["execution"].pop("maxBytesScanned", None)
+    payload["spec"]["execution"]["maxDocumentsScanned"] = 10
+    payload["spec"]["execution"]["sampling"] = {"mode": "off"}
+    return MonitorDefinition.model_validate(payload)
 
 
 @pytest.mark.asyncio
@@ -123,9 +138,10 @@ async def test_profile_run_incident_recovery_vertical_slice(db_session, test_eng
     await db_session.commit()
 
     session_factory = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
-    with patch.object(database, "AsyncSessionLocal", session_factory), patch(
-        "app.tasks.generate_llm_narration"
-    ) as narration:
+    with (
+        patch.object(database, "AsyncSessionLocal", session_factory),
+        patch("app.tasks.generate_llm_narration") as narration,
+    ):
         narration.delay = MagicMock()
         first = await _run_one_dsl_monitor(str(monitor.id), profile_id=str(profile_one.id))
 
@@ -151,28 +167,24 @@ async def test_profile_run_incident_recovery_vertical_slice(db_session, test_eng
     }
     from app.tasks import _generate_llm_narration_async, _send_alerts_async
 
-    with patch.object(database, "AsyncSessionLocal", session_factory), patch(
-        "app.services.llm.get_cached_narration", return_value=None
-    ), patch(
-        "app.services.llm.build_context", new=AsyncMock(return_value="deterministic context")
-    ), patch(
-        "app.services.llm.generate_narration", return_value=narration_payload
-    ), patch(
-        "app.services.llm.cache_narration"
-    ), patch(
-        "app.tasks.send_alerts"
-    ) as queued_alerts:
+    with (
+        patch.object(database, "AsyncSessionLocal", session_factory),
+        patch("app.services.llm.get_cached_narration", return_value=None),
+        patch("app.services.llm.build_context", new=AsyncMock(return_value="deterministic context")),
+        patch("app.services.llm.generate_narration", return_value=narration_payload),
+        patch("app.services.llm.cache_narration"),
+        patch("app.tasks.send_alerts") as queued_alerts,
+    ):
         narration_result = await _generate_llm_narration_async(str(incident.id))
         queued_alerts.delay.assert_called_once_with(str(incident.id))
 
     assert narration_result["status"] == "ok"
 
-    with patch.object(database, "AsyncSessionLocal", session_factory), patch(
-        "app.services.llm.get_cached_narration", return_value=narration_payload
-    ), patch(
-        "app.services.alert.dispatch_alert", return_value=True
-    ) as dispatch, patch(
-        "app.services.realtime.publish_event", new=AsyncMock()
+    with (
+        patch.object(database, "AsyncSessionLocal", session_factory),
+        patch("app.services.llm.get_cached_narration", return_value=narration_payload),
+        patch("app.services.alert.dispatch_alert", return_value=True) as dispatch,
+        patch("app.services.realtime.publish_event", new=AsyncMock()),
     ):
         alert_result = await _send_alerts_async(str(incident.id))
 
@@ -206,4 +218,151 @@ async def test_profile_run_incident_recovery_vertical_slice(db_session, test_eng
         incident = await session.scalar(select(Incident).where(Incident.table_id == table.id))
         assert incident.status == "resolved"
         runs = (await session.scalars(select(MonitorRun).where(MonitorRun.monitor_id == monitor.id))).all()
-        assert [run.status for run in runs] == ["failed", "passed"]
+    assert [run.status for run in runs] == ["failed", "passed"]
+
+
+@pytest.mark.asyncio
+async def test_mongodb_document_monitor_opens_and_resolves_incident(
+    db_session,
+    test_engine,
+):
+    """Prove the native Mongo plan through persisted run and incident transitions."""
+    try:
+        probe = socket.create_connection(("127.0.0.1", 27018), timeout=0.2)
+        probe.close()
+    except OSError:
+        if os.environ.get("REQUIRE_TEST_SERVICES", "").lower() in {"1", "true", "yes"}:
+            pytest.fail("MongoDB test service unavailable while REQUIRE_TEST_SERVICES=1")
+        pytest.skip("MongoDB test service unavailable")
+
+    from pymongo import AsyncMongoClient
+
+    from app import database
+    from app.tasks import _run_one_dsl_monitor
+
+    uri = "mongodb://datawatch-root:datawatch-root@127.0.0.1:27018/?authSource=admin"
+    collection_name = f"runtime_monitor_{uuid.uuid4().hex}"
+    client = AsyncMongoClient(uri)
+    collection = client["datawatch_nosql"][collection_name]
+    await collection.insert_one({"bootstrap": True})
+    await collection.delete_many({})
+
+    org = Organization(
+        name="Mongo Runtime Org",
+        slug=f"mongo-runtime-{uuid.uuid4().hex[:8]}",
+    )
+    db_session.add(org)
+    await db_session.flush()
+    source = DataSource(
+        org_id=org.id,
+        name="Mongo Runtime",
+        type="mongodb",
+        connection_config={
+            "encrypted": encrypt_config(
+                {
+                    "uri": uri,
+                    "database": "datawatch_nosql",
+                    "tls_mode": "disabled",
+                },
+                str(org.id),
+            )
+        },
+    )
+    db_session.add(source)
+    await db_session.flush()
+    ddl = f'CREATE COLLECTION "datawatch_nosql"."{collection_name}" ("bootstrap" boolean NULL);'
+    table = MonitoredTable(
+        source_id=source.id,
+        schema_name="datawatch_nosql",
+        table_name=collection_name,
+        dbt_model_yaml=ddl,
+    )
+    db_session.add(table)
+    await db_session.flush()
+    schema_fingerprint = build_relation_binding(
+        asset_id=table.id,
+        source_type="mongodb",
+        schema_name=table.schema_name,
+        table_name=table.table_name,
+        ddl=ddl,
+        latest_schema_fingerprint=None,
+    ).schema_fingerprint
+    definition = _mongo_row_count_definition(table.id)
+    revision = MonitorRevision(
+        revision=1,
+        definition_version=definition.api_version,
+        definition_hash=definition_hash(definition),
+        definition=persisted_definition_payload(definition),
+        validation_status="valid",
+        schema_fingerprint=schema_fingerprint,
+    )
+    monitor = Monitor(
+        org_id=org.id,
+        table_id=table.id,
+        name=definition.metadata.name,
+        mode="dsl",
+        status="draft",
+        current_revision=1,
+    )
+    db_session.add(monitor)
+    await db_session.flush()
+    revision.monitor_id = monitor.id
+    db_session.add(revision)
+    await db_session.flush()
+    monitor.active_revision_id = revision.id
+    monitor.status = "active"
+    first_profile = TableProfile(
+        table_id=table.id,
+        row_count=0,
+        schema_fingerprint=schema_fingerprint,
+        collected_at=datetime(2026, 8, 21, 2, 0, tzinfo=UTC),
+    )
+    db_session.add(first_profile)
+    await db_session.commit()
+
+    session_factory = async_sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        with (
+            patch.object(database, "AsyncSessionLocal", session_factory),
+            patch("app.tasks.generate_llm_narration") as narration,
+        ):
+            narration.delay = MagicMock()
+            first = await _run_one_dsl_monitor(
+                str(monitor.id),
+                profile_id=str(first_profile.id),
+            )
+        assert first["status"] == "failed"
+        assert first["result"]["incidentAction"] == "open"
+
+        await collection.insert_one({"bootstrap": True})
+        async with session_factory() as session:
+            second_profile = TableProfile(
+                table_id=table.id,
+                row_count=1,
+                schema_fingerprint=schema_fingerprint,
+                collected_at=datetime(2026, 8, 21, 2, 1, tzinfo=UTC),
+            )
+            session.add(second_profile)
+            await session.commit()
+            second_profile_id = second_profile.id
+        with patch.object(database, "AsyncSessionLocal", session_factory):
+            second = await _run_one_dsl_monitor(
+                str(monitor.id),
+                profile_id=str(second_profile_id),
+            )
+        assert second["status"] == "passed"
+        assert second["result"]["incidentAction"] == "resolve"
+
+        async with session_factory() as session:
+            incident = await session.scalar(select(Incident).where(Incident.table_id == table.id))
+            runs = (await session.scalars(select(MonitorRun).where(MonitorRun.monitor_id == monitor.id))).all()
+            assert incident.status == "resolved"
+            assert [run.status for run in runs] == ["failed", "passed"]
+            assert all(run.planner_version == "datawatch-v1alpha1-mongodb-1" for run in runs)
+    finally:
+        await collection.drop()
+        await client.close()

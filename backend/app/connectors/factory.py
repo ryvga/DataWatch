@@ -46,7 +46,14 @@ FIELD_METADATA = {
 
 
 VERSION_OPTIONS = {
-    "postgres": ["Auto-detect", "PostgreSQL 16", "PostgreSQL 15", "PostgreSQL 14", "PostgreSQL 13", "Aurora PostgreSQL"],
+    "postgres": [
+        "Auto-detect",
+        "PostgreSQL 16",
+        "PostgreSQL 15",
+        "PostgreSQL 14",
+        "PostgreSQL 13",
+        "Aurora PostgreSQL",
+    ],
     "mysql": ["Auto-detect", "MySQL 8", "MySQL 5.7"],
     "mariadb": ["Auto-detect", "MariaDB 11.4 LTS", "MariaDB 10.11 LTS"],
     "redshift": ["Auto-detect", "RA3", "DC2"],
@@ -129,9 +136,7 @@ CONNECTOR_REGISTRY = {
         "label": "MySQL",
         "description": "MySQL 5.7+",
         "readiness": "experimental",
-        "capabilities": _capabilities(
-            profiling="core", compiled_monitors="internal_read_only"
-        ),
+        "capabilities": _capabilities(profiling="core", compiled_monitors="internal_read_only"),
     },
     "mariadb": {
         "module": "app.connectors.mysql",
@@ -146,9 +151,7 @@ CONNECTOR_REGISTRY = {
         "label": "MariaDB",
         "description": "MariaDB 10.11+ / 11.4 LTS",
         "readiness": "experimental",
-        "capabilities": _capabilities(
-            profiling="core", compiled_monitors="internal_read_only"
-        ),
+        "capabilities": _capabilities(profiling="core", compiled_monitors="internal_read_only"),
     },
     "redshift": {
         "module": "app.connectors.redshift",
@@ -178,9 +181,7 @@ CONNECTOR_REGISTRY = {
         "label": "Snowflake",
         "description": "Snowflake Cloud Data Platform",
         "readiness": "planned",
-        "capabilities": _capabilities(
-            connection=False, discovery=False, schema=False
-        ),
+        "capabilities": _capabilities(connection=False, discovery=False, schema=False),
     },
     "clickhouse": {
         "module": "app.connectors.clickhouse",
@@ -271,7 +272,11 @@ CONNECTOR_REGISTRY = {
         "description": "MongoDB document database (Tier 1 — field drift detection)",
         "tier": 1,
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core", sampling=True),
+        "capabilities": _capabilities(
+            profiling="core",
+            compiled_monitors="internal_document_read_only",
+            sampling=True,
+        ),
     },
     "redis": {
         "module": "app.connectors.redis",
@@ -307,9 +312,7 @@ CONNECTOR_REGISTRY = {
         "description": "Microsoft SQL Server / Azure SQL",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(
-            profiling="core", compiled_monitors="internal_read_only"
-        ),
+        "capabilities": _capabilities(profiling="core", compiled_monitors="internal_read_only"),
     },
 }
 
@@ -329,6 +332,7 @@ class ConnectorFactory:
         if not entry:
             raise ValueError(f"Unsupported source type: {source_type}")
         import importlib
+
         mod = importlib.import_module(entry["module"])
         cls = getattr(mod, entry["class"])
         return cls(config)
@@ -338,24 +342,20 @@ class ConnectorFactory:
         """Return metadata for all connector types (for UI forms)."""
         result = []
         for k, v in CONNECTOR_REGISTRY.items():
-            required_fields = [
-                _field_metadata(name, "", True)
-                for name in v["required"]
-            ]
-            optional_fields = [
-                _field_metadata(name, default, False)
-                for name, default in v["optional"].items()
-            ]
-            result.append({
-                "type": k,
-                "label": v["label"],
-                "description": v["description"],
-                "required": v["required"],
-                "optional": v["optional"],
-                "fields": required_fields + optional_fields,
-                "versions": VERSION_OPTIONS.get(k, ["Auto-detect"]),
-                "tier": v.get("tier", 0),
-                "readiness": v["readiness"],
-                "capabilities": dict(v["capabilities"]),
-            })
+            required_fields = [_field_metadata(name, "", True) for name in v["required"]]
+            optional_fields = [_field_metadata(name, default, False) for name, default in v["optional"].items()]
+            result.append(
+                {
+                    "type": k,
+                    "label": v["label"],
+                    "description": v["description"],
+                    "required": v["required"],
+                    "optional": v["optional"],
+                    "fields": required_fields + optional_fields,
+                    "versions": VERSION_OPTIONS.get(k, ["Auto-detect"]),
+                    "tier": v.get("tier", 0),
+                    "readiness": v["readiness"],
+                    "capabilities": dict(v["capabilities"]),
+                }
+            )
         return result

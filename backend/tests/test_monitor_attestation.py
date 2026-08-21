@@ -95,3 +95,37 @@ def test_preview_attestation_rejects_invalid_ttl():
             schema_fingerprint=None,
             ttl_seconds=10,
         )
+
+
+def test_preview_attestation_is_bound_to_native_planner_version():
+    native_version = "datawatch-v1alpha1-mongodb-1"
+    token, _ = create_preview_attestation(
+        org_id="org-1",
+        asset_id="asset-1",
+        definition_hash="a" * 64,
+        schema_fingerprint="schema-1",
+        planner_version=native_version,
+        now=1_000,
+        ttl_seconds=60,
+    )
+    verified = verify_preview_attestation(
+        token,
+        org_id="org-1",
+        asset_id="asset-1",
+        definition_hash="a" * 64,
+        schema_fingerprint="schema-1",
+        planner_version=native_version,
+        now=1_000,
+    )
+    assert verified.planner_version == native_version
+
+    with pytest.raises(AttestationError, match="does not match"):
+        verify_preview_attestation(
+            token,
+            org_id="org-1",
+            asset_id="asset-1",
+            definition_hash="a" * 64,
+            schema_fingerprint="schema-1",
+            planner_version=PLANNER_VERSION,
+            now=1_000,
+        )

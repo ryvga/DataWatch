@@ -1,4 +1,5 @@
 """Versioned, validation-only API for the safe monitor DSL."""
+
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -21,7 +22,7 @@ from app.services.monitor_attestation import (
     create_preview_attestation,
     verify_preview_attestation,
 )
-from app.services.monitor_compiler import PLANNER_VERSION, analyze_relational_support
+from app.services.monitor_compiler import PLANNER_VERSION
 from app.services.monitor_dsl import (
     MonitorDefinition,
     definition_hash,
@@ -30,10 +31,13 @@ from app.services.monitor_dsl import (
     predicate_stats,
 )
 from app.services.monitor_run_service import MonitorRunError, RunRequest, reserve_run
+from app.services.monitor_planning import analyze_monitor_support
 from app.services.schema_binding import SchemaBindingError, build_relation_binding
 
 router = APIRouter(prefix="/api/v2/monitors", tags=["monitor_dsl"])
 asset_router = APIRouter(prefix="/api/v2/assets", tags=["monitor_dsl"])
+
+
 class RevisionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: int = Field(alias="expectedRevision", ge=1)
@@ -48,14 +52,10 @@ class ActivationRequest(BaseModel):
 
 class ManualRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    client_idempotency_key: str = Field(
-        alias="clientIdempotencyKey", min_length=1, max_length=512
-    )
+    client_idempotency_key: str = Field(alias="clientIdempotencyKey", min_length=1, max_length=512)
 
 
-async def _resolve_target(
-    asset_id: UUID, org_id, db: AsyncSession
-) -> tuple[MonitoredTable, DataSource]:
+async def _resolve_target(asset_id: UUID, org_id, db: AsyncSession) -> tuple[MonitoredTable, DataSource]:
     row = (
         await db.execute(
             select(MonitoredTable, DataSource)
@@ -105,7 +105,7 @@ def _planning_result(
         }
     else:
         binding_fingerprint = relation.schema_fingerprint
-        compilation, compiled = analyze_relational_support(definition, relation=relation)
+        compilation, compiled = analyze_monitor_support(definition, relation=relation)
         plan = compiled.payload() if compiled else None
 
     issues.extend(compilation["issues"])
@@ -118,10 +118,10 @@ def _planning_result(
             }
         )
     unsupported = [issue["code"] for issue in issues]
-    compiled_runtime_supported = (
-        compilation["compilationSupported"]
-        and capabilities.get("compiled_monitors") == "internal_read_only"
-    )
+    compiled_runtime_supported = compilation["compilationSupported"] and capabilities.get("compiled_monitors") in {
+        "internal_read_only",
+        "internal_document_read_only",
+    }
     activation_issues = list(issues)
     if definition.spec.trigger.type == "interval":
         activation_issues.append(
@@ -210,9 +210,7 @@ def _monitor_payload(monitor: Monitor, revision: MonitorRevision) -> dict:
         "mode": monitor.mode,
         "status": monitor.status,
         "currentRevision": monitor.current_revision,
-        "activeRevisionId": (
-            str(monitor.active_revision_id) if monitor.active_revision_id else None
-        ),
+        "activeRevisionId": (str(monitor.active_revision_id) if monitor.active_revision_id else None),
         "definitionVersion": revision.definition_version,
         "definitionHash": revision.definition_hash,
         "definition": revision.definition,
@@ -264,9 +262,7 @@ def _run_payload(run: MonitorRun) -> dict:
 
 
 async def _get_monitor(monitor_id: UUID, org_id, db: AsyncSession) -> Monitor:
-    monitor = await db.scalar(
-        select(Monitor).where(Monitor.id == monitor_id, Monitor.org_id == org_id)
-    )
+    monitor = await db.scalar(select(Monitor).where(Monitor.id == monitor_id, Monitor.org_id == org_id))
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
     return monitor
@@ -313,7 +309,7 @@ async def preview_monitor_definition(
     )
     preview = {
         "status": "validation_only",
-        "plannerVersion": PLANNER_VERSION,
+        "plannerVersion": validation["capabilityPlan"]["plannerVersion"],
         "schemaFingerprint": binding_fingerprint,
     }
     if "compiledPlan" in validation:
@@ -323,6 +319,7 @@ async def preview_monitor_definition(
             asset_id=str(table.id),
             definition_hash=digest,
             schema_fingerprint=binding_fingerprint,
+            planner_version=validation["capabilityPlan"]["plannerVersion"],
         )
         preview.update(
             {
@@ -405,8 +402,7 @@ async def list_monitor_drafts(
             select(Monitor, MonitorRevision)
             .join(
                 MonitorRevision,
-                (MonitorRevision.monitor_id == Monitor.id)
-                & (MonitorRevision.revision == Monitor.current_revision),
+                (MonitorRevision.monitor_id == Monitor.id) & (MonitorRevision.revision == Monitor.current_revision),
             )
             .where(Monitor.org_id == org.id, Monitor.table_id == asset_id)
             .order_by(Monitor.created_at.desc())
@@ -605,6 +601,8 @@ async def activate_monitor(
         source,
         latest_schema_fingerprint,
     )
+    definition = load_persisted_definition(revision.definition)
+    capability_plan, compiled_plan, _ = _planning_result(definition, source, table, latest_schema_fingerprint)
     try:
         verify_preview_attestation(
             body.preview_attestation,
@@ -612,13 +610,10 @@ async def activate_monitor(
             asset_id=str(monitor.table_id),
             definition_hash=revision.definition_hash,
             schema_fingerprint=schema_fingerprint,
+            planner_version=capability_plan["plannerVersion"],
         )
     except AttestationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    definition = load_persisted_definition(revision.definition)
-    capability_plan, compiled_plan, _ = _planning_result(
-        definition, source, table, schema_fingerprint
-    )
     if not capability_plan["activationSupported"] or compiled_plan is None:
         raise HTTPException(
             status_code=409,
@@ -641,6 +636,6 @@ async def activate_monitor(
             "status": "active",
             "trigger": "on_profile",
             "schedule": "existing_table_profile_cadence",
-            "plannerVersion": PLANNER_VERSION,
+            "plannerVersion": capability_plan["plannerVersion"],
         },
     }

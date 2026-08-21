@@ -327,6 +327,24 @@ Cassandra follows the [driver security guidance](https://docs.datastax.com/en/de
 by combining a certificate-required `SSLContext` with `ssl_options.server_hostname`
 for identity verification.
 
+MongoDB typed monitors use a separate planner identity,
+`datawatch-v1alpha1-mongodb-1`; they are not coerced through the relational SQL/MD5
+contract. Compilation emits an immutable canonical three-stage pipeline: a mandatory
+`maxDocumentsScanned + 1` limit, one aggregate group, and one numeric projection. The
+extra document is a scan attestation: reaching it fails the run with
+`document_scan_budget_exceeded` instead of evaluating a partial measurement. Execution
+sets `allowDiskUse=false`, a single-result batch, a bounded `maxTimeMS`, exact configured
+database/collection scope, and an expression/stage allowlist. User strings are wrapped
+in `$literal`, so values such as `$$ROOT` cannot become aggregation references.
+
+The native planner supports row count, null/non-null, empty/whitespace, zero/negative,
+boolean, numeric/text-length/freshness aggregates, and bounded violation count/rate
+predicates. Distinct/duplicate metrics, metric filters, and string-pattern predicates
+remain explicit compilation blockers. Preview attestations include the native planner
+version; the same plan hash and sampled schema fingerprint are persisted on every run.
+The required Mongo service lane proves both capped execution and an end-to-end breach →
+incident → recovery transition.
+
 ### Redis native profile
 
 Redis is represented as one logical `dbN.keyspace` asset. Its native profiler walks a

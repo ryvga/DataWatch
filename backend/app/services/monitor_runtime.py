@@ -1,4 +1,5 @@
 """Fail-closed execution contract for internally compiled monitor plans."""
+
 from __future__ import annotations
 
 import math
@@ -9,10 +10,13 @@ from sqlglot import exp, parse
 
 from app.connectors.base import (
     BaseConnector,
+    DocumentScanBudgetExceeded,
     ScanBudgetExceeded,
     ScanBudgetUnsupported,
 )
+from app.services.document_monitor import DocumentMonitorPlan
 from app.services.monitor_compiler import RelationalMonitorPlan
+from app.services.monitor_planning import MonitorPlan
 from app.services.monitor_dsl import Policy, Predicate
 from app.services.monitor_evaluator import (
     PolicyState,
@@ -51,9 +55,7 @@ def _validate_execution_plan(
     plan: RelationalMonitorPlan,
 ) -> None:
     """Re-check the execution envelope independently from compilation."""
-    connector_dialect = getattr(connector, "monitor_dialect", None) or getattr(
-        connector, "profile_dialect", None
-    )
+    connector_dialect = getattr(connector, "monitor_dialect", None) or getattr(connector, "profile_dialect", None)
     if connector_dialect != plan.dialect:
         raise MonitorExecutionError(
             "connector_plan_mismatch",
@@ -76,20 +78,14 @@ def _validate_execution_plan(
             "statement_not_read_only",
             "Compiled monitor execution requires exactly one SELECT statement",
         )
-    if any(
-        isinstance(node, (exp.DDL, exp.DML))
-        for node in statements[0].walk()
-    ):
+    if any(isinstance(node, (exp.DDL, exp.DML)) for node in statements[0].walk()):
         raise MonitorExecutionError(
             "statement_not_read_only",
             "Compiled monitor statement contains a write operation",
         )
 
     tables = list(statements[0].find_all(exp.Table))
-    if len(tables) != 1 or (
-        tables[0].name != plan.relation.table_name
-        or tables[0].db != plan.relation.schema_name
-    ):
+    if len(tables) != 1 or (tables[0].name != plan.relation.table_name or tables[0].db != plan.relation.schema_name):
         raise MonitorExecutionError(
             "relation_contract_invalid",
             "Compiled monitor statement is not bound to its declared relation",
@@ -101,12 +97,7 @@ def _validate_execution_plan(
             "parameter_contract_invalid",
             "Compiled monitor parameter names must be unique",
         )
-    placeholders = list(
-        dict.fromkeys(
-            placeholder.name
-            for placeholder in statements[0].find_all(exp.Placeholder)
-        )
-    )
+    placeholders = list(dict.fromkeys(placeholder.name for placeholder in statements[0].find_all(exp.Placeholder)))
     if placeholders != expected_parameters:
         raise MonitorExecutionError(
             "parameter_contract_invalid",
@@ -119,8 +110,7 @@ def _validate_execution_plan(
         not output_columns
         or len(output_columns) != len(set(output_columns))
         or len(output_references) != len(set(output_references))
-        or [projection.alias for projection in statements[0].expressions]
-        != output_columns
+        or [projection.alias for projection in statements[0].expressions] != output_columns
     ):
         raise MonitorExecutionError(
             "result_contract_invalid",
@@ -191,14 +181,85 @@ async def execute_compiled_plan(
     return measurements
 
 
+async def execute_document_plan(
+    connector: BaseConnector,
+    plan: DocumentMonitorPlan,
+) -> dict:
+    """Execute one immutable bounded document plan and validate its scalar result."""
+    if plan.relation.source_type != "mongodb" or getattr(connector, "native_profile_kind", None) != "document":
+        raise MonitorExecutionError(
+            "connector_plan_mismatch",
+            "Document monitor plan does not match the connector",
+        )
+    if not 1 <= plan.timeout_seconds <= 120 or plan.max_documents_scanned < 1:
+        raise MonitorExecutionError(
+            "execution_contract_invalid",
+            "Document monitor execution bounds are invalid",
+        )
+    output_columns = [output.column for output in plan.outputs]
+    output_references = [output.reference for output in plan.outputs]
+    if (
+        not output_columns
+        or len(output_columns) != len(set(output_columns))
+        or len(output_references) != len(set(output_references))
+    ):
+        raise MonitorExecutionError(
+            "result_contract_invalid",
+            "Document monitor outputs must be present and unique",
+        )
+    try:
+        row = await connector.execute_document_monitor(plan)
+    except DocumentScanBudgetExceeded as exc:
+        raise MonitorExecutionError(
+            "document_scan_budget_exceeded",
+            "Document monitor reached maxDocumentsScanned",
+        ) from exc
+    except TimeoutError as exc:
+        raise MonitorExecutionError(
+            "execution_timeout",
+            "Document monitor exceeded its timeout",
+        ) from exc
+    except NotImplementedError as exc:
+        raise MonitorExecutionError(
+            "connector_execution_not_supported",
+            "Connector has no document monitor execution adapter",
+        ) from exc
+    except Exception as exc:
+        raise MonitorExecutionError(
+            "execution_failed",
+            f"Document monitor execution failed: {type(exc).__name__}",
+        ) from exc
+    if set(row) != set(output_columns):
+        raise MonitorExecutionError(
+            "result_shape_invalid",
+            "Document monitor returned unexpected result columns",
+        )
+    measurements = {}
+    for output in plan.outputs:
+        value = row[output.column]
+        if value is None and not output.nullable:
+            raise MonitorExecutionError(
+                "result_null_invalid",
+                f"Document monitor output cannot be null: {output.reference}",
+            )
+        measurements[output.reference] = None if value is None else _finite_number(value)
+    return measurements
+
+
+async def execute_monitor_plan(connector: BaseConnector, plan: MonitorPlan) -> dict:
+    if isinstance(plan, DocumentMonitorPlan):
+        return await execute_document_plan(connector, plan)
+    return await execute_compiled_plan(connector, plan)
+
+
 async def execute_and_evaluate_compiled_plan(
     connector: BaseConnector,
-    plan: RelationalMonitorPlan,
+    plan: MonitorPlan,
     *,
     previous_policy_state: PolicyState | None = None,
 ) -> dict:
     """Execute one internal plan and return its deterministic policy decision."""
-    measurements = await execute_compiled_plan(connector, plan)
+    measurements = await execute_monitor_plan(connector, plan)
     breach_when = Predicate.model_validate(plan.breach_when)
     policy = Policy.model_validate(plan.policy)
     breached = evaluate_breach(breach_when, measurements)
