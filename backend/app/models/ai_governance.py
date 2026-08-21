@@ -1,4 +1,4 @@
-"""Phase-one AI governance inventory and immutable audit records."""
+"""AI governance inventory, immutable evidence, and audit records."""
 
 from __future__ import annotations
 
@@ -269,6 +269,71 @@ class AIApproval(Base):
     )
 
 
+class AIEvidence(Base):
+    """Content-addressed, redacted evidence descriptor; never a raw-data payload."""
+
+    __tablename__ = "ai_evidence"
+    __table_args__ = (
+        UniqueConstraint("org_id", "idempotency_key", name="uq_ai_evidence_idempotency"),
+        UniqueConstraint("id", "org_id", "system_id", name="uq_ai_evidence_owner"),
+        ForeignKeyConstraint(
+            ["deployment_id", "org_id", "system_id"],
+            ["ai_deployments.id", "ai_deployments.org_id", "ai_deployments.system_id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["manifest_id", "org_id", "system_id"],
+            ["ai_release_manifests.id", "ai_release_manifests.org_id", "ai_release_manifests.system_id"],
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["data_use_revision_id", "org_id", "system_id"],
+            ["ai_data_use_revisions.id", "ai_data_use_revisions.org_id", "ai_data_use_revisions.system_id"],
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "evidence_class IN ('customer_assertion', 'connector_observation', 'signed_workload_event', 'reviewer_decision', 'external_assessment')",
+            name="ck_ai_evidence_class",
+        ),
+        CheckConstraint(
+            "redaction_class IN ('metadata_only', 'hashed', 'bounded_attachment')",
+            name="ck_ai_evidence_redaction",
+        ),
+        CheckConstraint(
+            "retention_class IN ('governance_indefinite', 'operational_365d', 'customer_policy')",
+            name="ck_ai_evidence_retention",
+        ),
+        CheckConstraint("valid_until IS NULL OR valid_until >= valid_from", name="ck_ai_evidence_validity"),
+        Index("ix_ai_evidence_system_collected", "system_id", "collected_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    system_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    deployment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    manifest_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    data_use_revision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    source_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("table_profiles.id", ondelete="RESTRICT"), nullable=True
+    )
+    evidence_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    evidence_class: Mapped[str] = mapped_column(String(32), nullable=False)
+    producer: Mapped[str] = mapped_column(String(120), nullable=False)
+    descriptor: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    provenance: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    evaluator_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    redaction_class: Mapped[str] = mapped_column(String(32), nullable=False, default="metadata_only")
+    retention_class: Mapped[str] = mapped_column(String(32), nullable=False, default="governance_indefinite")
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
 class AIControlEvaluation(Base):
     __tablename__ = "ai_control_evaluations"
     __table_args__ = (
@@ -289,6 +354,11 @@ class AIControlEvaluation(Base):
             ["ai_data_use_revisions.id", "ai_data_use_revisions.org_id", "ai_data_use_revisions.system_id"],
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["evidence_id", "org_id", "system_id"],
+            ["ai_evidence.id", "ai_evidence.org_id", "ai_evidence.system_id"],
+            ondelete="RESTRICT",
+        ),
         CheckConstraint(
             "status IN ('pass', 'fail', 'unknown', 'unsupported', 'not_applicable', 'error')",
             name="ck_ai_control_evaluation_status",
@@ -306,6 +376,7 @@ class AIControlEvaluation(Base):
     deployment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     manifest_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     data_use_revision_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    evidence_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     control_id: Mapped[str] = mapped_column(String(80), nullable=False)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     evidence_class: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -359,7 +430,14 @@ class AIGovernanceIncident(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-_IMMUTABLE = (AISystemVersion, AIDataUseRevision, AIReleaseManifest, AIApproval, AIControlEvaluation)
+_IMMUTABLE = (
+    AISystemVersion,
+    AIDataUseRevision,
+    AIReleaseManifest,
+    AIApproval,
+    AIEvidence,
+    AIControlEvaluation,
+)
 
 
 def _reject_immutable_mutation(_mapper, _connection, target) -> None:

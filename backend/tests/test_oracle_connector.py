@@ -404,7 +404,7 @@ async def test_oracle_api_onboarding_worker_profile_and_persisted_retrieval(
         "app.tasks.run_anomaly_checks"
     ) as anomaly, patch("app.tasks.run_custom_monitors") as custom, patch(
         "app.tasks.run_dsl_monitors"
-    ) as dsl:
+    ) as dsl, patch("app.tasks.evaluate_ai_governance_for_table") as governance:
         from app.tasks import _profile_table_async
 
         result = await _profile_table_async(table_id)
@@ -414,6 +414,7 @@ async def test_oracle_api_onboarding_worker_profile_and_persisted_retrieval(
     anomaly.delay.assert_called_once()
     custom.delay.assert_called_once()
     dsl.delay.assert_called_once()
+    governance.delay.assert_called_once_with(table_id, result["profile_id"])
 
     retrieved = await client.get(f"/api/v1/tables/{table_id}", headers=auth_headers)
     assert retrieved.status_code == 200, retrieved.text

@@ -212,12 +212,13 @@ CQL outside connector execution paths until typed native planners exist.
 
 ## Testing
 
-### AI governance phase-one proof
+### AI governance phases one and two proof
 
 ```bash
 # API, tenancy, manifest replay, CAS, control semantics, incident dedupe
 cd backend
 venv/bin/pytest -q tests/test_ai_governance_phase1.py
+venv/bin/pytest -q tests/test_ai_governance_phase2.py
 
 # Full backend regression
 venv/bin/pytest -q tests
@@ -238,6 +239,12 @@ docker exec datawatch-postgres-1 dropdb -U datawatch datawatch_aigov_migration_t
 unauthorized effective role, missing embedding, and failed deletion propagation. Fixture
 evidence includes `fixture: true`; do not present it as an independently observed production
 fact. Use `POST /api/v1/ai/deployments/{id}/evaluate` for connector-backed evidence.
+Successful profiles also enqueue the same evaluator with `profile-{profile_id}`; inspect
+`ai_evidence` to verify producer, validity, provenance, redaction, retention, and content
+hashes. `scripts/quickstart.py --reset --local` is the explicit local-only purge path for
+these append-only jury fixtures. It disables triggers only inside its reset transaction,
+deletes governance rows in dependency order, restores enforcement, and reseeds; do not
+reuse that mechanism as a production retention workflow.
 The Compose source credentials (`readonly_user`, `analytics_ro`) are intentionally
 different from the bootstrap owners (`acme_admin`, `analytics_admin`) and must remain
 `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`, and table-`SELECT` only.

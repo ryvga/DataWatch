@@ -1,4 +1,4 @@
-"""Deterministic phase-one AI governance contracts and evaluators."""
+"""Deterministic AI governance contracts, controls, evidence, and risk summaries."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-EVALUATOR_VERSION = "aigov-phase1/1.0.0"
+EVALUATOR_VERSION = "aigov-phase2/2.0.0"
 MANIFEST_SCHEMA_VERSION = "datawatch.io/aigov-manifest/v1"
 TERMINAL_STATUSES = {"pass", "fail", "unknown", "unsupported", "not_applicable", "error"}
 
@@ -196,6 +196,196 @@ def evaluate_schema_freshness(data_use, profile, *, maximum_age_seconds: int) ->
         expected={"schemaFingerprint": data_use.schema_fingerprint, "maximumAgeSeconds": maximum_age_seconds},
         data_use_revision_id=str(data_use.id),
     )
+
+
+def _aware(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+def evaluate_evidence_age(
+    data_use,
+    profile,
+    *,
+    maximum_age_seconds: int,
+    now: datetime | None = None,
+) -> ControlResult:
+    now = _aware(now or datetime.now(UTC))
+    if profile is None:
+        return ControlResult(
+            control_id="evidence-age",
+            status="unknown",
+            evidence_class="connector_observation",
+            reason_code="evidence_unavailable",
+            observed={"available": False},
+            expected={"maximumAgeSeconds": maximum_age_seconds},
+            data_use_revision_id=str(data_use.id),
+        )
+    age_seconds = max(0, int((now - _aware(profile.collected_at)).total_seconds()))
+    status = "pass" if age_seconds <= maximum_age_seconds else "fail"
+    return ControlResult(
+        control_id="evidence-age",
+        status=status,
+        evidence_class="connector_observation",
+        reason_code="evidence_current" if status == "pass" else "evidence_stale",
+        observed={
+            "profileId": str(profile.id),
+            "collectedAt": _aware(profile.collected_at).isoformat(),
+            "ageSeconds": age_seconds,
+        },
+        expected={"maximumAgeSeconds": maximum_age_seconds},
+        data_use_revision_id=str(data_use.id),
+    )
+
+
+def evaluate_data_quality(data_use, profile) -> ControlResult:
+    observed: dict[str, Any]
+    if profile is None:
+        status, reason, observed = "unknown", "profile_unavailable", {"available": False}
+    elif profile.error:
+        status, reason = "error", "profile_collection_error"
+        observed = {"profileId": str(profile.id), "errorType": "profile_error"}
+    elif profile.row_count is None:
+        status, reason = "unknown", "row_count_unavailable"
+        observed = {"profileId": str(profile.id), "rowCountAvailable": False}
+    else:
+        status = "pass" if int(profile.row_count) > 0 else "fail"
+        reason = "profile_quality_available" if status == "pass" else "empty_data_asset"
+        observed = {
+            "profileId": str(profile.id),
+            "rowCount": int(profile.row_count),
+            "profileMode": (profile.profile_provenance or {}).get("mode", "unknown"),
+        }
+    return ControlResult(
+        control_id="data-quality-evidence",
+        status=status,
+        evidence_class="connector_observation",
+        reason_code=reason,
+        observed=observed,
+        expected={"successfulProfile": True, "minimumRows": 1},
+        data_use_revision_id=str(data_use.id),
+    )
+
+
+_SENSITIVITY_RANK = {"public": 0, "internal": 1, "confidential": 2, "restricted": 3}
+
+
+def evaluate_sensitivity(data_use, field_sensitivity: dict | None) -> ControlResult:
+    declared_fields = sorted(set(data_use.fields or []))
+    classifications = field_sensitivity or {}
+    missing = sorted(field for field in declared_fields if field not in classifications)
+    invalid = sorted(
+        field for field in declared_fields
+        if field in classifications and classifications[field] not in _SENSITIVITY_RANK
+    )
+    ceiling = data_use.sensitivity_ceiling
+    over_ceiling = sorted(
+        field for field in declared_fields
+        if classifications.get(field) in _SENSITIVITY_RANK
+        and _SENSITIVITY_RANK[classifications[field]] > _SENSITIVITY_RANK[ceiling]
+    )
+    if missing or invalid:
+        status, reason = "unknown", "field_classification_incomplete"
+    elif over_ceiling:
+        status, reason = "fail", "sensitivity_ceiling_exceeded"
+    else:
+        status, reason = "pass", "sensitivity_within_declared_ceiling"
+    return ControlResult(
+        control_id="sensitivity-boundary",
+        status=status,
+        evidence_class="customer_assertion",
+        reason_code=reason,
+        observed={
+            "classifiedFields": sorted(classifications),
+            "missingFields": missing,
+            "invalidFields": invalid,
+            "overCeilingFields": over_ceiling,
+        },
+        expected={"ceiling": ceiling, "fields": declared_fields},
+        data_use_revision_id=str(data_use.id),
+    )
+
+
+def evaluate_purpose_declaration(data_use) -> ControlResult:
+    present = {
+        "purpose": bool(data_use.purpose.strip()),
+        "necessity": bool(data_use.necessity.strip()),
+        "steward": bool(data_use.steward.strip()),
+        "fields": bool(data_use.fields),
+    }
+    status = "pass" if all(present.values()) else "fail"
+    return ControlResult(
+        control_id="purpose-declaration",
+        status=status,
+        evidence_class="customer_assertion",
+        reason_code="purpose_declaration_complete" if status == "pass" else "purpose_declaration_incomplete",
+        observed=present,
+        expected={"allRequired": True},
+        data_use_revision_id=str(data_use.id),
+    )
+
+
+def evidence_descriptor(result: ControlResult) -> tuple[dict, str]:
+    descriptor = {
+        "controlId": result.control_id,
+        "evidenceClass": result.evidence_class,
+        "reasonCode": result.reason_code,
+        "observed": result.observed,
+        "expected": result.expected,
+        "evaluatorVersion": EVALUATOR_VERSION,
+    }
+    return descriptor, canonical_hash(descriptor)
+
+
+def governance_risk_summary(system, data_uses: list, results: list[ControlResult]) -> dict:
+    autonomy = {"assistive": 10, "human_reviewed": 20, "semi_autonomous": 40, "autonomous": 60}
+    components = {
+        "autonomy": autonomy.get(system.autonomy_level, 30),
+        "production": 20 if system.lifecycle_status == "production" else 5,
+        "affectedPopulation": 10 if system.affected_population else 0,
+        "dataSensitivity": max(
+            (_SENSITIVITY_RANK.get(item.sensitivity_ceiling, 1) * 5 for item in data_uses),
+            default=0,
+        ),
+    }
+    inherent = min(100, sum(components.values()))
+    applicable = [result for result in results if result.status != "not_applicable"]
+    passing = [result for result in applicable if result.status == "pass"]
+    conclusive = [result for result in applicable if result.status in {"pass", "fail"}]
+    coverage = round(100 * len(conclusive) / len(applicable), 1) if applicable else 0.0
+    confidence_weights = {
+        "pass": 1.0,
+        "fail": 1.0,
+        "error": 0.25,
+        "unknown": 0.0,
+        "unsupported": 0.0,
+    }
+    confidence = (
+        round(100 * sum(confidence_weights.get(item.status, 0.0) for item in applicable) / len(applicable), 1)
+        if applicable else 0.0
+    )
+    pass_ratio = len(passing) / len(applicable) if applicable else 0.0
+    residual = round(min(100, inherent * (1 - 0.65 * pass_ratio) + (100 - confidence) * 0.15), 1)
+    statuses = {result.status for result in applicable}
+    if "fail" in statuses or "error" in statuses:
+        headline = "action_required"
+    elif statuses & {"unknown", "unsupported"}:
+        headline = "evidence_gap"
+    elif applicable:
+        headline = "observed_healthy"
+    else:
+        headline = "not_assessed"
+    return {
+        "headlineStatus": headline,
+        "inherentRisk": {"score": inherent, "components": components},
+        "controlCoveragePercent": coverage,
+        "evidenceConfidencePercent": confidence,
+        "residualRiskScore": residual,
+        "reasons": [
+            {"controlId": result.control_id, "status": result.status, "reasonCode": result.reason_code}
+            for result in results
+            if result.status not in {"pass", "not_applicable"}
+        ],
+    }
 
 
 def evaluate_privileges(data_use, observation: dict | None, *, supported: bool) -> ControlResult:

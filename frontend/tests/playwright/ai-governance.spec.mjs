@@ -40,9 +40,17 @@ const detail = {
   versions: [{ id: inventory[0].currentVersionId, versionNumber: 1, definitionHash: 'a'.repeat(64), definition: {}, changeRationale: 'Initial release' }],
   deployments: [{ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', environment: 'production', region: 'ma', status: 'observing', activeManifestId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', activeManifestHash: 'b'.repeat(64), activationGeneration: 1 }],
   dataUses: [{ id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', versionId: inventory[0].currentVersionId, ordinal: 1, evidenceClass: 'customer_assertion', definitionHash: 'c'.repeat(64), definition: { useKind: 'rag', fields: ['document_id', 'body'], schemaFingerprint: 'd'.repeat(64) } }],
+  governanceSummary: {
+    headlineStatus: 'action_required',
+    inherentRisk: { score: 45, components: { autonomy: 10, production: 20, affectedPopulation: 10, dataSensitivity: 5 } },
+    controlCoveragePercent: 100,
+    evidenceConfidencePercent: 100,
+    residualRiskScore: 37.7,
+    reasons: [{ controlId: 'vector-consistency', status: 'fail', reasonCode: 'vector_consistency_violation' }],
+  },
   evidenceTimeline: [
-    { id: 'eval-1', controlId: 'vector-consistency', status: 'fail', evidenceClass: 'connector_observation', reasonCode: 'vector_consistency_violation', inputHash: 'e'.repeat(64), createdAt: '2026-08-21T12:00:00Z' },
-    { id: 'eval-2', controlId: 'ownership-assertion', status: 'pass', evidenceClass: 'customer_assertion', reasonCode: 'ownership_complete', inputHash: 'f'.repeat(64), createdAt: '2026-08-21T11:59:00Z' },
+    { id: 'eval-1', evidenceId: 'evidence-1', controlId: 'vector-consistency', status: 'fail', evidenceClass: 'connector_observation', reasonCode: 'vector_consistency_violation', inputHash: 'e'.repeat(64), createdAt: '2026-08-21T12:00:00Z' },
+    { id: 'eval-2', evidenceId: 'evidence-2', controlId: 'ownership-assertion', status: 'pass', evidenceClass: 'customer_assertion', reasonCode: 'ownership_complete', inputHash: 'f'.repeat(64), createdAt: '2026-08-21T11:59:00Z' },
     { id: 'review-1', controlId: 'release-review', status: 'noted', evidenceClass: 'reviewer_decision', reasonCode: 'reviewer_attestation_recorded', inputHash: '1'.repeat(64), createdAt: '2026-08-21T11:58:00Z' },
   ],
   incidents: [{ id: 'incident-1', controlId: 'vector-consistency', severity: 'P2', status: 'open', title: 'AI governance control failed', createdAt: '2026-08-21T12:00:00Z' }],
@@ -69,12 +77,16 @@ async function run() {
     await page.waitForURL(`${BASE_URL}/ai-systems/${SYSTEM_ID}`, { timeout: 30000 })
     await page.getByText('Declared data map').waitFor({ timeout: 30000 })
     await page.getByText('Evidence timeline').waitFor({ timeout: 30000 })
+    await page.getByText('Why this status?').waitFor({ timeout: 30000 })
+    assert(await page.getByText('action required').isVisible(), 'Headline governance status must be visible')
+    assert(await page.getByText('100%', { exact: true }).first().isVisible(), 'Evidence confidence must be visible')
+    assert(await page.getByText(/evidence evidence/).first().isVisible(), 'Evaluations must link to evidence IDs')
     assert(await page.getByText('customer_assertion').first().isVisible(), 'Customer assertions must be visibly labeled')
     assert(await page.getByText('connector_observation').first().isVisible(), 'Connector observations must be visibly labeled')
     assert(await page.getByText('reviewer_decision').first().isVisible(), 'Reviewer decisions must be visibly labeled')
     assert((await page.getByText('Observe only').count()) > 0, 'Observe-only boundary must be visible')
     assert(Object.values(diagnostics).every((items) => items.length === 0), `Browser diagnostics are not empty: ${JSON.stringify(diagnostics)}`)
-    console.log(JSON.stringify({ status: 'passed', checked: ['inventory-work-queue', 'system-detail', 'data-map', 'evidence-provenance', 'observe-only-boundary'], diagnostics }, null, 2))
+    console.log(JSON.stringify({ status: 'passed', checked: ['inventory-work-queue', 'system-detail', 'data-map', 'headline-risk-reasons', 'evidence-confidence', 'evidence-provenance', 'observe-only-boundary'], diagnostics }, null, 2))
   } catch (error) {
     await page.screenshot({ path: '/tmp/ai-governance-failure.png', fullPage: true }).catch(() => {})
     console.error(JSON.stringify({ status: 'failed', message: error.message, url: page.url(), body: (await page.locator('body').innerText().catch(() => '')).slice(0, 4000), diagnostics }, null, 2))

@@ -489,6 +489,28 @@ def seed_ai_governance_jury_scenarios(conn, org_id, table_ids: dict):
     with conn.cursor() as cur:
         cur.execute("SELECT source_id FROM monitored_tables WHERE id = %s", (str(table_id),))
         source_id = cur.fetchone()[0]
+        cur.execute(
+            """
+            UPDATE monitored_tables
+            SET check_config = COALESCE(check_config, '{}'::jsonb) || %s::jsonb
+            WHERE id = %s
+            """,
+            (
+                json.dumps(
+                    {
+                        "governance": {
+                            "fieldSensitivity": {
+                                "id": "internal",
+                                "name": "public",
+                                "description": "internal",
+                                "updated_at": "public",
+                            }
+                        }
+                    }
+                ),
+                str(table_id),
+            ),
+        )
         cur.execute("SELECT schema_fingerprint FROM table_profiles WHERE table_id = %s AND schema_fingerprint IS NOT NULL ORDER BY collected_at DESC LIMIT 1", (str(table_id),))
         row = cur.fetchone()
         fingerprint = row[0] if row else "fixture-schema-unknown"
@@ -567,16 +589,39 @@ def seed_ai_governance_jury_scenarios(conn, org_id, table_ids: dict):
         ]
         for control_id, reason, observed, expected in scenarios:
             evaluation_id = uid(f"evaluation:{control_id}")
+            evidence_id = uid(f"evidence:{control_id}")
             incident_id = uid(f"incident:{control_id}")
             input_hash = hashlib.sha256(json.dumps({"observed": observed, "expected": expected, "fixture": True}, sort_keys=True).encode()).hexdigest()
             idem = hashlib.sha256(f"jury:{manifest_hash}:{control_id}".encode()).hexdigest()
+            descriptor = {
+                "controlId": control_id,
+                "evidenceClass": "connector_observation",
+                "reasonCode": reason,
+                "observed": {**observed, "fixture": True},
+                "expected": expected,
+                "evaluatorVersion": "aigov-jury-fixture/2.0",
+            }
+            content_hash = hashlib.sha256(json.dumps(descriptor, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            evidence_idem = hashlib.sha256(f"jury-evidence:{manifest_hash}:{control_id}".encode()).hexdigest()
+            cur.execute("""
+                INSERT INTO ai_evidence (id, org_id, system_id, deployment_id, manifest_id,
+                    data_use_revision_id, evidence_type, evidence_class, producer, descriptor,
+                    provenance, content_hash, evaluator_version, redaction_class,
+                    retention_class, valid_from, valid_until, collected_at, idempotency_key)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'connector_observation','jury-fixture',%s,%s,%s,
+                    'aigov-jury-fixture/2.0','metadata_only','governance_indefinite',NOW(),
+                    NOW() + INTERVAL '24 hours',NOW(),%s) ON CONFLICT DO NOTHING
+            """, (str(evidence_id), str(org_id), str(system_id), str(deployment_id),
+                  str(manifest_id), str(data_use_id), control_id, json.dumps(descriptor),
+                  json.dumps({"fixture": True, "manifestHash": manifest_hash}), content_hash,
+                  evidence_idem))
             cur.execute("""
                 INSERT INTO ai_control_evaluations (id, org_id, system_id, deployment_id,
-                    manifest_id, data_use_revision_id, control_id, status, evidence_class,
+                    manifest_id, data_use_revision_id, evidence_id, control_id, status, evidence_class,
                     observed, expected, reason_code, evaluator_version, input_hash, idempotency_key)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'fail','connector_observation',%s,%s,%s,
-                    'aigov-jury-fixture/1.0',%s,%s) ON CONFLICT DO NOTHING
-            """, (str(evaluation_id), str(org_id), str(system_id), str(deployment_id), str(manifest_id), str(data_use_id), control_id, json.dumps({**observed, "fixture": True}), json.dumps(expected), reason, input_hash, idem))
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'fail','connector_observation',%s,%s,%s,
+                    'aigov-jury-fixture/2.0',%s,%s) ON CONFLICT DO NOTHING
+            """, (str(evaluation_id), str(org_id), str(system_id), str(deployment_id), str(manifest_id), str(data_use_id), str(evidence_id), control_id, json.dumps({**observed, "fixture": True}), json.dumps(expected), reason, input_hash, idem))
             dedupe = hashlib.sha256(f"jury:{deployment_id}:{control_id}".encode()).hexdigest()
             cur.execute("""
                 INSERT INTO ai_governance_incidents (id, org_id, system_id, deployment_id,
@@ -1131,7 +1176,27 @@ def run_reset(use_local: bool = False):
     conn = db_conn()
     slugs = [ws["slug"] for ws in WORKSPACES]
     with conn.cursor() as cur:
-        # Delete orgs (cascades to users, sources, tables, profiles, incidents, alerts)
+        # Governance audit rows intentionally RESTRICT tenant deletion and reject ordinary
+        # mutations. This explicit local-only reset is the authorized destructive path for
+        # deterministic jury fixtures; production needs a separate export/purge workflow.
+        cur.execute("SELECT id FROM organizations WHERE slug = ANY(%s)", (slugs,))
+        org_ids = [row[0] for row in cur.fetchall()]
+        if org_ids:
+            cur.execute("SET LOCAL session_replication_role = replica")
+            for table in (
+                "ai_governance_incidents",
+                "ai_control_evaluations",
+                "ai_evidence",
+                "ai_approvals",
+                "ai_deployments",
+                "ai_release_manifests",
+                "ai_data_use_revisions",
+                "ai_system_versions",
+                "ai_systems",
+            ):
+                cur.execute(f"DELETE FROM {table} WHERE org_id = ANY(%s::uuid[])", (org_ids,))
+            cur.execute("SET LOCAL session_replication_role = origin")
+        # Delete orgs (cascades through the non-governance demo data).
         cur.execute("DELETE FROM organizations WHERE slug = ANY(%s)", (slugs,))
         cur.execute("DELETE FROM staff_users WHERE email=%s", (STAFF_EMAIL,))
     conn.commit()

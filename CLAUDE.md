@@ -124,7 +124,7 @@ POST /tables → scheduler.add_job()
 
 ---
 
-## Database Schema (28 tables)
+## Database Schema (29 tables)
 
 | Table | Purpose |
 |---|---|
@@ -154,6 +154,7 @@ POST /tables → scheduler.add_job()
 | `ai_release_manifests` | Immutable content-addressed release context and evidence cutoff |
 | `ai_deployments` | Environment/region posture and CAS-protected active manifest |
 | `ai_approvals` | Append-only non-gating reviewer attestations and evidence snapshot hashes |
+| `ai_evidence` | Immutable metadata-only evidence descriptors, provenance, validity, content hashes, and retention |
 | `ai_control_evaluations` | Immutable typed control results with evidence provenance and replay hash |
 | `ai_governance_incidents` | Deduplicated observe-mode governance failures routed through alerts |
 
@@ -437,7 +438,7 @@ The project is in **MVP SaaS state**. Completed milestones:
 6. **AI features** — incident explanations, monitor recommender, natural language → SQL rule builder
 7. **Frontend** — Overview, Tables, Monitors, Incidents, Incident Detail, Reports, Billing, Teams, assignments, notifications, and natural-language monitor UI
 8. **Security** — HKDF per-org Fernet keys, login never reveals workspace existence, admin subdomain env-only
-9. **AI governance phase one** — tenant-safe AI inventory, append-only versions/data-use/manifests/evaluations, PostgreSQL/pgvector supply-chain controls, CAS manifest activation, evidence timeline, governance incidents, existing alert routing, and seeded PFE scenarios; strictly observe-only
+9. **AI governance phases one and two** — tenant-safe AI inventory, append-only versions/data-use/manifests/evaluations/evidence, PostgreSQL/pgvector supply-chain controls, profile-cadence refresh, CAS manifest activation, explainable risk/confidence, governance incidents, existing alert routing, and seeded PFE scenarios; strictly observe-only
 
 **To run locally:**
 

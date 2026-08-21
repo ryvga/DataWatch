@@ -537,7 +537,7 @@ Query params: `limit` (default 100, max 500), `cursor`
 
 ---
 
-## AI Governance Phase One — `/api/v1/ai`
+## AI Governance Phases One and Two — `/api/v1/ai`
 
 All routes require a workspace JWT and return `404` for cross-tenant identities. Phase one
 is observe-only: activation records an exact manifest context but never blocks an external
@@ -553,14 +553,22 @@ deployment.
 | `POST` | `/release-manifests/{id}/reviews` | Append a non-gating reviewer decision and evidence snapshot hash |
 | `POST` | `/systems/{id}/deployments` | Register an environment/region/workload identity hash |
 | `POST` | `/deployments/{id}/activate-manifest` | Compare-and-swap the exact manifest ID/hash and activation generation |
-| `POST` | `/deployments/{id}/evaluate` | Run deterministic ownership, schema/freshness, role/grant, and vector controls |
-| `GET` | `/systems/{id}/evidence` | Return up to 250 append-only terminal results with evidence class and replay hash |
+| `POST` | `/deployments/{id}/evaluate` | Run deterministic ownership, purpose, schema/freshness, data quality, evidence age, sensitivity, role/grant, and vector controls |
+| `GET` | `/systems/{id}/evidence` | Return up to 250 evaluations joined to immutable evidence hashes, validity, provenance, redaction, and retention |
 
 Activation requires `manifest_id`, the same 64-character `manifest_hash`,
 `expected_generation`, and the expected previous active hash. A stale writer receives
 `409`. Evaluation requires a client idempotency key and accepts bounded timeout and scan
 budget values. Results preserve six distinct states: `pass`, `fail`, `unknown`,
 `unsupported`, `not_applicable`, and `error`.
+
+Each new evaluation includes `evidenceId` and `validUntil`. The deployment response and
+system detail include `governanceSummary`: `headlineStatus`, explainable inherent-risk
+components, control coverage, evidence confidence, residual risk, and exact non-passing
+control reasons. `unknown`, stale, unavailable, or unsupported evidence is never counted as
+passing. Reusing the same client key and manifest deterministically replays both evaluation
+and evidence IDs. A successful profile automatically uses `profile-{profile_id}` and refreshes
+every active manifest bound to that asset within its monitoring interval.
 
 For a PostgreSQL RAG declaration, `vector_contract` identifies only verified schema fields
 and another monitored table on the same source. The connector runs one read-only aggregate,

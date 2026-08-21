@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
@@ -20,6 +20,7 @@ from app.models.ai_governance import (
     AIApproval,
     AIDataUseRevision,
     AIDeployment,
+    AIEvidence,
     AIGovernanceIncident,
     AIReleaseManifest,
     AISystem,
@@ -33,14 +34,21 @@ from app.models.user import User
 from app.routers.auth import get_current_user_from_jwt
 from app.services.ai_governance import (
     EVALUATOR_VERSION,
+    ControlResult,
     build_data_use_definition,
     build_release_manifest,
     build_version_definition,
     canonical_hash,
+    evidence_descriptor,
+    evaluate_data_quality,
+    evaluate_evidence_age,
     evaluate_ownership,
     evaluate_privileges,
+    evaluate_purpose_declaration,
     evaluate_schema_freshness,
+    evaluate_sensitivity,
     evaluate_vector_consistency,
+    governance_risk_summary,
     reject_sensitive_payload,
 )
 from app.services.crypto import decrypt_config
@@ -265,20 +273,39 @@ async def get_system(
     evaluations = (await db.scalars(select(AIControlEvaluation).where(AIControlEvaluation.system_id == system.id).order_by(desc(AIControlEvaluation.created_at)).limit(100))).all()
     approvals = (await db.scalars(select(AIApproval).where(AIApproval.system_id == system.id).order_by(desc(AIApproval.created_at)).limit(100))).all()
     incidents = (await db.scalars(select(AIGovernanceIncident).where(AIGovernanceIncident.system_id == system.id).order_by(desc(AIGovernanceIncident.created_at)))).all()
+    evidence = (await db.scalars(select(AIEvidence).where(AIEvidence.system_id == system.id).order_by(desc(AIEvidence.collected_at)).limit(250))).all()
     payload = _system_payload(system, open_failures=sum(item.status != "resolved" for item in incidents))
     timeline = [
-        {"id": str(e.id), "kind": "control_evaluation", "controlId": e.control_id, "status": e.status, "evidenceClass": e.evidence_class, "reasonCode": e.reason_code, "observed": e.observed, "expected": e.expected, "inputHash": e.input_hash, "createdAt": e.created_at}
+        {"id": str(e.id), "kind": "control_evaluation", "controlId": e.control_id, "status": e.status, "evidenceId": str(e.evidence_id) if e.evidence_id else None, "evidenceClass": e.evidence_class, "reasonCode": e.reason_code, "observed": e.observed, "expected": e.expected, "inputHash": e.input_hash, "createdAt": e.created_at}
         for e in evaluations
     ] + [
         {"id": str(a.id), "kind": "review", "controlId": "release-review", "status": a.decision, "evidenceClass": a.evidence_class, "reasonCode": "reviewer_attestation_recorded", "observed": {"reviewerRole": a.reviewer_role, "rationale": a.rationale}, "expected": {}, "inputHash": a.evidence_snapshot_hash, "createdAt": a.created_at}
         for a in approvals
     ]
     timeline.sort(key=lambda item: item["createdAt"], reverse=True)
+    latest_by_control = {}
+    for evaluation in evaluations:
+        key = (evaluation.control_id, evaluation.data_use_revision_id)
+        latest_by_control.setdefault(key, evaluation)
+    latest_results = [
+        ControlResult(
+            control_id=item.control_id,
+            status=item.status,
+            evidence_class=item.evidence_class,
+            reason_code=item.reason_code,
+            observed=item.observed,
+            expected=item.expected,
+            data_use_revision_id=str(item.data_use_revision_id) if item.data_use_revision_id else None,
+        )
+        for item in latest_by_control.values()
+    ]
     payload.update({
         "versions": [{"id": str(v.id), "versionNumber": v.version_number, "definitionHash": v.definition_hash, "definition": v.definition, "changeRationale": v.change_rationale, "createdAt": v.created_at} for v in versions],
         "deployments": [{"id": str(d.id), "environment": d.environment, "region": d.region, "status": d.status, "activeManifestId": str(d.active_manifest_id) if d.active_manifest_id else None, "activeManifestHash": d.active_manifest_hash, "activationGeneration": d.activation_generation} for d in deployments],
         "dataUses": [{"id": str(item.id), "versionId": str(item.version_id), "ordinal": item.ordinal, "definition": item.canonical_definition, "definitionHash": item.definition_hash, "evidenceClass": item.evidence_class, "createdAt": item.created_at} for item in data_uses],
         "evidenceTimeline": timeline,
+        "evidence": [{"id": str(item.id), "type": item.evidence_type, "evidenceClass": item.evidence_class, "contentHash": item.content_hash, "producer": item.producer, "redactionClass": item.redaction_class, "retentionClass": item.retention_class, "validFrom": item.valid_from, "validUntil": item.valid_until, "collectedAt": item.collected_at, "provenance": item.provenance} for item in evidence],
+        "governanceSummary": governance_risk_summary(system, list(data_uses), latest_results),
         "incidents": [{"id": str(i.id), "controlId": i.control_id, "severity": i.severity, "status": i.status, "title": i.title, "createdAt": i.created_at} for i in incidents],
     })
     return payload
@@ -513,18 +540,38 @@ async def evaluate_deployment(
     data_use_ids = [UUID(item["id"]) for item in manifest.canonical_manifest["dataUses"]]
     data_uses = (await db.scalars(select(AIDataUseRevision).where(AIDataUseRevision.id.in_(data_use_ids), AIDataUseRevision.org_id == org.id))).all()
     results = [evaluate_ownership(system)]
+    profiles_by_use: dict[UUID, TableProfile | None] = {}
+    sources_by_use: dict[UUID, DataSource | None] = {}
     for data_use in data_uses:
         source = await db.scalar(select(DataSource).where(DataSource.id == data_use.source_id, DataSource.org_id == org.id))
-        profile = await db.scalar(select(TableProfile).where(TableProfile.table_id == data_use.table_id, TableProfile.collected_at <= manifest.evidence_cutoff).order_by(desc(TableProfile.collected_at)).limit(1))
+        profile = await db.scalar(select(TableProfile).where(TableProfile.table_id == data_use.table_id).order_by(desc(TableProfile.collected_at)).limit(1))
+        table = await db.scalar(select(MonitoredTable).where(MonitoredTable.id == data_use.table_id))
+        profiles_by_use[data_use.id] = profile
+        sources_by_use[data_use.id] = source
         observation = None
         observation_error = None
-        if source and source.type == "postgres" and data_use.use_kind == "rag":
+        connector_supported = bool(
+            source
+            and source.type == "postgres"
+            and not (data_use.vector_contract or {}).get("fixture")
+        )
+        if connector_supported and data_use.use_kind == "rag":
             try:
                 observation = await _connector_observation(data_use, source, db, org.id, body)
             except Exception as exc:
                 observation_error = type(exc).__name__
         maximum_age = int((data_use.vector_contract or {}).get("maximum_freshness_seconds", 86400))
-        results.append(evaluate_schema_freshness(data_use, profile, maximum_age_seconds=maximum_age))
+        results.extend([
+            evaluate_purpose_declaration(data_use),
+            evaluate_schema_freshness(data_use, profile, maximum_age_seconds=maximum_age),
+            evaluate_data_quality(data_use, profile),
+            evaluate_evidence_age(data_use, profile, maximum_age_seconds=maximum_age),
+            evaluate_sensitivity(
+                data_use,
+                ((table.check_config or {}).get("governance") or {}).get("fieldSensitivity")
+                if table else None,
+            ),
+        ])
         if observation_error:
             results.extend([
                 type(evaluate_privileges(data_use, None, supported=True))(
@@ -535,15 +582,60 @@ async def evaluate_deployment(
                 ),
             ])
         else:
-            results.append(evaluate_privileges(data_use, observation, supported=bool(source and source.type == "postgres")))
-            results.append(evaluate_vector_consistency(data_use, observation, supported=bool(source and source.type == "postgres")))
+            results.append(evaluate_privileges(data_use, observation, supported=connector_supported))
+            results.append(evaluate_vector_consistency(data_use, observation, supported=connector_supported))
     persisted = []
     created_incident_ids = []
+    now = datetime.now(UTC)
     for result in results:
         idem = canonical_hash({"client": body.client_idempotency_key, "manifest": manifest.manifest_hash, "control": result.control_id, "dataUse": result.data_use_revision_id})
+        data_use_id = UUID(result.data_use_revision_id) if result.data_use_revision_id else None
+        profile = profiles_by_use.get(data_use_id) if data_use_id else None
+        source = sources_by_use.get(data_use_id) if data_use_id else None
+        descriptor, content_hash = evidence_descriptor(result)
+        maximum_age = 86400
+        if data_use_id:
+            data_use = next(item for item in data_uses if item.id == data_use_id)
+            maximum_age = int((data_use.vector_contract or {}).get("maximum_freshness_seconds", 86400))
+        collected_at = profile.collected_at if profile and result.evidence_class == "connector_observation" else now
+        valid_until = (
+            collected_at + timedelta(seconds=maximum_age)
+            if result.evidence_class == "connector_observation" else None
+        )
+        evidence_idem = canonical_hash({"evaluation": idem, "contentHash": content_hash})
+        evidence = await db.scalar(select(AIEvidence).where(AIEvidence.org_id == org.id, AIEvidence.idempotency_key == evidence_idem))
+        if not evidence:
+            evidence = AIEvidence(
+                org_id=org.id,
+                system_id=system.id,
+                deployment_id=deployment.id,
+                manifest_id=manifest.id,
+                data_use_revision_id=data_use_id,
+                source_profile_id=profile.id if profile and result.evidence_class == "connector_observation" else None,
+                evidence_type=result.control_id,
+                evidence_class=result.evidence_class,
+                producer="panopta-governance-runner",
+                descriptor=descriptor,
+                provenance={
+                    "manifestHash": manifest.manifest_hash,
+                    "sourceId": str(source.id) if source else None,
+                    "profileId": str(profile.id) if profile else None,
+                    "collectionMode": (profile.profile_provenance or {}).get("mode") if profile else "declaration",
+                },
+                content_hash=content_hash,
+                evaluator_version=EVALUATOR_VERSION,
+                redaction_class="metadata_only",
+                retention_class="governance_indefinite",
+                valid_from=collected_at,
+                valid_until=valid_until,
+                collected_at=collected_at,
+                idempotency_key=evidence_idem,
+            )
+            db.add(evidence)
+            await db.flush()
         evaluation = await db.scalar(select(AIControlEvaluation).where(AIControlEvaluation.org_id == org.id, AIControlEvaluation.idempotency_key == idem))
         if not evaluation:
-            evaluation = AIControlEvaluation(org_id=org.id, system_id=system.id, deployment_id=deployment.id, manifest_id=manifest.id, data_use_revision_id=UUID(result.data_use_revision_id) if result.data_use_revision_id else None, control_id=result.control_id, status=result.status, evidence_class=result.evidence_class, observed=result.observed, expected=result.expected, reason_code=result.reason_code, evaluator_version=EVALUATOR_VERSION, input_hash=result.input_hash, idempotency_key=idem)
+            evaluation = AIControlEvaluation(org_id=org.id, system_id=system.id, deployment_id=deployment.id, manifest_id=manifest.id, data_use_revision_id=data_use_id, evidence_id=evidence.id, control_id=result.control_id, status=result.status, evidence_class=result.evidence_class, observed=result.observed, expected=result.expected, reason_code=result.reason_code, evaluator_version=EVALUATOR_VERSION, input_hash=result.input_hash, idempotency_key=idem, created_at=now)
             db.add(evaluation)
             await db.flush()
         dedupe = canonical_hash({"deployment": str(deployment.id), "control": result.control_id, "dataUse": result.data_use_revision_id})
@@ -554,14 +646,14 @@ async def evaluate_deployment(
                 created_incident_ids.append(str(incident_id))
         elif result.status == "pass":
             await db.execute(update(AIGovernanceIncident).where(AIGovernanceIncident.org_id == org.id, AIGovernanceIncident.dedupe_key == dedupe, AIGovernanceIncident.status.in_(["open", "acknowledged"])).values(status="resolved", resolved_at=datetime.now(UTC)))
-        persisted.append({"id": str(evaluation.id), "controlId": result.control_id, "status": result.status, "evidenceClass": result.evidence_class, "reasonCode": result.reason_code, "observed": result.observed, "expected": result.expected, "inputHash": result.input_hash})
+        persisted.append({"id": str(evaluation.id), "evidenceId": str(evidence.id), "controlId": result.control_id, "status": result.status, "evidenceClass": result.evidence_class, "reasonCode": result.reason_code, "observed": result.observed, "expected": result.expected, "inputHash": result.input_hash, "validUntil": evidence.valid_until})
     await db.commit()
     from app.services.realtime import publish_event
     from app.tasks import send_governance_alerts
     await publish_event(str(org.id), "ai_governance.evaluated", {"systemId": str(system.id), "deploymentId": str(deployment.id), "manifestHash": manifest.manifest_hash})
     for incident_id in created_incident_ids:
         send_governance_alerts.delay(incident_id)
-    return {"deploymentId": str(deployment.id), "manifestHash": manifest.manifest_hash, "mode": "observe", "evaluations": persisted}
+    return {"deploymentId": str(deployment.id), "manifestHash": manifest.manifest_hash, "mode": "observe", "governanceSummary": governance_risk_summary(system, list(data_uses), results), "evaluations": persisted}
 
 
 @router.get("/systems/{system_id}/evidence")
@@ -572,5 +664,5 @@ async def evidence_timeline(
 ):
     _user, org = current
     await _system_or_404(system_id, org.id, db)
-    rows = (await db.scalars(select(AIControlEvaluation).where(AIControlEvaluation.system_id == system_id, AIControlEvaluation.org_id == org.id).order_by(desc(AIControlEvaluation.created_at)).limit(250))).all()
-    return [{"id": str(row.id), "controlId": row.control_id, "status": row.status, "evidenceClass": row.evidence_class, "reasonCode": row.reason_code, "observed": row.observed, "expected": row.expected, "inputHash": row.input_hash, "evaluatorVersion": row.evaluator_version, "createdAt": row.created_at} for row in rows]
+    rows = (await db.execute(select(AIControlEvaluation, AIEvidence).join(AIEvidence, AIEvidence.id == AIControlEvaluation.evidence_id).where(AIControlEvaluation.system_id == system_id, AIControlEvaluation.org_id == org.id).order_by(desc(AIControlEvaluation.created_at)).limit(250))).all()
+    return [{"id": str(row.id), "evidenceId": str(evidence.id), "controlId": row.control_id, "status": row.status, "evidenceClass": row.evidence_class, "reasonCode": row.reason_code, "observed": row.observed, "expected": row.expected, "inputHash": row.input_hash, "contentHash": evidence.content_hash, "producer": evidence.producer, "redactionClass": evidence.redaction_class, "retentionClass": evidence.retention_class, "validFrom": evidence.valid_from, "validUntil": evidence.valid_until, "provenance": evidence.provenance, "evaluatorVersion": row.evaluator_version, "createdAt": row.created_at} for row, evidence in rows]

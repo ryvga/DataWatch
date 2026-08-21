@@ -1,9 +1,9 @@
 # DataWatch — Architecture
 
-## AI governance control plane — phase one active
+## AI governance control plane — phases one and two active
 
 The first database-native governance vertical is active for PostgreSQL/pgvector RAG data
-supply chains. Eight tenant-owned tables separate mutable system/deployment posture from
+supply chains. Nine tenant-owned tables separate mutable system/deployment posture from
 append-only versions, data-use revisions, release manifests, and terminal evaluations.
 Composite foreign keys prove organization ownership across every relationship. A generic
 PostgreSQL trigger rejects update/delete mutations on audit records.
@@ -23,6 +23,15 @@ databases mirror that boundary with separate administrative owners and non-super
 `SELECT`-only connector roles, so local evidence does not rely on owner privileges. See
 [`docs/ai-governance.md`](ai-governance.md) for the domain model, policy DSL, enforcement
 ladder, standards mapping, PFE evaluation plan, and first vertical slice.
+
+Phase two adds a content-addressed `ai_evidence` ledger. A successful profile enqueues
+reevaluation for active manifests bound to that exact asset, so control state changes on the
+existing monitoring interval rather than through a second scheduler. Evidence records hold
+only bounded metadata and link to evaluations through a composite tenant foreign key. Their
+producer, provenance, validity window, evaluator version, redaction/retention class, and hash
+remain immutable. Headline posture is derived from reason-linked controls: inherent-risk
+components, conclusive coverage, evidence confidence, and residual risk. Missing, stale,
+unsupported, or unavailable evidence is never converted into a passing state.
 
 ## System Overview
 
@@ -47,7 +56,7 @@ DataWatch is a multi-tenant data quality monitoring platform. It is structured a
 ┌─────────▼─────────────┐   ┌──────────▼──────────────┐
 │  Celery Worker         │   │  PostgreSQL 16           │
 │                        │   │                          │
-│  profile_table         │   │  28 tables               │
+│  profile_table         │   │  29 tables               │
 │  bootstrap_autopilot   │   │  JSONB for metrics,      │
 │  run_anomaly_checks    │   │  narration, config,      │
 │  generate_llm_narration│   │  autopilot state         │

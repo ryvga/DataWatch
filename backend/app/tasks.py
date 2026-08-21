@@ -227,6 +227,11 @@ async def _profile_table_async(table_id: str) -> dict:
 
         run_dsl_monitors.delay(table_id, str(profile.id))
 
+        # Refresh governance evidence on the same successful monitoring cadence.
+        from app.tasks import evaluate_ai_governance_for_table
+
+        evaluate_ai_governance_for_table.delay(table_id, str(profile.id))
+
         log_payload = {
             "table_id": table_id,
             "profile_id": str(profile.id),
@@ -1116,6 +1121,69 @@ async def _send_governance_alerts_async(incident_id: str) -> dict:
             results.append({"config_id": str(config.id), "channel": config.channel, "sent": ok})
         await publish_event(str(governance_incident.org_id), "alert.dispatched", {"governanceIncidentId": str(governance_incident.id), "results": results})
         return {"incident_id": incident_id, "alerts_dispatched": len(results), "results": results}
+
+
+@celery_app.task(name="tasks.evaluate_ai_governance_for_table")
+def evaluate_ai_governance_for_table(table_id: str, profile_id: str):
+    """Refresh every active manifest bound to a newly profiled asset."""
+    return _run(_evaluate_ai_governance_for_table_async(table_id, profile_id))
+
+
+async def _evaluate_ai_governance_for_table_async(table_id: str, profile_id: str) -> dict:
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.ai_governance import AIDataUseRevision, AIDeployment, AIReleaseManifest
+    from app.models.organization import Organization
+    from app.routers.ai_governance import EvaluationRequest, evaluate_deployment
+
+    async with AsyncSessionLocal() as db:
+        data_uses = (
+            await db.scalars(
+                select(AIDataUseRevision).where(AIDataUseRevision.table_id == UUID(table_id))
+            )
+        ).all()
+        if not data_uses:
+            return {"status": "not_applicable", "table_id": table_id, "evaluated": 0}
+        by_system: dict[UUID, set[str]] = {}
+        for item in data_uses:
+            by_system.setdefault(item.system_id, set()).add(str(item.id))
+        deployments = (
+            await db.scalars(
+                select(AIDeployment).where(
+                    AIDeployment.system_id.in_(list(by_system)),
+                    AIDeployment.active_manifest_id.is_not(None),
+                )
+            )
+        ).all()
+        evaluated = []
+        for deployment in deployments:
+            manifest = await db.get(AIReleaseManifest, deployment.active_manifest_id)
+            if not manifest:
+                continue
+            manifest_uses = {
+                item["id"] for item in manifest.canonical_manifest["dataUses"]
+            }
+            if not (manifest_uses & by_system[deployment.system_id]):
+                continue
+            org = await db.get(Organization, deployment.org_id)
+            if not org:
+                continue
+            response = await evaluate_deployment(
+                deployment.id,
+                EvaluationRequest(client_idempotency_key=f"profile-{profile_id}"),
+                current=(None, org),
+                db=db,
+            )
+            evaluated.append(
+                {
+                    "deployment_id": str(deployment.id),
+                    "headline_status": response["governanceSummary"]["headlineStatus"],
+                }
+            )
+        return {"status": "ok", "table_id": table_id, "evaluated": len(evaluated), "results": evaluated}
 
 
 @celery_app.task(name="tasks.notify_incident_assignment")

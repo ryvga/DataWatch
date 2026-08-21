@@ -11,6 +11,7 @@ from app.models.ai_governance import (
     AIApproval,
     AIControlEvaluation,
     AIDataUseRevision,
+    AIEvidence,
     AIGovernanceIncident,
     AIReleaseManifest,
     AISystemVersion,
@@ -103,6 +104,18 @@ class _FakePostgresConnector:
         return None
 
 
+class _CleanPostgresConnector(_FakePostgresConnector):
+    async def collect_rag_governance_observation(self, **_kwargs):
+        return {
+            "effective_roles": ["rag_runtime"],
+            "effective_grants": [{"role": "rag_runtime", "privilege": "SELECT"}],
+            "missing_embeddings": 0,
+            "orphan_embeddings": 0,
+            "stale_embeddings": 0,
+            "deletion_propagation_failures": 0,
+        }
+
+
 async def _seed_assets(db_session, org_id):
     source = DataSource(
         org_id=org_id,
@@ -124,6 +137,16 @@ async def _seed_assets(db_session, org_id):
         table_name="documents",
         freshness_column="updated_at",
         dbt_model_yaml='CREATE TABLE "knowledge"."documents" (\n  "document_id" uuid NOT NULL,\n  "body" text NULL,\n  "updated_at" timestamp NOT NULL,\n  "deleted_at" timestamp NULL\n);',
+        check_config={
+            "governance": {
+                "fieldSensitivity": {
+                    "document_id": "internal",
+                    "body": "internal",
+                    "updated_at": "public",
+                    "deleted_at": "internal",
+                }
+            }
+        },
     )
     vectors = MonitoredTable(
         source_id=source.id,
@@ -251,12 +274,54 @@ async def test_phase_one_api_vertical_idor_cas_replay_controls_and_incident_dedu
     statuses = {item["controlId"]: item["status"] for item in evaluated.json()["evaluations"]}
     assert statuses == {
         "ownership-assertion": "pass",
+        "purpose-declaration": "pass",
         "schema-freshness-observation": "pass",
+        "data-quality-evidence": "pass",
+        "evidence-age": "pass",
+        "sensitivity-boundary": "pass",
         "effective-db-role-drift": "fail",
         "vector-consistency": "fail",
     }
     assert [item["id"] for item in replayed.json()["evaluations"]] == [item["id"] for item in evaluated.json()["evaluations"]]
+    assert [item["evidenceId"] for item in replayed.json()["evaluations"]] == [item["evidenceId"] for item in evaluated.json()["evaluations"]]
+    assert evaluated.json()["governanceSummary"]["headlineStatus"] == "action_required"
+    assert evaluated.json()["governanceSummary"]["evidenceConfidencePercent"] == 100.0
+    assert await db_session.scalar(select(func.count()).select_from(AIEvidence)) == 8
     assert await db_session.scalar(select(func.count()).select_from(AIGovernanceIncident)) == 2
+
+    # A successful profile enqueues this worker path; it refreshes every active
+    # manifest containing the profiled asset within that same monitoring interval.
+    from app.tasks import _evaluate_ai_governance_for_table_async
+
+    latest_profile_id = await db_session.scalar(
+        select(TableProfile.id).where(TableProfile.table_id == documents.id)
+    )
+    with patch("app.routers.ai_governance.ConnectorFactory.create", return_value=_FakePostgresConnector()), \
+         patch("app.services.realtime.publish_event", new_callable=AsyncMock), \
+         patch("app.tasks.send_governance_alerts.delay"):
+        continuous = await _evaluate_ai_governance_for_table_async(
+            str(documents.id), str(latest_profile_id)
+        )
+    assert continuous["evaluated"] == 1
+    assert continuous["results"][0]["headline_status"] == "action_required"
+    assert await db_session.scalar(select(func.count()).select_from(AIEvidence)) == 16
+    assert await db_session.scalar(select(func.count()).select_from(AIGovernanceIncident)) == 2
+
+    with patch("app.routers.ai_governance.ConnectorFactory.create", return_value=_CleanPostgresConnector()), \
+         patch("app.services.realtime.publish_event", new_callable=AsyncMock), \
+         patch("app.tasks.send_governance_alerts.delay"):
+        recovered = await client.post(
+            f"/api/v1/ai/deployments/{deployment_id}/evaluate",
+            headers=auth_headers,
+            json={"client_idempotency_key": "recovery-scenario-001"},
+        )
+    assert recovered.status_code == 200
+    assert recovered.json()["governanceSummary"]["headlineStatus"] == "observed_healthy"
+    assert await db_session.scalar(
+        select(func.count()).select_from(AIGovernanceIncident).where(
+            AIGovernanceIncident.status == "resolved"
+        )
+    ) == 2
 
     # A second tenant cannot read or attach records from this system.
     second_slug = f"other-{uuid.uuid4().hex[:8]}"
@@ -276,6 +341,20 @@ async def test_phase_one_api_vertical_idor_cas_replay_controls_and_incident_dedu
     assert '"raw_prompt":' not in serialized
     assert '"raw_outputs":' not in serialized
     assert {item["evidenceClass"] for item in detail.json()["evidenceTimeline"]} == {"customer_assertion", "connector_observation", "reviewer_decision"}
+    assert detail.json()["governanceSummary"]["headlineStatus"] == "observed_healthy"
+    assert detail.json()["governanceSummary"]["reasons"] == []
+    assert all(item["redactionClass"] == "metadata_only" for item in detail.json()["evidence"])
+    evidence_rows = await client.get(f"/api/v1/ai/systems/{system_id}/evidence", headers=auth_headers)
+    assert evidence_rows.status_code == 200
+    assert len(evidence_rows.json()) == 24
+    assert all(item["evidenceId"] and item["contentHash"] for item in evidence_rows.json())
+    immutable_evidence = await db_session.scalar(
+        select(AIEvidence).where(AIEvidence.org_id == org_id).limit(1)
+    )
+    immutable_evidence.producer = "mutated"
+    with pytest.raises(ValueError, match="append-only"):
+        await db_session.commit()
+    await db_session.rollback()
 
 
 @pytest.mark.asyncio
@@ -283,7 +362,7 @@ async def test_immutable_models_reject_orm_mutation(db_session, test_org):
     org_id = uuid.UUID(test_org["org_id"])
     system_id = uuid.uuid4()
     # The API vertical creates full rows; here the event contract itself is tested without weakening DB constraints.
-    assert AIReleaseManifest in {AIReleaseManifest, AIDataUseRevision, AISystemVersion, AIApproval, AIControlEvaluation}
+    assert AIReleaseManifest in {AIReleaseManifest, AIDataUseRevision, AISystemVersion, AIApproval, AIEvidence, AIControlEvaluation}
     from app.models.ai_governance import _reject_immutable_mutation
     with pytest.raises(ValueError, match="append-only"):
         _reject_immutable_mutation(None, None, type("Record", (), {})())

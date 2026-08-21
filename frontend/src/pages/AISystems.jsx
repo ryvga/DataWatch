@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Bot, ChevronRight, CircleAlert, Plus, RefreshCw, ShieldCheck } from 'lucide-react'
 import { createAISystem, getAISystem, getAISystems } from '@/api/endpoints'
@@ -19,6 +19,10 @@ const stateTone = {
   unknown: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   unsupported: 'border-border bg-muted text-muted-foreground',
   not_applicable: 'border-border bg-muted text-muted-foreground',
+  action_required: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
+  evidence_gap: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  observed_healthy: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  not_assessed: 'border-border bg-muted text-muted-foreground',
 }
 
 function StatusBadge({ value }) {
@@ -97,20 +101,22 @@ function Detail({ id }) {
   const [system, setSystem] = useState(null)
   const [error, setError] = useState('')
   useEffect(() => { getAISystem(id).then(({ data }) => setSystem(data)).catch(() => setError('This AI system could not be loaded.')) }, [id])
-  const latest = useMemo(() => system?.evidenceTimeline?.[0], [system])
   if (error) return <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-destructive">{error}</div>
   if (!system) return <div className="py-20 text-center text-sm text-muted-foreground">Loading AI system…</div>
   const owners = [system.businessOwnerId, system.technicalOwnerId, system.riskOwnerId].filter(Boolean).length
+  const summary = system.governanceSummary || { headlineStatus: 'not_assessed', inherentRisk: { score: 0, components: {} }, controlCoveragePercent: 0, evidenceConfidencePercent: 0, residualRiskScore: 0, reasons: [] }
   return (
     <div className="space-y-6">
       <div><Button variant="ghost" size="sm" asChild className="-ml-2 mb-3"><Link to="/ai-systems"><ArrowLeft className="mr-2 size-4" />AI systems</Link></Button><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h1 className="text-2xl font-semibold tracking-tight">{system.name}</h1><p className="mt-1 max-w-3xl text-sm text-muted-foreground">{system.intendedPurpose}</p></div><Badge variant="outline">Observe only</Badge></div></div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card><CardHeader className="pb-2"><CardDescription>Accountability</CardDescription><CardTitle className="text-2xl">{owners}/3 owners</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Business, technical, and risk ownership are independently tracked.</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>Active deployments</CardDescription><CardTitle className="text-2xl">{system.deployments.filter((item) => item.activeManifestId).length}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Activation uses a generation and exact manifest hash.</CardContent></Card>
-        <Card><CardHeader className="pb-2"><CardDescription>Latest evidence</CardDescription><CardTitle className="text-lg">{latest ? <StatusBadge value={latest.status} /> : 'Not assessed'}</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Assertions and connector observations remain visibly distinct.</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Governance status</CardDescription><CardTitle className="text-lg"><StatusBadge value={summary.headlineStatus} /></CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Derived from linked controls and evidence; gaps never count as passing.</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Evidence confidence</CardDescription><CardTitle className="text-2xl tabular-nums">{summary.evidenceConfidencePercent}%</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Conclusive, current evidence divided by applicable controls.</CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardDescription>Residual risk</CardDescription><CardTitle className="text-2xl tabular-nums">{summary.residualRiskScore}/100</CardTitle></CardHeader><CardContent className="text-xs text-muted-foreground">Inherent {summary.inherentRisk.score}/100 · coverage {summary.controlCoveragePercent}%.</CardContent></Card>
       </div>
+      {summary.reasons.length > 0 && <Card><CardHeader><CardTitle className="text-base">Why this status?</CardTitle><CardDescription>Every headline state resolves to its latest control reason.</CardDescription></CardHeader><CardContent className="grid gap-2 sm:grid-cols-2">{summary.reasons.map((reason) => <div key={`${reason.controlId}-${reason.reasonCode}`} className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm"><div><p className="font-medium">{reason.controlId}</p><p className="text-xs text-muted-foreground">{reason.reasonCode.replaceAll('_', ' ')}</p></div><StatusBadge value={reason.status} /></div>)}</CardContent></Card>}
       <Card><CardHeader><CardTitle className="text-base">Declared data map</CardTitle><CardDescription>Immutable, schema-bound declarations. They do not claim observed workload use or legal purpose.</CardDescription></CardHeader><CardContent className="p-0"><Table><TableHeader><TableRow><TableHead>Use</TableHead><TableHead>Fields</TableHead><TableHead>Evidence class</TableHead><TableHead>Schema binding</TableHead></TableRow></TableHeader><TableBody>{system.dataUses.length ? system.dataUses.map((item) => <TableRow key={item.id}><TableCell className="capitalize">{item.definition.useKind.replaceAll('_', ' ')}</TableCell><TableCell>{item.definition.fields.join(', ')}</TableCell><TableCell><Badge variant="outline">{item.evidenceClass}</Badge></TableCell><TableCell className="font-mono text-xs">{item.definition.schemaFingerprint.slice(0, 12)}</TableCell></TableRow>) : <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No data-use revision has been bound to a version.</TableCell></TableRow>}</TableBody></Table></CardContent></Card>
-      <Card><CardHeader><CardTitle className="text-base">Evidence timeline</CardTitle><CardDescription>Terminal evaluations are append-only and content-addressed.</CardDescription></CardHeader><CardContent className="space-y-0">{system.evidenceTimeline.length ? system.evidenceTimeline.map((item, index) => <div key={item.id} className="flex gap-4 border-l pl-5 pb-5 last:pb-0"><div className="-ml-[25px] mt-1.5 size-2.5 rounded-full bg-border ring-4 ring-background" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{item.controlId}</span><StatusBadge value={item.status} /><Badge variant="outline">{item.evidenceClass}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.reasonCode.replaceAll('_', ' ')}</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">{item.inputHash.slice(0, 20)} · {new Date(item.createdAt).toLocaleString()}</p></div></div>) : <div className="py-10 text-center text-sm text-muted-foreground">Activate a manifest and run an evaluation to create connector-backed evidence.</div>}</CardContent></Card>
+      <Card><CardHeader><CardTitle className="text-base">Evidence timeline</CardTitle><CardDescription>Terminal evaluations link to immutable, content-addressed, metadata-only evidence.</CardDescription></CardHeader><CardContent className="space-y-0">{system.evidenceTimeline.length ? system.evidenceTimeline.map((item) => <div key={item.id} className="flex gap-4 border-l pl-5 pb-5 last:pb-0"><div className="-ml-[25px] mt-1.5 size-2.5 rounded-full bg-border ring-4 ring-background" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="font-medium">{item.controlId}</span><StatusBadge value={item.status} /><Badge variant="outline">{item.evidenceClass}</Badge></div><p className="mt-1 text-sm text-muted-foreground">{item.reasonCode.replaceAll('_', ' ')}</p><p className="mt-1 font-mono text-[11px] text-muted-foreground">evaluation {item.inputHash.slice(0, 16)} · evidence {item.evidenceId?.slice(0, 8) || 'historical'} · {new Date(item.createdAt).toLocaleString()}</p></div></div>) : <div className="py-10 text-center text-sm text-muted-foreground">Activate a manifest and run an evaluation to create connector-backed evidence.</div>}</CardContent></Card>
     </div>
   )
 }

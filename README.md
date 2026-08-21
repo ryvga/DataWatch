@@ -20,7 +20,7 @@ Monitors your warehouse tables, detects anomalies (z-score, Isolation Forest, ST
        │ Celery tasks             │ SQLAlchemy async
 ┌──────▼──────────┐    ┌──────────▼──────────┐
 │  Celery Worker  │    │  PostgreSQL 16       │
-│  profile_table  │    │  28 tables, indexes  │
+│  profile_table  │    │  29 tables, indexes  │
 │  anomaly_checks │    └─────────────────────┘
 │  llm_narration  │
 │  send_alerts    │    ┌─────────────────────┐
@@ -115,7 +115,7 @@ Public competitor capabilities and the independent feature-parity backlog are tr
 
 ## AI governance
 
-Phase one of the database-native AI governance control plane is implemented for a
+Phases one and two of the database-native AI governance control plane are implemented for a
 PostgreSQL/pgvector RAG supply chain. A tenant can register a system, create an immutable
 version and schema-bound data-use revision, produce a canonical release manifest, activate
 that exact hash on a deployment with compare-and-swap, and evaluate ownership,
@@ -124,7 +124,11 @@ and connector observations remain explicitly labeled; raw rows, prompts, outputs
 embeddings, and connector secrets are rejected from governance payloads. The seeded jury
 workspace contains four visibly marked fixture scenarios. Local source databases use
 separate administrative owners and dedicated `NOSUPERUSER`/`SELECT`-only connector
-accounts; a source credential is never the PostgreSQL bootstrap owner. See
+accounts; a source credential is never the PostgreSQL bootstrap owner. Every successful
+profile now refreshes active governance manifests on the same cadence. Each terminal
+evaluation links immutable metadata-only evidence with provenance, validity, hashes,
+redaction, and retention; headline risk exposes coverage, confidence, residual score, and
+exact reasons. Stale, unknown, unavailable, and unsupported evidence never passes. See
 [`docs/ai-governance.md`](docs/ai-governance.md).
 
 ## Quick Start (local)
