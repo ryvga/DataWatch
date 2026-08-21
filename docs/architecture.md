@@ -383,7 +383,12 @@ then dispatches named bindings to dedicated PostgreSQL, DuckDB, or SQLite method
 PostgreSQL starts from a clean transaction, sets transaction read-only and a server-side
 statement timeout, and always rolls back. File-backed DuckDB connections are read-only
 and use interrupt-on-timeout; SQLite opens files with `mode=ro` and interrupts timed-out
-queries. The result must have the exact ordered aliases and finite numeric values, with
+queries. `maxBytesScanned` is preserved in the signed plan: PostgreSQL, SQLite, and
+file-backed DuckDB compare it against a conservative complete-relation/database storage
+bound before execution; adapters that cannot enforce it fail closed. A Redis token lease
+serializes compiled queries per `(org, source)` across worker processes and expires after
+the query timeout plus a bounded cleanup margin. The result must have the exact ordered
+aliases and finite numeric values, with
 null accepted only for nullable outputs. Driver exceptions are mapped to stable domain
 codes without leaking credential text. These adapters are internal capability only.
 
@@ -482,3 +487,5 @@ Output validated by `NarrationResult` Pydantic model. 1 retry on validation fail
 | Org isolation | Every DB query on tenant data includes `org_id` filter. 404 instead of 403 (no info leak). |
 | Credential in logs | `connection_config` never returned in any API response — stripped at Pydantic schema level |
 | Rate limiting | Redis counters per org per day — prevents abuse on free tier |
+| Connection egress | Source create/update/preview require owner/admin, share a Redis attempt limit, resolve every DNS answer, block metadata/link-local and production private targets by default, and confine local-file connectors to an explicit root |
+| Connection-string injection | PostgreSQL/Redshift use driver keyword arguments; SQL Server braces and escapes every ODBC value while pinning verified TLS attributes |

@@ -83,6 +83,10 @@ manual runs use the same idempotent reservation and lease state machine. Migrati
 and the internal run service provide ordered claims, expiring leases, immutable terminal
 audits, atomic policy-state finalization, and a typed incident bridge; unsupported
 connector plans remain fail-closed.
+`maxBytesScanned` is enforced with conservative storage bounds and a Redis lease permits
+only one compiled query per tenant/source at a time. Unsaved connection tests and source
+credential changes require an owner/admin, share a Redis attempt limit, and pass the
+deployment DNS/IP/local-file egress policy before a connector is created.
 
 The internal evaluator implements deterministic `breachWhen`, consecutive breach,
 recovery pass, and cooldown decisions. The idempotent run orchestrator persists every
@@ -186,7 +190,8 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 | GET | `/health` | — | DB + Redis + scheduler status |
 | GET | `/ready` | — | HTTP 503 until DB and Redis can serve requests |
 | GET | `/api/v1/sources` | JWT | List data sources |
-| POST | `/api/v1/sources` | JWT | Register new source |
+| POST | `/api/v1/sources` | owner/admin JWT | Register new source |
+| POST | `/api/v1/sources/test-connection` | owner/admin JWT | Test unsaved credentials under rate/egress policy |
 | POST | `/api/v1/sources/{id}/test` | JWT | Test connection |
 | POST | `/api/v1/sources/{id}/discover` | JWT | Discover schemas/tables |
 | GET | `/api/v1/tables` | JWT | List monitored tables |
