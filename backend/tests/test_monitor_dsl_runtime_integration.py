@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import duckdb
 import pytest
@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.models.data_source import DataSource
+from app.models.alert_config import AlertConfig
 from app.models.incident import Incident
 from app.models.monitor import Monitor, MonitorRevision, MonitorRun
 from app.models.monitored_table import MonitoredTable
@@ -105,6 +106,13 @@ async def test_profile_run_incident_recovery_vertical_slice(db_session, test_eng
     await db_session.flush()
     monitor.active_revision_id = revision.id
     monitor.status = "active"
+    alert_config = AlertConfig(
+        org_id=org.id,
+        table_id=table.id,
+        channel="webhook",
+        config={"url": "https://alerts.example.test/datawatch", "secret": "test-secret"},
+    )
+    db_session.add(alert_config)
     profile_one = TableProfile(
         table_id=table.id,
         row_count=0,
@@ -130,6 +138,50 @@ async def test_profile_run_incident_recovery_vertical_slice(db_session, test_eng
         assert incident.status == "open"
         assert incident.fired_checks[0]["check_type"] == "monitor_dsl"
         assert first_run.status == "failed"
+
+    # Continue through the real narration persistence and alert-routing task
+    # boundaries with deterministic provider/transport fixtures.
+    narration_payload = {
+        "summary": "The orders table is empty.",
+        "likely_causes": [{"hypothesis": "Upstream load failed", "probability": "high"}],
+        "impact_assessment": "Downstream order analytics are incomplete.",
+        "recommended_actions": ["Inspect the upstream load"],
+        "data_pattern_notes": "The active row-count monitor observed zero rows.",
+        "confidence": "high",
+    }
+    from app.tasks import _generate_llm_narration_async, _send_alerts_async
+
+    with patch.object(database, "AsyncSessionLocal", session_factory), patch(
+        "app.services.llm.get_cached_narration", return_value=None
+    ), patch(
+        "app.services.llm.build_context", new=AsyncMock(return_value="deterministic context")
+    ), patch(
+        "app.services.llm.generate_narration", return_value=narration_payload
+    ), patch(
+        "app.services.llm.cache_narration"
+    ), patch(
+        "app.tasks.send_alerts"
+    ) as queued_alerts:
+        narration_result = await _generate_llm_narration_async(str(incident.id))
+        queued_alerts.delay.assert_called_once_with(str(incident.id))
+
+    assert narration_result["status"] == "ok"
+
+    with patch.object(database, "AsyncSessionLocal", session_factory), patch(
+        "app.services.llm.get_cached_narration", return_value=narration_payload
+    ), patch(
+        "app.services.alert.dispatch_alert", return_value=True
+    ) as dispatch, patch(
+        "app.services.realtime.publish_event", new=AsyncMock()
+    ):
+        alert_result = await _send_alerts_async(str(incident.id))
+
+    assert alert_result["alerts_dispatched"] == 1
+    assert alert_result["results"][0]["sent"] is True
+    dispatch.assert_called_once()
+    async with session_factory() as session:
+        narrated = await session.get(Incident, incident.id)
+        assert narrated.llm_narration == narration_payload
 
     duck = duckdb.connect(str(duck_path))
     duck.execute("INSERT INTO main.orders VALUES (1)")
