@@ -63,7 +63,7 @@ jobs:
           PGPASSWORD: datawatch
         run: psql -h 127.0.0.1 -p 5433 -U datawatch -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE datawatch_test;'
       - name: Start connector matrix services
-        run: docker compose -f docker-compose.test-dbs.yml up -d --wait test-mysql test-mariadb test-mongo test-sqlserver
+        run: docker compose -f docker-compose.test-dbs.yml up -d --wait test-mysql test-mariadb test-mongo test-sqlserver test-cassandra
       - name: Run backend suite without silent integration skips
         env:
           DATABASE_URL: postgresql+asyncpg://datawatch:datawatch@127.0.0.1:5433/datawatch_test

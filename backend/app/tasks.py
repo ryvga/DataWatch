@@ -699,6 +699,7 @@ def _monitor_execution_error_code(error) -> str:
         "scan_budget_exceeded",
         "scan_budget_not_supported",
         "document_scan_budget_exceeded",
+        "row_scan_budget_exceeded",
     }:
         return code
     return "execution_failed"
@@ -822,6 +823,7 @@ async def _run_one_dsl_monitor(
             plan = compile_monitor_plan(
                 load_persisted_definition(revision.definition),
                 relation=relation,
+                ddl=table.dbt_model_yaml,
             )
             async with source_query_lease(
                 str(source.org_id),

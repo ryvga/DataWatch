@@ -18,6 +18,10 @@ class DocumentScanBudgetExceeded(ValueError):
     """A native document plan reached its mandatory document ceiling."""
 
 
+class RowScanBudgetExceeded(ValueError):
+    """A native partition plan reached its mandatory row ceiling."""
+
+
 @dataclass
 class TableInfo:
     name: str
@@ -74,6 +78,10 @@ class BaseConnector(ABC):
     async def execute_document_monitor(self, plan) -> dict:
         """Execute an internally generated, connector-native document plan."""
         raise NotImplementedError(f"{type(self).__name__} has no document monitor execution path")
+
+    async def execute_partition_monitor(self, plan) -> dict:
+        """Execute an internally prepared, partition-bound native plan."""
+        raise NotImplementedError(f"{type(self).__name__} has no partition monitor execution path")
 
     async def enforce_monitor_scan_budget(
         self,

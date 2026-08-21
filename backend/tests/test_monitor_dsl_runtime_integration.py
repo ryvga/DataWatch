@@ -67,6 +67,21 @@ def _mongo_row_count_definition(table_id: uuid.UUID) -> MonitorDefinition:
     return MonitorDefinition.model_validate(payload)
 
 
+def _cassandra_row_count_definition(table_id: uuid.UUID) -> MonitorDefinition:
+    payload = _row_count_definition(table_id).model_dump(
+        mode="json",
+        by_alias=True,
+        exclude_unset=True,
+    )
+    payload["spec"]["trigger"] = {"type": "manual"}
+    payload["spec"]["execution"].pop("maxBytesScanned", None)
+    payload["spec"]["execution"].pop("maxDocumentsScanned", None)
+    payload["spec"]["execution"]["maxRowsScanned"] = 10
+    payload["spec"]["execution"]["partitionBindings"] = {"tenant_id": "tenant-a"}
+    payload["spec"]["execution"]["sampling"] = {"mode": "off"}
+    return MonitorDefinition.model_validate(payload)
+
+
 @pytest.mark.asyncio
 async def test_profile_run_incident_recovery_vertical_slice(db_session, test_engine, tmp_path: Path):
     """Exercise the real task boundary against DuckDB and the real Postgres audit DB."""
@@ -366,3 +381,150 @@ async def test_mongodb_document_monitor_opens_and_resolves_incident(
     finally:
         await collection.drop()
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_cassandra_partition_monitor_opens_and_resolves_incident(
+    db_session,
+    test_engine,
+):
+    """Prove prepared partition execution through persisted incident transitions."""
+    try:
+        probe = socket.create_connection(("127.0.0.1", 9043), timeout=0.2)
+        probe.close()
+    except OSError:
+        if os.environ.get("REQUIRE_TEST_SERVICES", "").lower() in {"1", "true", "yes"}:
+            pytest.fail("Cassandra test service unavailable while REQUIRE_TEST_SERVICES=1")
+        pytest.skip("Cassandra test service unavailable")
+
+    from cassandra.cluster import Cluster
+
+    from app import database
+    from app.connectors.cassandra import CassandraConnector
+    from app.tasks import _run_one_dsl_monitor
+
+    keyspace = f"runtime_monitor_{uuid.uuid4().hex}"
+    cluster = Cluster(["127.0.0.1"], port=9043)
+    session = cluster.connect()
+    session.execute(
+        f"CREATE KEYSPACE \"{keyspace}\" WITH replication = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
+    )
+    session.execute(
+        f'CREATE TABLE "{keyspace}"."events" (tenant_id text, event_id int, PRIMARY KEY (tenant_id, event_id))'
+    )
+    connector = CassandraConnector(
+        {
+            "hosts": "127.0.0.1",
+            "port": 9043,
+            "keyspace": keyspace,
+            "tls_mode": "disabled",
+        }
+    )
+    ddl = await connector.get_table_ddl(keyspace, "events")
+
+    org = Organization(
+        name="Cassandra Runtime Org",
+        slug=f"cassandra-runtime-{uuid.uuid4().hex[:8]}",
+    )
+    db_session.add(org)
+    await db_session.flush()
+    source = DataSource(
+        org_id=org.id,
+        name="Cassandra Runtime",
+        type="cassandra",
+        connection_config={
+            "encrypted": encrypt_config(
+                {
+                    "hosts": "127.0.0.1",
+                    "port": 9043,
+                    "keyspace": keyspace,
+                    "tls_mode": "disabled",
+                },
+                str(org.id),
+            )
+        },
+    )
+    db_session.add(source)
+    await db_session.flush()
+    table = MonitoredTable(
+        source_id=source.id,
+        schema_name=keyspace,
+        table_name="events",
+        dbt_model_yaml=ddl,
+    )
+    db_session.add(table)
+    await db_session.flush()
+    schema_fingerprint = build_relation_binding(
+        asset_id=table.id,
+        source_type="cassandra",
+        schema_name=table.schema_name,
+        table_name=table.table_name,
+        ddl=ddl,
+        latest_schema_fingerprint=None,
+    ).schema_fingerprint
+    definition = _cassandra_row_count_definition(table.id)
+    revision = MonitorRevision(
+        revision=1,
+        definition_version=definition.api_version,
+        definition_hash=definition_hash(definition),
+        definition=persisted_definition_payload(definition),
+        validation_status="valid",
+        schema_fingerprint=schema_fingerprint,
+    )
+    monitor = Monitor(
+        org_id=org.id,
+        table_id=table.id,
+        name=definition.metadata.name,
+        mode="dsl",
+        status="draft",
+        current_revision=1,
+    )
+    db_session.add(monitor)
+    await db_session.flush()
+    revision.monitor_id = monitor.id
+    db_session.add(revision)
+    await db_session.flush()
+    monitor.active_revision_id = revision.id
+    monitor.status = "active"
+    await db_session.commit()
+
+    session_factory = async_sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    try:
+        with (
+            patch.object(database, "AsyncSessionLocal", session_factory),
+            patch("app.tasks.generate_llm_narration") as narration,
+        ):
+            narration.delay = MagicMock()
+            first = await _run_one_dsl_monitor(
+                str(monitor.id),
+                client_idempotency_key="cassandra-empty",
+            )
+        assert first["status"] == "failed"
+        assert first["result"]["incidentAction"] == "open"
+
+        session.execute(
+            f'INSERT INTO "{keyspace}"."events" (tenant_id, event_id) VALUES (%s, %s)',
+            ("tenant-a", 1),
+        )
+        with patch.object(database, "AsyncSessionLocal", session_factory):
+            second = await _run_one_dsl_monitor(
+                str(monitor.id),
+                client_idempotency_key="cassandra-recovered",
+            )
+        assert second["status"] == "passed"
+        assert second["result"]["incidentAction"] == "resolve"
+
+        async with session_factory() as audit_session:
+            incident = await audit_session.scalar(select(Incident).where(Incident.table_id == table.id))
+            runs = (await audit_session.scalars(select(MonitorRun).where(MonitorRun.monitor_id == monitor.id))).all()
+            assert incident.status == "resolved"
+            assert [run.status for run in runs] == ["failed", "passed"]
+            assert all(run.planner_version == "datawatch-v1alpha1-cassandra-1" for run in runs)
+    finally:
+        await connector.close()
+        session.execute(f'DROP KEYSPACE IF EXISTS "{keyspace}"')
+        cluster.shutdown()

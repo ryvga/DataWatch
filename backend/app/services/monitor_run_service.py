@@ -35,6 +35,7 @@ SAFE_ERROR_MESSAGES = {
     "scan_budget_exceeded": "Compiled monitor exceeds maxBytesScanned",
     "scan_budget_not_supported": "Connector cannot enforce maxBytesScanned",
     "document_scan_budget_exceeded": "Document monitor reached maxDocumentsScanned",
+    "row_scan_budget_exceeded": "Partition monitor reached maxRowsScanned",
     "execution_failed": "Compiled monitor execution failed",
     "evaluation_failed": "Compiled monitor evaluation failed",
     "plan_context_mismatch": "Compiled plan no longer matches the reserved run",
@@ -163,7 +164,11 @@ async def reserve_run(
         ddl=table.dbt_model_yaml,
         latest_schema_fingerprint=latest_fingerprint,
     )
-    plan = compile_monitor_plan(definition, relation=relation)
+    plan = compile_monitor_plan(
+        definition,
+        relation=relation,
+        ddl=table.dbt_model_yaml,
+    )
     plan_payload = plan.payload()
 
     run_id = uuid.uuid4()

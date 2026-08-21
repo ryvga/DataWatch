@@ -105,11 +105,15 @@ def _planning_result(
         }
     else:
         binding_fingerprint = relation.schema_fingerprint
-        compilation, compiled = analyze_monitor_support(definition, relation=relation)
+        compilation, compiled = analyze_monitor_support(
+            definition,
+            relation=relation,
+            ddl=table.dbt_model_yaml,
+        )
         plan = compiled.payload() if compiled else None
 
     issues.extend(compilation["issues"])
-    if capabilities["profiling"] == "none":
+    if capabilities["profiling"] == "none" and definition.spec.trigger.type == "on_profile":
         issues.append(
             {
                 "code": "connector_has_no_profile_runtime",
@@ -121,6 +125,7 @@ def _planning_result(
     compiled_runtime_supported = compilation["compilationSupported"] and capabilities.get("compiled_monitors") in {
         "internal_read_only",
         "internal_document_read_only",
+        "internal_partition_read_only",
     }
     activation_issues = list(issues)
     if definition.spec.trigger.type == "interval":

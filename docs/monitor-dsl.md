@@ -75,6 +75,16 @@ are structural `$literal` values, never user-authored stages or field references
 `maxBytesScanned`, distinct/duplicate metrics, metric filters, and string-pattern
 predicates remain fail-closed for this planner.
 
+Cassandra uses `datawatch-v1alpha1-cassandra-1`. Its manual-only definitions must set
+`maxRowsScanned` between 1 and 10,000, disable sampling, and provide a scalar
+`partitionBindings` value for every partition-key field and no other field. Compilation
+emits only a planner-owned `SELECT` for that exact partition with a
+`LIMIT maxRowsScanned + 1`; the connector prepares the CQL and binds partition values
+through the driver. Reaching the extra row fails with `row_scan_budget_exceeded`, so a
+truncated partition can never produce a misleading pass. The current slice deliberately
+does not claim source-wide scheduled profiling, live trusted-certificate TLS, Cassandra
+4 compatibility, Astra bundles, or controlled-scale evidence.
+
 ## Authoring model (2026-08-21)
 
 The authoring language is intentionally declarative YAML/JSON. DataWatch does **not**

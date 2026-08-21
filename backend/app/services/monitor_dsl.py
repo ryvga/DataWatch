@@ -1,4 +1,5 @@
 """Strict, non-executable runtime model for datawatch.io/v1alpha1 monitors."""
+
 from __future__ import annotations
 
 import hashlib
@@ -42,8 +43,7 @@ class ValueExpression(StrictModel):
             if isinstance(value, list) and len(value) > 100:
                 raise ValueError("literal lists may contain at most 100 values")
             if any(
-                isinstance(item, (dict, list, tuple, set))
-                or not isinstance(item, (str, int, float, bool, type(None)))
+                isinstance(item, (dict, list, tuple, set)) or not isinstance(item, (str, int, float, bool, type(None)))
                 for item in values
             ):
                 raise ValueError("literals must be JSON scalar values or a flat scalar list")
@@ -57,13 +57,36 @@ class ValueExpression(StrictModel):
 
 
 class Predicate(StrictModel):
-    op: Literal[
-        "eq", "ne", "gt", "gte", "lt", "lte", "between", "in", "not_in",
-        "contains", "starts_with", "ends_with", "is_null", "is_not_null",
-        "is_missing", "is_nan", "is_zero", "is_negative", "is_empty",
-        "is_whitespace", "is_true", "is_false", "is_future", "is_past",
-        "not_between",
-    ] | None = None
+    op: (
+        Literal[
+            "eq",
+            "ne",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "between",
+            "in",
+            "not_in",
+            "contains",
+            "starts_with",
+            "ends_with",
+            "is_null",
+            "is_not_null",
+            "is_missing",
+            "is_nan",
+            "is_zero",
+            "is_negative",
+            "is_empty",
+            "is_whitespace",
+            "is_true",
+            "is_false",
+            "is_future",
+            "is_past",
+            "not_between",
+        ]
+        | None
+    ) = None
     left: ValueExpression | None = None
     right: ValueExpression | None = None
     value: ValueExpression | None = None
@@ -81,9 +104,18 @@ class Predicate(StrictModel):
         if not self.op:
             raise ValueError("predicate must contain an operator or group")
         unary = {
-            "is_null", "is_not_null", "is_missing", "is_nan", "is_zero",
-            "is_negative", "is_empty", "is_whitespace", "is_true", "is_false",
-            "is_future", "is_past",
+            "is_null",
+            "is_not_null",
+            "is_missing",
+            "is_nan",
+            "is_zero",
+            "is_negative",
+            "is_empty",
+            "is_whitespace",
+            "is_true",
+            "is_false",
+            "is_future",
+            "is_past",
         }
         if self.op in unary:
             if self.value is None or self.left is not None or self.right is not None:
@@ -94,13 +126,9 @@ class Predicate(StrictModel):
             isinstance(self.right.literal, list) and len(self.right.literal) == 2
         ):
             raise ValueError(f"{self.op} requires a two-value literal list on the right")
-        if self.op in {"in", "not_in"} and not (
-            isinstance(self.right.literal, list) and self.right.literal
-        ):
+        if self.op in {"in", "not_in"} and not (isinstance(self.right.literal, list) and self.right.literal):
             raise ValueError(f"{self.op} requires a non-empty literal list on the right")
-        if self.op in {"contains", "starts_with", "ends_with"} and not isinstance(
-            self.right.literal, str
-        ):
+        if self.op in {"contains", "starts_with", "ends_with"} and not isinstance(self.right.literal, str):
             raise ValueError(f"{self.op} requires a string literal on the right")
         return self
 
@@ -111,15 +139,40 @@ class Predicate(StrictModel):
 class Measurement(StrictModel):
     id: str = Field(min_length=1, max_length=63)
     type: Literal["metric", "violations"]
-    metric: Literal[
-        "row_count", "null_count", "null_rate", "distinct_count", "distinct_rate",
-        "non_null_count", "non_null_rate", "duplicate_count",
-        "empty_string_count", "empty_string_rate", "whitespace_count", "whitespace_rate",
-        "zero_count", "zero_rate", "negative_count", "negative_rate",
-        "true_count", "true_rate", "false_count", "false_rate",
-        "text_length_min", "text_length_max", "text_length_mean",
-        "min", "max", "mean", "stddev", "sum", "freshness_seconds",
-    ] | None = None
+    metric: (
+        Literal[
+            "row_count",
+            "null_count",
+            "null_rate",
+            "distinct_count",
+            "distinct_rate",
+            "non_null_count",
+            "non_null_rate",
+            "duplicate_count",
+            "empty_string_count",
+            "empty_string_rate",
+            "whitespace_count",
+            "whitespace_rate",
+            "zero_count",
+            "zero_rate",
+            "negative_count",
+            "negative_rate",
+            "true_count",
+            "true_rate",
+            "false_count",
+            "false_rate",
+            "text_length_min",
+            "text_length_max",
+            "text_length_mean",
+            "min",
+            "max",
+            "mean",
+            "stddev",
+            "sum",
+            "freshness_seconds",
+        ]
+        | None
+    ) = None
     field: str | None = Field(default=None, min_length=1, max_length=255)
     filter_when: Predicate | None = Field(default=None, alias="filterWhen")
     violation_when: Predicate | None = Field(default=None, alias="violationWhen")
@@ -190,7 +243,31 @@ class Execution(StrictModel):
     timeout_seconds: int = Field(default=30, alias="timeoutSeconds", ge=1, le=120)
     max_bytes_scanned: int | None = Field(default=None, alias="maxBytesScanned", ge=1)
     max_documents_scanned: int | None = Field(default=None, alias="maxDocumentsScanned", ge=1)
+    max_rows_scanned: int | None = Field(default=None, alias="maxRowsScanned", ge=1)
+    partition_bindings: dict[str, Any] = Field(
+        default_factory=dict,
+        alias="partitionBindings",
+    )
     sampling: Sampling = Field(default_factory=Sampling)
+
+    @model_validator(mode="after")
+    def native_bounds(self):
+        if len(self.partition_bindings) > 10:
+            raise ValueError("partitionBindings may contain at most 10 keys")
+        for key, value in self.partition_bindings.items():
+            if not key or len(key) > 255 or "\x00" in key:
+                raise ValueError("partitionBindings keys are invalid")
+            if (
+                value is None
+                or isinstance(value, (dict, list, tuple, set))
+                or not isinstance(value, (str, int, float, bool))
+            ):
+                raise ValueError("partitionBindings values must be non-null JSON scalars")
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError("partitionBindings numeric values must be finite")
+            if isinstance(value, str) and len(value) > 2_048:
+                raise ValueError("partitionBindings strings may contain at most 2048 characters")
+        return self
 
 
 class Metadata(StrictModel):
@@ -198,9 +275,9 @@ class Metadata(StrictModel):
     labels: dict[str, str] = Field(default_factory=dict)
     description: str | None = Field(default=None, max_length=2_000)
     owner: str | None = Field(default=None, max_length=255)
-    quality_dimension: Literal[
-        "accuracy", "completeness", "consistency", "timeliness", "validity", "uniqueness"
-    ] | None = Field(default=None, alias="qualityDimension")
+    quality_dimension: (
+        Literal["accuracy", "completeness", "consistency", "timeliness", "validity", "uniqueness"] | None
+    ) = Field(default=None, alias="qualityDimension")
     notes: str | None = Field(default=None, max_length=4_000)
 
     @model_validator(mode="after")
@@ -255,18 +332,13 @@ class MonitorSpec(StrictModel):
                     references.add(value.ref)
                 if value and value.field and not inside_measurement:
                     raise ValueError("breach predicates cannot reference source fields")
-            nodes.extend(
-                (child, depth + 1, inside_measurement)
-                for child in predicate.children()
-            )
+            nodes.extend((child, depth + 1, inside_measurement) for child in predicate.children())
         declared_references = set()
         for measurement in self.measurements:
             if measurement.type == "metric":
                 declared_references.add(measurement.id)
             else:
-                declared_references.update(
-                    f"{measurement.id}.{output}" for output in measurement.output or []
-                )
+                declared_references.update(f"{measurement.id}.{output}" for output in measurement.output or [])
         unknown = sorted(references - declared_references)
         if unknown:
             raise ValueError(f"unknown measurement reference: {unknown[0]}")

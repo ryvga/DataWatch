@@ -263,9 +263,12 @@ services so family/version drift is visible. SQL Server's isolated self-signed l
 an explicit insecure test mode; verified identity remains the runtime default.
 The environment, commands, claim boundary, and 20-run measurements are preserved in
 `docs/evidence/sql-connector-conformance-2026-08-21.md` and its JSON companion.
-MongoDB uses a native sampled document profiler. Cassandra remains discovery/schema-only
-until a typed partition planner exists; arbitrary CQL is rejected before a driver call,
-and Cassandra transport defaults to certificate and hostname verification.
+MongoDB uses a native sampled document profiler. Cassandra exposes scoped discovery and
+deterministic schema snapshots plus manual typed partition monitors. The Cassandra
+planner requires every partition key, binds values through a driver-prepared statement,
+selects at most `maxRowsScanned + 1` rows, and fails closed instead of evaluating a
+partial partition. Arbitrary caller CQL is rejected before a driver call, and Cassandra
+transport defaults to certificate and hostname verification.
 
 ---
 
@@ -344,6 +347,26 @@ remain explicit compilation blockers. Preview attestations include the native pl
 version; the same plan hash and sampled schema fingerprint are persisted on every run.
 The required Mongo service lane proves both capped execution and an end-to-end breach →
 incident → recovery transition.
+
+### Cassandra partition monitors
+
+Cassandra uses planner identity `datawatch-v1alpha1-cassandra-1` rather than relational
+SQL. The server-owned DDL snapshot records partition and clustering-key roles. Preview
+then requires `partitionBindings` to contain every partition key and no unrelated key,
+plus `maxRowsScanned` between 1 and 10,000. Identifiers are rendered only by the planner;
+partition values are bound by `session.prepare(...).bind(...)` and never interpolated
+into CQL. The statement reads one exact partition with `LIMIT maxRowsScanned + 1`, a
+bounded fetch size, and a driver timeout. Seeing the extra row raises
+`row_scan_budget_exceeded`; measurements are never calculated from a truncated result.
+
+The application evaluates allowlisted row-count, typed aggregate, freshness, and
+violation metrics in memory over that bounded partition, then uses the same persisted
+run, policy, incident, narration trigger, and recovery services as relational and Mongo
+plans. Cassandra monitors are manual-only until a native scheduled profile contract can
+supply trustworthy source-wide provenance. The required Cassandra 5 service lane proves
+connection, scoped discovery, schema markers, prepared execution, mutation rejection,
+overflow, cleanup, and an incident open → recovery transition. Live trusted-certificate
+TLS, Cassandra 4, Astra bundles, and controlled-scale evidence remain explicit gaps.
 
 ### Redis native profile
 

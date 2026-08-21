@@ -360,6 +360,56 @@ async def test_mongodb_preview_uses_native_bounded_planner_and_attestation():
 
 
 @pytest.mark.asyncio
+async def test_cassandra_preview_uses_partition_bound_planner_and_attestation():
+    from app.routers.monitor_dsl import preview_monitor_definition
+
+    table = SimpleNamespace(
+        id=UUID(ASSET_ID),
+        schema_name="analytics",
+        table_name="events",
+        dbt_model_yaml=(
+            'CREATE TABLE "analytics"."events" (\n'
+            '  "tenant_id" text is_partition_key=true is_clustering_key=false,\n'
+            '  "event_id" int is_partition_key=false is_clustering_key=true,\n'
+            '  "status" text is_partition_key=false is_clustering_key=false,\n'
+            '  "payment_reference" text is_partition_key=false is_clustering_key=false\n);'
+        ),
+    )
+    source = SimpleNamespace(type="cassandra")
+
+    class Database:
+        async def execute(self, statement):
+            class Result:
+                def one_or_none(self):
+                    return (table, source)
+
+            return Result()
+
+        async def scalar(self, statement):
+            return None
+
+    body = valid_definition()
+    body["spec"]["trigger"] = {"type": "manual"}
+    body["spec"]["execution"].pop("maxBytesScanned")
+    body["spec"]["execution"].pop("maxDocumentsScanned")
+    body["spec"]["execution"]["maxRowsScanned"] = 100
+    body["spec"]["execution"]["partitionBindings"] = {"tenant_id": "tenant-a"}
+    body["spec"]["execution"]["sampling"] = {"mode": "off"}
+    response = await preview_monitor_definition(
+        MonitorDefinition.model_validate(body),
+        org=SimpleNamespace(id="org-1"),
+        db=Database(),
+    )
+
+    assert response["preview"]["status"] == "compiled_validation_only"
+    assert response["preview"]["plannerVersion"] == "datawatch-v1alpha1-cassandra-1"
+    assert response["compiledPlan"]["kind"] == "cassandra_partition_scan"
+    assert response["compiledPlan"]["statementMode"] == "internal_prepared_only"
+    assert response["compiledPlan"]["parameters"] == [{"name": "tenant_id", "value": "tenant-a"}]
+    assert response["capabilityPlan"]["activationSupported"] is True
+
+
+@pytest.mark.asyncio
 async def test_incompatible_preview_does_not_issue_activation_attestation():
     from app.routers.monitor_dsl import preview_monitor_definition
 

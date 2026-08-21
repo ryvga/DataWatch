@@ -32,6 +32,7 @@ async def test_connector_types_include_registry_fields_and_versions():
             "none",
             "internal_read_only",
             "internal_document_read_only",
+            "internal_partition_read_only",
         }
         field_names = {field["name"] for field in item["fields"]}
         assert set(item["required"]).issubset(field_names)
@@ -62,6 +63,7 @@ async def test_connector_types_include_registry_fields_and_versions():
     assert by_type["redis"]["readiness"] == "experimental"
     assert by_type["redis"]["versions"] == ["Auto-detect", "Redis 7", "Redis 8"]
     cassandra_fields = {field["name"]: field for field in by_type["cassandra"]["fields"]}
+    assert by_type["cassandra"]["capabilities"]["compiled_monitors"] == "internal_partition_read_only"
     assert cassandra_fields["tls_mode"]["default"] == "verify_identity"
     assert "Astra DB" not in by_type["cassandra"]["versions"]
     assert by_type["snowflake"]["readiness"] == "planned"

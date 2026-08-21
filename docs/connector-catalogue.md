@@ -15,7 +15,7 @@ describe only paths backed by executable evidence.
 | Relational | Oracle | Enterprise operational database | Planned, not implemented | `python-oracledb` thin-mode connection, discovery, deterministic schema, Oracle core dialect, live Oracle Free lane |
 | Embedded SQL | SQLite | Application/local source | Beta/core | Restrict hosted paths to a managed allowlist/upload boundary and add persisted API profile test |
 | Document | MongoDB | Tier-1 document source | Experimental bounded sampled profile plus immutable typed aggregation monitors; required real Mongo lane and incident recovery vertical | Add trusted-certificate live TLS, repeated-sample drift confirmation, scale evidence, filter/distinct/string-pattern semantics |
-| Wide-column | Cassandra | Partition-scoped source | Experimental discovery/schema only | Required partition bindings and internally prepared, bounded native plans; Cassandra 4/5 lanes |
+| Wide-column | Cassandra | Partition-scoped source | Experimental scoped discovery/schema plus manual immutable monitors with complete partition bindings, prepared statements, a hard row ceiling, required Cassandra 5 lane, and incident recovery proof | Add scheduled native profiling, trusted-certificate TLS, Cassandra 4 compatibility, controlled scale, and Astra bundles |
 | Key/value and streams | Redis | TTL/stream health source | Experimental bounded native profile: `SCAN`, TTL, memory, type, Hash size, Stream length/group pending/lag; no values | Add typed immutable monitor plans, incident bridge, mutation corpus, and dedicated Redis 7/8 lanes |
 | Cloud warehouse | Snowflake | Proprietary warehouse | Planned 501 stub | Official driver with bounded login/network/statement timeouts, discovery/schema, native core dialect, secret-backed nightly conformance |
 | Open-source warehouse | ClickHouse | Networked open-source warehouse | Experimental discovery/schema shell | Verified TLS, query budgets, ClickHouse core profiler, container-backed persisted profile test |
@@ -53,7 +53,8 @@ A connector cannot move beyond experimental until all applicable gates pass:
 3. Complete ClickHouse as the open-source warehouse vertical.
 4. Implement Redis native TTL/Streams monitoring without relational emulation.
 5. Implement Snowflake, then Oracle, as full driver-to-persisted-profile verticals.
-6. Add Cassandra partition-bound monitoring and harden hosted DuckDB/SQLite file access.
+6. Extend Cassandra from the completed manual partition-monitor slice to scheduled native
+   profiling, then harden hosted DuckDB/SQLite file access.
 
 This order prioritizes reusable safety contracts and executable verticals over adding
 unverified provider badges.

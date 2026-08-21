@@ -255,10 +255,12 @@ CONNECTOR_REGISTRY = {
             "ssl_ca": None,
         },
         "label": "Cassandra",
-        "description": "Apache Cassandra discovery/schema adapter; typed partition plans pending",
+        "description": "Apache Cassandra discovery/schema and manual partition-bound typed monitors",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(),
+        "capabilities": _capabilities(
+            compiled_monitors="internal_partition_read_only",
+        ),
     },
     "mongodb": {
         "module": "app.connectors.mongodb",

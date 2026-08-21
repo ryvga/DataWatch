@@ -11,9 +11,11 @@ from sqlglot import exp, parse
 from app.connectors.base import (
     BaseConnector,
     DocumentScanBudgetExceeded,
+    RowScanBudgetExceeded,
     ScanBudgetExceeded,
     ScanBudgetUnsupported,
 )
+from app.services.cassandra_monitor import CassandraMonitorPlan
 from app.services.document_monitor import DocumentMonitorPlan
 from app.services.monitor_compiler import RelationalMonitorPlan
 from app.services.monitor_planning import MonitorPlan
@@ -249,7 +251,64 @@ async def execute_document_plan(
 async def execute_monitor_plan(connector: BaseConnector, plan: MonitorPlan) -> dict:
     if isinstance(plan, DocumentMonitorPlan):
         return await execute_document_plan(connector, plan)
+    if isinstance(plan, CassandraMonitorPlan):
+        return await execute_partition_plan(connector, plan)
     return await execute_compiled_plan(connector, plan)
+
+
+async def execute_partition_plan(
+    connector: BaseConnector,
+    plan: CassandraMonitorPlan,
+) -> dict:
+    """Execute one prepared partition plan and validate its scalar result."""
+    if plan.relation.source_type != "cassandra" or getattr(connector, "native_profile_kind", None) != "partition":
+        raise MonitorExecutionError(
+            "connector_plan_mismatch",
+            "Partition monitor plan does not match the connector",
+        )
+    if not 1 <= plan.timeout_seconds <= 120 or plan.max_rows_scanned < 1:
+        raise MonitorExecutionError(
+            "execution_contract_invalid",
+            "Partition monitor execution bounds are invalid",
+        )
+    try:
+        measurements = await connector.execute_partition_monitor(plan)
+    except RowScanBudgetExceeded as exc:
+        raise MonitorExecutionError(
+            "row_scan_budget_exceeded",
+            "Partition monitor reached maxRowsScanned",
+        ) from exc
+    except TimeoutError as exc:
+        raise MonitorExecutionError(
+            "execution_timeout",
+            "Partition monitor exceeded its timeout",
+        ) from exc
+    except NotImplementedError as exc:
+        raise MonitorExecutionError(
+            "connector_execution_not_supported",
+            "Connector has no partition monitor execution adapter",
+        ) from exc
+    except Exception as exc:
+        raise MonitorExecutionError(
+            "execution_failed",
+            f"Partition monitor execution failed: {type(exc).__name__}",
+        ) from exc
+    expected = {output.reference for output in plan.outputs}
+    if set(measurements) != expected:
+        raise MonitorExecutionError(
+            "result_shape_invalid",
+            "Partition monitor returned unexpected measurements",
+        )
+    result = {}
+    for output in plan.outputs:
+        value = measurements[output.reference]
+        if value is None and not output.nullable:
+            raise MonitorExecutionError(
+                "result_null_invalid",
+                f"Partition monitor output cannot be null: {output.reference}",
+            )
+        result[output.reference] = None if value is None else _finite_number(value)
+    return result
 
 
 async def execute_and_evaluate_compiled_plan(

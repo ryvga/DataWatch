@@ -2,8 +2,9 @@ import asyncio
 import logging
 import ssl
 from typing import Any
+from uuid import UUID
 
-from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
+from app.connectors.base import BaseConnector, RowScanBudgetExceeded, SchemaInfo, TableInfo
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ _SYSTEM_KEYSPACES = {
     "system_schema",
     "system_virtual_schema",
 }
+
 
 class CassandraConnector(BaseConnector):
     """
@@ -29,6 +31,8 @@ class CassandraConnector(BaseConnector):
         self._cluster: Any | None = None
         self._session: Any | None = None
         self._connect_lock = asyncio.Lock()
+
+    native_profile_kind = "partition"
 
     @staticmethod
     def _parse_hosts(hosts: str | list[str]) -> list[str]:
@@ -72,9 +76,7 @@ class CassandraConnector(BaseConnector):
             **cluster_options,
         )
         keyspace = c.get("keyspace")
-        self._session = (
-            self._cluster.connect(keyspace) if keyspace else self._cluster.connect()
-        )
+        self._session = self._cluster.connect(keyspace) if keyspace else self._cluster.connect()
         return self._session
 
     def _ssl_context(self) -> ssl.SSLContext | None:
@@ -115,23 +117,61 @@ class CassandraConnector(BaseConnector):
         def _discover() -> list[SchemaInfo]:
             schemas: list[SchemaInfo] = []
             keyspaces = self._cluster.metadata.keyspaces.items()
+            configured_keyspace = self._config.get("keyspace")
             for keyspace_name, keyspace in sorted(keyspaces):
                 if keyspace_name in _SYSTEM_KEYSPACES:
                     continue
+                if configured_keyspace and keyspace_name != configured_keyspace:
+                    continue
 
-                tables = [
-                    TableInfo(name=table_name, estimated_rows=None)
-                    for table_name in sorted(keyspace.tables)
-                ]
+                tables = [TableInfo(name=table_name, estimated_rows=None) for table_name in sorted(keyspace.tables)]
                 schemas.append(SchemaInfo(name=keyspace_name, tables=tables))
             return schemas
 
         return await asyncio.to_thread(_discover)
 
     async def execute_profile_query(self, query: str) -> dict:
-        raise NotImplementedError(
-            "Cassandra does not execute caller-provided CQL; a typed partition plan is required"
+        raise NotImplementedError("Cassandra does not execute caller-provided CQL; a typed partition plan is required")
+
+    async def execute_partition_monitor(self, plan) -> dict:
+        from app.services.cassandra_monitor import (
+            CassandraMonitorPlan,
+            evaluate_cassandra_rows,
+            render_cassandra_statement,
         )
+
+        if not isinstance(plan, CassandraMonitorPlan):
+            raise ValueError("Cassandra monitor plan type is invalid")
+        self._validate_scope(plan.relation.schema_name, plan.relation.table_name)
+        expected = render_cassandra_statement(
+            plan.relation,
+            plan.selected_fields,
+            plan.partition_keys,
+            plan.max_rows_scanned,
+        )
+        if plan.statement != expected or not 1 <= plan.timeout_seconds <= 120:
+            raise ValueError("Cassandra monitor plan contract is invalid")
+        session = await self._get_session()
+
+        def _execute() -> list[dict[str, Any]]:
+            prepared = session.prepare(plan.statement)
+            values = tuple(
+                _coerce_partition_value(
+                    plan.relation.column(key).data_type,
+                    value,
+                )
+                for key, value in zip(plan.partition_keys, plan.partition_values)
+            )
+            bound = prepared.bind(values)
+            bound.fetch_size = plan.max_rows_scanned + 1
+            result = session.execute(bound, timeout=plan.timeout_seconds)
+            rows = list(result)
+            return [_row_mapping(row, plan.selected_fields) for row in rows]
+
+        rows = await asyncio.to_thread(_execute)
+        if len(rows) > plan.max_rows_scanned:
+            raise RowScanBudgetExceeded("Cassandra monitor reached maxRowsScanned")
+        return evaluate_cassandra_rows(plan, rows)
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
         await self._get_session()
@@ -145,18 +185,25 @@ class CassandraConnector(BaseConnector):
             for column_name, column in table_meta.columns.items():
                 lines.append(
                     "  "
-                    f"{column_name} {column.cql_type} "
+                    f"{_quote_identifier(column_name)} {column.cql_type} "
                     f"is_partition_key={str(column_name in partition_keys).lower()} "
                     f"is_clustering_key={str(column_name in clustering_keys).lower()}"
                 )
 
             return (
-                f"CREATE TABLE {schema}.{table} (\n"
-                + ",\n".join(lines)
-                + "\n);"
+                f"CREATE TABLE {_quote_identifier(schema)}.{_quote_identifier(table)} (\n" + ",\n".join(lines) + "\n);"
             )
 
         return await asyncio.to_thread(_ddl)
+
+    async def get_table_schema(
+        self,
+        schema: str,
+        table: str,
+    ) -> tuple[str, set[str]]:
+        ddl = await self.get_table_ddl(schema, table)
+        table_meta = self._get_table_metadata(schema, table)
+        return ddl, set(table_meta.columns)
 
     async def close(self) -> None:
         session = self._session
@@ -173,6 +220,7 @@ class CassandraConnector(BaseConnector):
         await asyncio.to_thread(_close)
 
     def _get_table_metadata(self, schema: str, table: str):
+        self._validate_scope(schema, table)
         keyspaces = self._cluster.metadata.keyspaces
         keyspace = keyspaces.get(schema) or keyspaces.get(schema.lower())
         if keyspace is None:
@@ -182,3 +230,30 @@ class CassandraConnector(BaseConnector):
         if table_meta is None:
             raise ValueError(f"Cassandra table not found: {schema}.{table}")
         return table_meta
+
+    def _validate_scope(self, schema: str, table: str) -> None:
+        configured = self._config.get("keyspace")
+        if configured and schema != configured:
+            raise ValueError("Cassandra operations are restricted to the configured keyspace")
+        if not schema or not table or "\x00" in schema or "\x00" in table:
+            raise ValueError("Cassandra keyspace or table is invalid")
+
+
+def _quote_identifier(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def _coerce_partition_value(data_type: str, value):
+    normalized = data_type.lower()
+    if normalized in {"uuid", "timeuuid"} and isinstance(value, str):
+        return UUID(value)
+    return value
+
+
+def _row_mapping(row, selected_fields: tuple[str, ...]) -> dict[str, Any]:
+    if hasattr(row, "_asdict"):
+        values = row._asdict()
+        return {field: values.get(field) for field in selected_fields}
+    if isinstance(row, dict):
+        return {field: row.get(field) for field in selected_fields}
+    return {field: getattr(row, field) for field in selected_fields}

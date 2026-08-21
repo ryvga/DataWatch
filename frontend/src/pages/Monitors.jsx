@@ -104,6 +104,8 @@ const INITIAL_DSL_FORM = {
   consecutiveBreaches: '1',
   recoveryPasses: '1',
   maxDocumentsScanned: '10000',
+  maxRowsScanned: '1000',
+  partitionBindings: '{"tenant_id":"tenant-a"}',
 }
 
 function BuildDslDefinition({ form, sourceType }) {
@@ -151,7 +153,7 @@ function BuildDslDefinition({ form, sourceType }) {
     metadata,
     spec: {
       target: { assetId: form.tableId },
-      trigger: { type: form.triggerType },
+      trigger: { type: sourceType === 'cassandra' ? 'manual' : form.triggerType },
       measurements: [measurement],
       breachWhen: {
         op: form.breachOperator,
@@ -172,6 +174,13 @@ function BuildDslDefinition({ form, sourceType }) {
           maxDocumentsScanned: Number(form.maxDocumentsScanned),
           sampling: { mode: 'off' },
         }
+        : sourceType === 'cassandra'
+          ? {
+            timeoutSeconds: 30,
+            maxRowsScanned: Number(form.maxRowsScanned),
+            partitionBindings: JSON.parse(form.partitionBindings),
+            sampling: { mode: 'off' },
+          }
         : { timeoutSeconds: 30, sampling: { mode: 'auto' } },
     },
   }
@@ -186,6 +195,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
   const selectedTable = tables.find((table) => table.id === form.tableId)
   const sourceType = selectedTable?.source_type
   const isMongo = sourceType === 'mongodb'
+  const isCassandra = sourceType === 'cassandra'
 
   useEffect(() => {
     if (!open) return
@@ -212,6 +222,21 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
       return 'MongoDB string pattern predicates are not supported by the bounded planner yet.'
     }
     if (isMongo && form.filterField.trim()) return 'MongoDB metric filters are not supported by the bounded planner yet.'
+    if (isCassandra && (!Number.isInteger(Number(form.maxRowsScanned)) || Number(form.maxRowsScanned) < 1 || Number(form.maxRowsScanned) > 10000)) {
+      return 'Cassandra max rows scanned must be an integer between 1 and 10,000.'
+    }
+    if (isCassandra) {
+      try {
+        const bindings = JSON.parse(form.partitionBindings)
+        if (!bindings || Array.isArray(bindings) || typeof bindings !== 'object' || Object.keys(bindings).length === 0) {
+          return 'Cassandra partition bindings must be a non-empty JSON object.'
+        }
+        const invalidValue = Object.values(bindings).some((value) => value === null || !['string', 'number', 'boolean'].includes(typeof value))
+        if (invalidValue) return 'Cassandra partition values must be non-null strings, numbers, or booleans.'
+      } catch {
+        return 'Cassandra partition bindings must be valid JSON.'
+      }
+    }
     if (form.kind === 'violations' && !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative', 'is_empty', 'is_whitespace', 'is_true', 'is_false', 'is_future', 'is_past'].includes(form.predicateOperator) && !form.predicateValue.trim()) {
       return 'Enter the value the column should be compared with.'
     }
@@ -501,6 +526,39 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
             </div>
           )}
 
+          {isCassandra && (
+            <div className="grid gap-4 rounded-md border bg-muted/20 p-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="dsl-max-rows">Maximum partition rows scanned</Label>
+                <Input
+                  id="dsl-max-rows"
+                  type="number"
+                  min="1"
+                  max="10000"
+                  step="1"
+                  value={form.maxRowsScanned}
+                  onChange={set('maxRowsScanned')}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required hard ceiling. The run fails closed before evaluating a larger partition.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="dsl-partition-bindings">Exact partition bindings (JSON)</Label>
+                <Textarea
+                  id="dsl-partition-bindings"
+                  value={form.partitionBindings}
+                  onChange={set('partitionBindings')}
+                  className="min-h-24 font-mono text-xs"
+                  spellCheck="false"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Every partition-key field must be bound. Values are sent through a prepared statement, never interpolated into CQL.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
               <Label>Severity</Label>
@@ -518,10 +576,11 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
             </div>
             <div className="grid gap-2">
               <Label>Trigger</Label>
-              <Select value={form.triggerType} onValueChange={set('triggerType')}>
+              <Select value={isCassandra ? 'manual' : form.triggerType} onValueChange={set('triggerType')} disabled={isCassandra}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="on_profile">After each profile</SelectItem><SelectItem value="manual">Manual only</SelectItem></SelectContent>
               </Select>
+              {isCassandra && <p className="text-xs text-muted-foreground">Cassandra partition monitors are manual-only in this release.</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="dsl-breaches">Consecutive breaches</Label>
