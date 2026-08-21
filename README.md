@@ -63,6 +63,9 @@ is in [`docs/evidence/sql-connector-conformance-2026-08-21.md`](docs/evidence/sq
 The Cassandra prepared-partition contract, hosted proof, incident recovery result, and
 PFE-ready limitation boundary are in
 [`docs/evidence/cassandra-partition-monitor-conformance-2026-08-21.md`](docs/evidence/cassandra-partition-monitor-conformance-2026-08-21.md).
+The consolidated MongoDB/Cassandra/Redis security, lifecycle, hosted-run chronology, and
+report-chapter mapping are in
+[`docs/evidence/nosql-monitor-conformance-2026-08-21.md`](docs/evidence/nosql-monitor-conformance-2026-08-21.md).
 
 `GET /api/v1/sources/connector-types` returns this readiness plus machine-readable
 capabilities. Legacy custom SQL is a restricted, transitional escape hatch: definitions
