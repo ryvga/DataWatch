@@ -112,6 +112,19 @@ async function run() {
       })
     })
 
+    await page.route('**/api/v1/tables/*/nl-rule', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sql: 'SELECT COUNT(*) FROM public.events WHERE event_name IS NULL',
+          explanation: 'Counts events that do not have the required event name.',
+          severity: 'P2',
+          estimated_impact: 'Analytics and routing may be incomplete.',
+        }),
+      })
+    })
+
     await login(page)
     await openTable(page)
 
@@ -153,6 +166,10 @@ async function run() {
     await page.getByPlaceholder('Monitor name').fill(NL_MONITOR_NAME)
     await saveButton.click()
     await page.waitForFunction((name) => document.body.innerText.includes(name), NL_MONITOR_NAME, { timeout: 30000 })
+
+    assert(diagnostics.consoleErrors.length === 0, `Console diagnostics: ${diagnostics.consoleErrors.join(' | ')}`)
+    assert(diagnostics.pageErrors.length === 0, `Page diagnostics: ${diagnostics.pageErrors.join(' | ')}`)
+    assert(diagnostics.failedRequests.length === 0, `Request diagnostics: ${diagnostics.failedRequests.join(' | ')}`)
 
     console.log(JSON.stringify({
       status: 'passed',
