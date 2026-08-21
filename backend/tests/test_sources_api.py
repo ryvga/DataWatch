@@ -68,7 +68,8 @@ async def test_connector_types_include_registry_fields_and_versions():
     assert by_type["cassandra"]["capabilities"]["compiled_monitors"] == "internal_partition_read_only"
     assert cassandra_fields["tls_mode"]["default"] == "verify_identity"
     assert "Astra DB" not in by_type["cassandra"]["versions"]
-    assert by_type["snowflake"]["readiness"] == "planned"
+    assert by_type["snowflake"]["readiness"] == "experimental"
+    assert by_type["snowflake"]["capabilities"]["profiling"] == "core"
 
     mariadb = ConnectorFactory.create(
         "mariadb",
