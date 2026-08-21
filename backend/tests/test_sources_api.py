@@ -5,6 +5,9 @@ from fastapi import HTTPException
 
 from app.connectors.factory import CONNECTOR_REGISTRY, ConnectorFactory
 from app.connectors.mysql import MySQLConnector
+from app.auth import create_access_token, hash_password
+from app.models.organization import Organization
+from app.models.user import User
 from app.routers import sources
 from app.routers import tables
 
@@ -74,6 +77,9 @@ async def test_connector_types_include_registry_fields_and_versions():
 async def test_preview_source_connection_tests_unsaved_config(monkeypatch):
     calls = {}
 
+    async def allow_rate(_org_id):
+        calls["rate_checked"] = True
+
     class FakeConnector:
         async def test_connection(self):
             return True
@@ -86,12 +92,14 @@ async def test_preview_source_connection_tests_unsaved_config(monkeypatch):
         "create",
         lambda source_type, config: calls.setdefault("args", (source_type, config)) and FakeConnector(),
     )
+    monkeypatch.setattr(sources, "_enforce_connection_rate_limit", allow_rate)
 
     result = await sources.preview_source_connection(
         sources.DataSourceTestRequest(
             type="postgres",
             connection_config={"host": "localhost", "database": "demo"},
-        )
+        ),
+        current=(SimpleNamespace(role="owner"), SimpleNamespace(id="org-1")),
     )
 
     assert result.connected is True
@@ -99,10 +107,87 @@ async def test_preview_source_connection_tests_unsaved_config(monkeypatch):
     assert result.latency_ms >= 0
     assert calls["args"] == ("postgres", {"host": "localhost", "database": "demo"})
     assert calls["closed"] is True
+    assert calls["rate_checked"] is True
+
+
+@pytest.mark.asyncio
+async def test_connection_preview_requires_owner_or_admin():
+    with pytest.raises(HTTPException) as exc_info:
+        await sources.preview_source_connection(
+            sources.DataSourceTestRequest(
+                type="postgres",
+                connection_config={"host": "db.example.com", "database": "demo"},
+            ),
+            current=(SimpleNamespace(role="member"), SimpleNamespace(id="org-1")),
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_connection_preview_member_is_rejected_by_api(
+    client, db_session, test_org
+):
+    org = await db_session.get(Organization, test_org["org_id"])
+    member = User(
+        org_id=org.id,
+        email="member-preview@example.com",
+        password_hash=hash_password("member-password-123"),
+        role="member",
+    )
+    db_session.add(member)
+    await db_session.commit()
+    await db_session.refresh(member)
+    token = create_access_token(str(member.id), str(org.id), org.slug)
+
+    response = await client.post(
+        "/api/v1/sources/test-connection",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "type": "postgres",
+            "connection_config": {"host": "public.example", "database": "demo"},
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Owner or admin role required"
+
+
+@pytest.mark.asyncio
+async def test_connection_rate_limit_is_shared_and_fails_closed(monkeypatch):
+    calls = []
+
+    class FakeRedis:
+        async def incr(self, key):
+            calls.append(("incr", key))
+            return 11
+
+        async def expire(self, key, ttl):
+            calls.append(("expire", key, ttl))
+
+        async def aclose(self):
+            calls.append(("close",))
+
+    async def fake_redis():
+        return FakeRedis()
+
+    monkeypatch.setattr(sources, "_redis", fake_redis)
+    monkeypatch.setattr(sources.settings, "SOURCE_PREVIEW_RATE_LIMIT", 10)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await sources._enforce_connection_rate_limit("org-1")
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.headers == {"Retry-After": "60"}
+    assert calls[0][0] == "incr"
+    assert calls[-1] == ("close",)
 
 
 @pytest.mark.asyncio
 async def test_connection_errors_never_echo_driver_or_credential_details(monkeypatch):
+    async def allow_target(_source_type, _config):
+        return None
+
     class FailingConnector:
         async def test_connection(self):
             raise RuntimeError("access denied password=super-secret host=internal-db")
@@ -115,6 +200,7 @@ async def test_connection_errors_never_echo_driver_or_credential_details(monkeyp
         "create",
         lambda source_type, config: FailingConnector(),
     )
+    monkeypatch.setattr(sources, "enforce_source_target_policy", allow_target)
 
     result = await sources._test_connection_config(
         "postgres",
@@ -129,6 +215,9 @@ async def test_connection_errors_never_echo_driver_or_credential_details(monkeyp
 
 @pytest.mark.asyncio
 async def test_connection_preview_swallows_and_sanitizes_close_failures(monkeypatch):
+    async def allow_target(_source_type, _config):
+        return None
+
     class Connector:
         async def test_connection(self):
             return True
@@ -141,6 +230,7 @@ async def test_connection_preview_swallows_and_sanitizes_close_failures(monkeypa
         "create",
         lambda source_type, config: Connector(),
     )
+    monkeypatch.setattr(sources, "enforce_source_target_policy", allow_target)
 
     result = await sources._test_connection_config(
         "postgres",

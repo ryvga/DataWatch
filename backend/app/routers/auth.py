@@ -565,6 +565,8 @@ async def get_current_user_from_jwt(
     org = await db.get(Organization, payload["org_id"])
     if not org:
         raise HTTPException(status_code=401, detail="Org not found")
+    if user.org_id != org.id:
+        raise HTTPException(status_code=401, detail="Token tenant mismatch")
     return user, org
 
 

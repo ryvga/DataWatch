@@ -15,9 +15,12 @@ from app.database import get_db
 from app.models.data_source import DataSource
 from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
+from app.models.user import User
 from app.routers.auth import get_current_org_from_jwt
+from app.routers.auth import get_current_user_from_jwt
 from app.services.crypto import decrypt_config, encrypt_config
 from app.services.error_safety import safe_connection_error
+from app.services.source_network_policy import enforce_source_target_policy
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/sources", tags=["sources"])
@@ -123,6 +126,7 @@ def _validate_connection_config(source_type: str, config: dict) -> None:
 
 async def _test_connection_config(source_type: str, config: dict) -> TestResult:
     _validate_connection_config(source_type, config)
+    await enforce_source_target_policy(source_type, config)
     connector = None
     start = time.monotonic()
     try:
@@ -143,6 +147,41 @@ async def _test_connection_config(source_type: str, config: dict) -> TestResult:
                 logger.warning("Source connector close failed: %s", type(e).__name__)
 
 
+def _require_source_admin(current: tuple[User, Organization]) -> Organization:
+    user, org = current
+    if user.role not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Owner or admin role required")
+    return org
+
+
+async def _enforce_connection_rate_limit(org_id: str) -> None:
+    """Redis fixed-window limit; fail closed if the shared limiter is unavailable."""
+    window = max(1, settings.SOURCE_PREVIEW_RATE_WINDOW_SECONDS)
+    bucket = int(time.time()) // window
+    key = f"rate:source_connection:{org_id}:{bucket}"
+    r = await _redis()
+    try:
+        count = await r.incr(key)
+        if count == 1:
+            await r.expire(key, window + 1)
+        if count > max(1, settings.SOURCE_PREVIEW_RATE_LIMIT):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many source connection attempts. Please wait before retrying.",
+                headers={"Retry-After": str(window)},
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Source connection rate limiter unavailable: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail="Source connection checks are temporarily unavailable",
+        ) from exc
+    finally:
+        await r.aclose()
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/connector-types", tags=["sources"])
@@ -154,18 +193,22 @@ async def get_connector_types():
 @router.post("/test-connection", response_model=TestResult)
 async def preview_source_connection(
     body: DataSourceTestRequest,
-    org: Organization = Depends(get_current_org_from_jwt),
+    current: tuple[User, Organization] = Depends(get_current_user_from_jwt),
 ):
     """Test a connection config before saving credentials."""
+    org = _require_source_admin(current)
+    await _enforce_connection_rate_limit(str(org.id))
     return await _test_connection_config(body.type, body.connection_config)
 
 
 @router.post("", response_model=DataSourceResponse, status_code=201)
 async def create_source(
     body: DataSourceCreate,
-    org: Organization = Depends(get_current_org_from_jwt),
+    current: tuple[User, Organization] = Depends(get_current_user_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
+    org = _require_source_admin(current)
+    await _enforce_connection_rate_limit(str(org.id))
     test_result = await _test_connection_config(body.type, body.connection_config)
     if not test_result.connected:
         raise HTTPException(
@@ -238,15 +281,17 @@ class SourceUpdateRequest(BaseModel):
 async def update_source(
     source_id: str,
     body: SourceUpdateRequest,
-    org: Organization = Depends(get_current_org_from_jwt),
+    current: tuple[User, Organization] = Depends(get_current_user_from_jwt),
     db: AsyncSession = Depends(get_db),
 ):
+    org = _require_source_admin(current)
     src = await _get_source_or_404(source_id, org, db)
 
     if body.name is not None:
         src.name = body.name
 
     if body.connection_config is not None:
+        await _enforce_connection_rate_limit(str(org.id))
         test_result = await _test_connection_config(src.type, body.connection_config)
         if not test_result.connected:
             raise HTTPException(

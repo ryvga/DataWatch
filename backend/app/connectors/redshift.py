@@ -18,21 +18,25 @@ class RedshiftConnector(BaseConnector):
         self._config = config
         self._conn = None
 
-    def _dsn(self) -> str:
+    def _connect_kwargs(self) -> dict:
         c = self._config
         user = c.get("username") or c.get("user", "")
-        return (
-            f"host={c['host']} port={c.get('port', 5439)} "
-            f"dbname={c['database']} user={user} password={c['password']} "
-            "sslmode=require"
-        )
+        return {
+            "host": c["host"],
+            "port": int(c.get("port", 5439)),
+            "dbname": c["database"],
+            "user": user,
+            "password": c["password"],
+            "sslmode": "require",
+        }
 
     async def _get_conn(self):
         if self._conn is None or self._conn.closed:
             import psycopg
             from psycopg.rows import dict_row
             self._conn = await psycopg.AsyncConnection.connect(
-                self._dsn(), row_factory=dict_row
+                row_factory=dict_row,
+                **self._connect_kwargs(),
             )
         return self._conn
 

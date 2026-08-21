@@ -161,6 +161,8 @@ Available scenarios: `pipeline_failure` · `null_spike` · `schema_drift` · `ro
 | `FERNET_MASTER_KEY` | Credential encryption master key | ✅ |
 | `DATABASE_URL` | PostgreSQL async URL (`postgresql+asyncpg://...`) | ✅ |
 | `REDIS_URL` | Redis URL | ✅ |
+| `SOURCE_ALLOW_PRIVATE_NETWORKS` | Explicit production opt-in for private database targets | No (default `false`) |
+| `SOURCE_LOCAL_PATH_ROOT` | Allowed production root for SQLite/DuckDB files | No (disabled when empty) |
 | `OPENROUTER_API_KEY` | OpenRouter API key for LLM narration | Optional |
 | `LLM_MODEL` | Model to use (default: `nvidia/nemotron-3-ultra-550b-a55b:free`) | Optional |
 | `LLM_BASE_URL` | LLM API base URL (default: `https://openrouter.ai/api/v1`) | Optional |

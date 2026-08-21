@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     # Redis / Celery
     REDIS_URL: str = "redis://redis:6379/0"
 
+    # User-configured source egress. Private networks require an explicit
+    # production opt-in; local embedded databases require a confined root.
+    SOURCE_ALLOW_PRIVATE_NETWORKS: bool = False
+    SOURCE_LOCAL_PATH_ROOT: str = ""
+    SOURCE_PREVIEW_RATE_LIMIT: int = 10
+    SOURCE_PREVIEW_RATE_WINDOW_SECONDS: int = 60
+
     # AI — global fallback; per-org key takes priority
     OPENROUTER_API_KEY: str = ""
     LLM_BASE_URL: str = "https://openrouter.ai/api/v1"
