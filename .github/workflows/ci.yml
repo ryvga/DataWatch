@@ -43,8 +43,8 @@ jobs:
           --health-timeout=3s
           --health-retries=20
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -93,8 +93,8 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
@@ -112,8 +112,8 @@ jobs:
   warehouse-containers:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -140,8 +140,8 @@ jobs:
       REDSHIFT_SMOKE_CONFIG: ${{ secrets.REDSHIFT_SMOKE_CONFIG }}
       DATABRICKS_SMOKE_CONFIG: ${{ secrets.DATABRICKS_SMOKE_CONFIG }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -181,8 +181,8 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_oracle }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -207,8 +207,8 @@ jobs:
   fullstack-browser:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Create deterministic CI environment
@@ -228,7 +228,7 @@ jobs:
               text = '\n'.join(value if line.startswith(prefix) else line for line in text.splitlines()) + '\n'
           path.write_text(text)
           PY
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: '20'
           cache: npm
