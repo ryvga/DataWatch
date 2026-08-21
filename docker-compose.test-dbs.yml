@@ -101,7 +101,7 @@ services:
     volumes:
       - ./scripts/test_dbs/trino-memory.properties:/etc/trino/catalog/memory.properties:ro
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      test: ["CMD-SHELL", "trino --server http://127.0.0.1:8080 --execute 'SELECT 1' >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       retries: 30
