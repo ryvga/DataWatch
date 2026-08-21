@@ -51,6 +51,8 @@ const FIELD_LABELS = {
   project_id: 'Project ID',
   credentials_json: 'Service account JSON',
   dataset: 'Dataset',
+  maximum_bytes_billed: 'Maximum bytes billed per profile',
+  query_timeout_seconds: 'Query timeout (seconds)',
   account: 'Account',
   warehouse: 'Warehouse',
   schema: 'Default schema',
@@ -66,6 +68,9 @@ const FIELD_LABELS = {
   http_scheme: 'HTTP scheme',
   tls_mode: 'TLS mode',
   ssl_ca: 'TLS CA certificate (PEM)',
+  key_pattern: 'Key pattern',
+  max_scan_keys: 'Maximum scanned keys',
+  scan_count: 'SCAN count hint',
 }
 
 const SECRET_FIELDS = new Set(['password', 'credentials_json', 'uri', 'access_token'])

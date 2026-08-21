@@ -103,7 +103,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import SourceConnectionDialog from '@/components/SourceConnectionDialog'
 import TableSetupDialog from '@/components/TableSetupDialog'
 
-const SOURCE_TYPES = ['postgres', 'mysql', 'mariadb', 'mongodb', 'cassandra', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
+const SOURCE_TYPES = ['postgres', 'mysql', 'mariadb', 'mongodb', 'cassandra', 'redis', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
 
 const SOURCE_TYPE_LABELS = {
   postgres: 'PostgreSQL',
@@ -111,6 +111,7 @@ const SOURCE_TYPE_LABELS = {
   mariadb: 'MariaDB',
   mongodb: 'MongoDB',
   cassandra: 'Cassandra',
+  redis: 'Redis',
   redshift: 'Amazon Redshift',
   bigquery: 'Google BigQuery',
   snowflake: 'Snowflake',
@@ -126,10 +127,11 @@ const SOURCE_CONFIG_TEMPLATES = {
   mysql: '{\n  "host": "localhost",\n  "port": 3306,\n  "database": "mydb",\n  "username": "datawatch_monitor",\n  "password": ""\n}',
   mariadb: '{\n  "host": "localhost",\n  "port": 3306,\n  "database": "mydb",\n  "username": "datawatch_monitor",\n  "password": ""\n}',
   redshift: '{\n  "host": "cluster.region.redshift.amazonaws.com",\n  "port": 5439,\n  "database": "dev",\n  "username": "awsuser",\n  "password": ""\n}',
-  bigquery: '{\n  "project_id": "my-gcp-project",\n  "credentials_json": null\n}',
-  snowflake: '{\n  "account": "xy12345.us-east-1",\n  "user": "MYUSER",\n  "password": "",\n  "database": "MYDB",\n  "warehouse": "COMPUTE_WH"\n}',
+  bigquery: '{\n  "project_id": "my-gcp-project",\n  "credentials_json": null,\n  "dataset": null,\n  "maximum_bytes_billed": 1073741824,\n  "query_timeout_seconds": 120\n}',
+  snowflake: '{\n  "account": "xy12345.us-east-1",\n  "user": "MYUSER",\n  "password": "",\n  "database": "MYDB",\n  "warehouse": "COMPUTE_WH",\n  "schema": "PUBLIC",\n  "query_timeout_seconds": 120\n}',
   mongodb: '{\n  "uri": "mongodb://user:pass@localhost:27017",\n  "database": "mydb"\n}',
   cassandra: '{\n  "hosts": "node1.cassandra.io,node2.cassandra.io",\n  "port": 9042,\n  "keyspace": "my_keyspace",\n  "username": "cassandra",\n  "password": ""\n}',
+  redis: '{\n  "host": "localhost",\n  "port": 6379,\n  "database": 0,\n  "username": null,\n  "password": null,\n  "tls_mode": "verify_identity",\n  "key_pattern": "app:*",\n  "max_scan_keys": 1000,\n  "scan_count": 100\n}',
   sqlserver: '{\n  "host": "localhost",\n  "port": 1433,\n  "database": "MyDB",\n  "username": "sa",\n  "password": ""\n}',
   clickhouse: '{\n  "host": "localhost",\n  "port": 8123,\n  "database": "default",\n  "username": "default",\n  "password": ""\n}',
   databricks: '{\n  "server_hostname": "adb-xxx.azuredatabricks.net",\n  "http_path": "/sql/1.0/warehouses/xxx",\n  "access_token": "dapi...",\n  "catalog": "hive_metastore"\n}',
