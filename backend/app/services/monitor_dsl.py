@@ -60,7 +60,9 @@ class Predicate(StrictModel):
     op: Literal[
         "eq", "ne", "gt", "gte", "lt", "lte", "between", "in", "not_in",
         "contains", "starts_with", "ends_with", "is_null", "is_not_null",
-        "is_missing", "is_nan", "is_zero", "is_negative",
+        "is_missing", "is_nan", "is_zero", "is_negative", "is_empty",
+        "is_whitespace", "is_true", "is_false", "is_future", "is_past",
+        "not_between",
     ] | None = None
     left: ValueExpression | None = None
     right: ValueExpression | None = None
@@ -78,16 +80,20 @@ class Predicate(StrictModel):
             return self
         if not self.op:
             raise ValueError("predicate must contain an operator or group")
-        unary = {"is_null", "is_not_null", "is_missing", "is_nan", "is_zero", "is_negative"}
+        unary = {
+            "is_null", "is_not_null", "is_missing", "is_nan", "is_zero",
+            "is_negative", "is_empty", "is_whitespace", "is_true", "is_false",
+            "is_future", "is_past",
+        }
         if self.op in unary:
             if self.value is None or self.left is not None or self.right is not None:
                 raise ValueError(f"{self.op} requires value only")
         elif self.left is None or self.right is None or self.value is not None:
             raise ValueError(f"{self.op} requires left and right")
-        if self.op == "between" and not (
+        if self.op in {"between", "not_between"} and not (
             isinstance(self.right.literal, list) and len(self.right.literal) == 2
         ):
-            raise ValueError("between requires a two-value literal list on the right")
+            raise ValueError(f"{self.op} requires a two-value literal list on the right")
         if self.op in {"in", "not_in"} and not (
             isinstance(self.right.literal, list) and self.right.literal
         ):
@@ -107,9 +113,15 @@ class Measurement(StrictModel):
     type: Literal["metric", "violations"]
     metric: Literal[
         "row_count", "null_count", "null_rate", "distinct_count", "distinct_rate",
+        "non_null_count", "non_null_rate", "duplicate_count",
+        "empty_string_count", "empty_string_rate", "whitespace_count", "whitespace_rate",
+        "zero_count", "zero_rate", "negative_count", "negative_rate",
+        "true_count", "true_rate", "false_count", "false_rate",
+        "text_length_min", "text_length_max", "text_length_mean",
         "min", "max", "mean", "stddev", "sum", "freshness_seconds",
     ] | None = None
     field: str | None = Field(default=None, min_length=1, max_length=255)
+    filter_when: Predicate | None = Field(default=None, alias="filterWhen")
     violation_when: Predicate | None = Field(default=None, alias="violationWhen")
     output: list[Literal["count", "rate"]] | None = Field(default=None, min_length=1, max_length=2)
 
@@ -129,6 +141,7 @@ class Measurement(StrictModel):
             or not self.output
             or self.metric is not None
             or self.field is not None
+            or self.filter_when is not None
         ):
             raise ValueError("violations measurement requires violationWhen and output")
         if self.output and len(set(self.output)) != len(self.output):
@@ -141,15 +154,32 @@ class Target(StrictModel):
 
 
 class Trigger(StrictModel):
-    type: Literal["on_profile", "manual"] = "on_profile"
+    type: Literal["on_profile", "manual", "interval"] = "on_profile"
+    interval_minutes: int | None = Field(default=None, alias="intervalMinutes", ge=5, le=43_200)
+
+    @model_validator(mode="after")
+    def trigger_contract(self):
+        if self.type == "interval" and self.interval_minutes is None:
+            raise ValueError("interval trigger requires intervalMinutes")
+        if self.type != "interval" and self.interval_minutes is not None:
+            raise ValueError("intervalMinutes is only valid for interval triggers")
+        return self
 
 
 class Policy(StrictModel):
+    mode: Literal["alert", "track"] = "alert"
     severity: Literal["P1", "P2", "P3"] = "P3"
     consecutive_breaches: int = Field(default=1, alias="consecutiveBreaches", ge=1, le=20)
     recovery_passes: int = Field(default=1, alias="recoveryPasses", ge=1, le=20)
     cooldown_minutes: int = Field(default=60, alias="cooldownMinutes", ge=0, le=43_200)
     notify_on_execution_error: bool = Field(default=True, alias="notifyOnExecutionError")
+    audience: list[str] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def audience_bounds(self):
+        if any(not value.strip() or len(value) > 255 for value in self.audience):
+            raise ValueError("policy.audience values must be non-empty and at most 255 characters")
+        return self
 
 
 class Sampling(StrictModel):
@@ -166,6 +196,12 @@ class Execution(StrictModel):
 class Metadata(StrictModel):
     name: str = Field(min_length=1, max_length=63)
     labels: dict[str, str] = Field(default_factory=dict)
+    description: str | None = Field(default=None, max_length=2_000)
+    owner: str | None = Field(default=None, max_length=255)
+    quality_dimension: Literal[
+        "accuracy", "completeness", "consistency", "timeliness", "validity", "uniqueness"
+    ] | None = Field(default=None, alias="qualityDimension")
+    notes: str | None = Field(default=None, max_length=4_000)
 
     @model_validator(mode="after")
     def metadata_bounds(self):
@@ -197,6 +233,11 @@ class MonitorSpec(StrictModel):
             (measurement.violation_when, 1, True)
             for measurement in self.measurements
             if measurement.violation_when is not None
+        )
+        nodes.extend(
+            (measurement.filter_when, 1, True)
+            for measurement in self.measurements
+            if measurement.filter_when is not None
         )
         seen_nodes = 0
         references: set[str] = set()
@@ -303,6 +344,11 @@ def predicate_stats(definition: MonitorDefinition) -> dict[str, int]:
         (measurement.violation_when, 1)
         for measurement in definition.spec.measurements
         if measurement.violation_when is not None
+    )
+    stack.extend(
+        (measurement.filter_when, 1)
+        for measurement in definition.spec.measurements
+        if measurement.filter_when is not None
     )
     count = 0
     max_depth = 0

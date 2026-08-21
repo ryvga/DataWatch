@@ -69,6 +69,17 @@ function parseLiteral(value) {
   return text
 }
 
+function apiErrorMessage(error, fallback) {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (detail?.message) return detail.message
+  if (Array.isArray(detail)) {
+    const messages = detail.map((item) => item?.msg).filter(Boolean)
+    if (messages.length) return messages.join('; ')
+  }
+  return fallback
+}
+
 const INITIAL_DSL_FORM = {
   tableId: '',
   name: '',
@@ -80,6 +91,14 @@ const INITIAL_DSL_FORM = {
   predicateValue: '',
   output: 'rate',
   severity: 'P2',
+  mode: 'alert',
+  triggerType: 'on_profile',
+  description: '',
+  owner: '',
+  qualityDimension: '',
+  filterField: '',
+  filterOperator: 'none',
+  filterValue: '',
   consecutiveBreaches: '1',
   recoveryPasses: '1',
 }
@@ -88,9 +107,17 @@ function BuildDslDefinition({ form }) {
   const metadataName = slugify(form.name)
   const threshold = parseLiteral(form.threshold)
   const isRowCount = form.kind === 'row_count'
-  const measurementId = isRowCount ? 'rows' : 'violations'
-  const breachRef = isRowCount ? 'rows' : `violations.${form.output}`
-  const predicate = ['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative'].includes(form.predicateOperator)
+  const isViolation = form.kind === 'violations'
+  const metricByKind = {
+    freshness: 'freshness_seconds',
+    null_rate: 'null_rate',
+    duplicate_rate: 'duplicate_count',
+    negative_rate: 'negative_rate',
+    empty_string_rate: 'empty_string_rate',
+  }
+  const measurementId = isRowCount ? 'rows' : isViolation ? 'violations' : 'value'
+  const breachRef = isRowCount ? 'rows' : isViolation ? `violations.${form.output}` : 'value'
+  const predicate = ['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative', 'is_empty', 'is_whitespace', 'is_true', 'is_false', 'is_future', 'is_past'].includes(form.predicateOperator)
     ? { op: form.predicateOperator, value: { field: form.field.trim() } }
     : {
       op: form.predicateOperator,
@@ -98,22 +125,38 @@ function BuildDslDefinition({ form }) {
       right: { literal: parseLiteral(form.predicateValue) },
     }
 
+  const filterWhen = form.filterField.trim() && form.filterOperator !== 'none'
+    ? ['is_null', 'is_not_null'].includes(form.filterOperator)
+      ? { op: form.filterOperator, value: { field: form.filterField.trim() } }
+      : { op: form.filterOperator, left: { field: form.filterField.trim() }, right: { literal: parseLiteral(form.filterValue) } }
+    : null
+  const metadata = {
+    name: metadataName,
+    ...(form.description.trim() ? { description: form.description.trim() } : {}),
+    ...(form.owner.trim() ? { owner: form.owner.trim() } : {}),
+    ...(form.qualityDimension ? { qualityDimension: form.qualityDimension } : {}),
+  }
+  const measurement = isRowCount
+    ? { id: measurementId, type: 'metric', metric: 'row_count' }
+    : isViolation
+      ? { id: measurementId, type: 'violations', violationWhen: predicate, output: [form.output] }
+      : { id: measurementId, type: 'metric', metric: metricByKind[form.kind], field: form.field.trim(), ...(filterWhen ? { filterWhen } : {}) }
+
   return {
     apiVersion: 'datawatch.io/v1alpha1',
     kind: 'Monitor',
-    metadata: { name: metadataName },
+    metadata,
     spec: {
       target: { assetId: form.tableId },
-      trigger: { type: 'on_profile' },
-      measurements: [isRowCount
-        ? { id: measurementId, type: 'metric', metric: 'row_count' }
-        : { id: measurementId, type: 'violations', violationWhen: predicate, output: [form.output] }],
+      trigger: { type: form.triggerType },
+      measurements: [measurement],
       breachWhen: {
         op: form.breachOperator,
         left: { ref: breachRef },
         right: { literal: threshold },
       },
       policy: {
+        mode: form.mode,
         severity: form.severity,
         consecutiveBreaches: Number(form.consecutiveBreaches) || 1,
         recoveryPasses: Number(form.recoveryPasses) || 1,
@@ -148,9 +191,12 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
     if (!form.tableId) return 'Choose a monitored table.'
     if (!slugify(form.name)) return 'Add a name using lowercase letters, numbers, or hyphens.'
     if (!form.threshold.trim() || !Number.isFinite(Number(form.threshold))) return 'Enter a numeric breach threshold.'
-    if (form.kind === 'violations' && !form.field.trim()) return 'Choose the column this rule should inspect.'
-    if (form.kind === 'violations' && !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative'].includes(form.predicateOperator) && !form.predicateValue.trim()) {
+    if (!['row_count'].includes(form.kind) && !form.field.trim()) return 'Choose the column this rule should inspect.'
+    if (form.kind === 'violations' && !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative', 'is_empty', 'is_whitespace', 'is_true', 'is_false', 'is_future', 'is_past'].includes(form.predicateOperator) && !form.predicateValue.trim()) {
       return 'Enter the value the column should be compared with.'
+    }
+    if (form.filterField.trim() && form.filterOperator !== 'none' && !['is_null', 'is_not_null'].includes(form.filterOperator) && !form.filterValue.trim()) {
+      return 'Enter a value for the optional metric filter.'
     }
     return ''
   }
@@ -170,7 +216,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
       setPreview(response.data)
     } catch (err) {
       setPreview(null)
-      setError(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Definition validation failed.')
+      setError(apiErrorMessage(err, 'Definition validation failed.'))
     } finally {
       setBusy('')
     }
@@ -197,7 +243,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
       onCreated?.()
       onOpenChange(false)
     } catch (err) {
-      setError(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Could not create the DSL monitor.')
+      setError(apiErrorMessage(err, 'Could not create the DSL monitor.'))
     } finally {
       setBusy('')
     }
@@ -215,7 +261,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
   }
 
   const capabilityPlan = preview?.capabilityPlan
-  const predicateValueOperators = !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative'].includes(form.predicateOperator)
+  const predicateValueOperators = !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative', 'is_empty', 'is_whitespace', 'is_true', 'is_false', 'is_future', 'is_past'].includes(form.predicateOperator)
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -245,8 +291,13 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
               <Select value={form.kind} onValueChange={set('kind')}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="row_count">Row count metric</SelectItem>
-                  <SelectItem value="violations">Column violations</SelectItem>
+                  <SelectItem value="row_count">Volume · row count</SelectItem>
+                  <SelectItem value="freshness">Freshness · seconds since update</SelectItem>
+                  <SelectItem value="null_rate">Completeness · null rate</SelectItem>
+                  <SelectItem value="duplicate_rate">Uniqueness · duplicate count</SelectItem>
+                  <SelectItem value="negative_rate">Validity · negative values</SelectItem>
+                  <SelectItem value="empty_string_rate">Completeness · empty strings</SelectItem>
+                  <SelectItem value="violations">Validation · row predicate</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -271,7 +322,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                 <Input id="dsl-threshold" type="number" min="0" step="1" value={form.threshold} onChange={set('threshold')} />
               </div>
             </div>
-          ) : (
+          ) : form.kind === 'violations' ? (
             <div className="grid gap-4 rounded-md border bg-muted/20 p-4">
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="grid gap-2">
@@ -292,6 +343,12 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                       <SelectItem value="lt">less than</SelectItem>
                       <SelectItem value="lte">at most</SelectItem>
                       <SelectItem value="contains">contains</SelectItem>
+                      <SelectItem value="is_empty">is empty</SelectItem>
+                      <SelectItem value="is_whitespace">is whitespace-only</SelectItem>
+                      <SelectItem value="is_true">is true</SelectItem>
+                      <SelectItem value="is_false">is false</SelectItem>
+                      <SelectItem value="is_future">is in the future</SelectItem>
+                      <SelectItem value="is_past">is in the past</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -319,6 +376,82 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                 </div>
               </div>
             </div>
+          ) : (
+            <div className="grid gap-4 rounded-md border bg-muted/20 p-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="dsl-metric-field">Column</Label>
+                  <Input id="dsl-metric-field" value={form.field} onChange={set('field')} placeholder={form.kind === 'freshness' ? 'updated_at' : 'amount'} />
+                  <p className="text-xs text-muted-foreground">The field is checked against the table’s typed schema before activation.</p>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="dsl-metric-threshold">Breach threshold</Label>
+                  <Input id="dsl-metric-threshold" type="number" min="0" step="0.01" value={form.threshold} onChange={set('threshold')} />
+                  <Select value={form.breachOperator} onValueChange={set('breachOperator')}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gt">greater than</SelectItem>
+                      <SelectItem value="gte">at least</SelectItem>
+                      <SelectItem value="lt">less than</SelectItem>
+                      <SelectItem value="lte">at most</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4 rounded-md border bg-muted/20 p-4">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="dsl-description">Monitor description</Label>
+                <Textarea id="dsl-description" value={form.description} onChange={set('description')} placeholder="What should this monitor protect?" className="min-h-20" />
+              </div>
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="dsl-owner">Owner</Label>
+                  <Input id="dsl-owner" value={form.owner} onChange={set('owner')} placeholder="data-platform@example.com" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Quality dimension</Label>
+                  <Select value={form.qualityDimension || 'none'} onValueChange={(value) => set('qualityDimension')(value === 'none' ? '' : value)}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Not specified</SelectItem>
+                      <SelectItem value="accuracy">Accuracy</SelectItem>
+                      <SelectItem value="completeness">Completeness</SelectItem>
+                      <SelectItem value="consistency">Consistency</SelectItem>
+                      <SelectItem value="timeliness">Timeliness</SelectItem>
+                      <SelectItem value="validity">Validity</SelectItem>
+                      <SelectItem value="uniqueness">Uniqueness</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {form.kind !== 'violations' && form.kind !== 'row_count' && (
+            <div className="grid gap-3 rounded-md border bg-muted/20 p-4">
+              <div>
+                <p className="text-sm font-medium">Optional metric filter</p>
+                <p className="mt-1 text-xs text-muted-foreground">Scope the metric to a typed WHERE condition, such as status = paid. Literals stay parameterized.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Input aria-label="Metric filter field" value={form.filterField} onChange={set('filterField')} placeholder="status" />
+                <Select value={form.filterOperator} onValueChange={set('filterOperator')}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No filter</SelectItem>
+                    <SelectItem value="eq">equals</SelectItem>
+                    <SelectItem value="ne">does not equal</SelectItem>
+                    <SelectItem value="is_null">is null</SelectItem>
+                    <SelectItem value="is_not_null">is not null</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input aria-label="Metric filter value" value={form.filterValue} onChange={set('filterValue')} placeholder="paid" disabled={form.filterOperator === 'none' || ['is_null', 'is_not_null'].includes(form.filterOperator)} />
+              </div>
+            </div>
           )}
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -327,6 +460,20 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
               <Select value={form.severity} onValueChange={set('severity')}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="P1">P1 — Critical</SelectItem><SelectItem value="P2">P2 — High</SelectItem><SelectItem value="P3">P3 — Medium</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Run mode</Label>
+              <Select value={form.mode} onValueChange={set('mode')}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="alert">Alert on breach</SelectItem><SelectItem value="track">Track only</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Trigger</Label>
+              <Select value={form.triggerType} onValueChange={set('triggerType')}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="on_profile">After each profile</SelectItem><SelectItem value="manual">Manual only</SelectItem></SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">

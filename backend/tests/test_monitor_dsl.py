@@ -134,6 +134,72 @@ def test_metric_measurement_has_strict_type_contract():
     assert model.spec.measurements[0].metric == "row_count"
 
 
+def test_richer_monitor_metadata_filters_and_track_mode_are_canonical():
+    definition = valid_definition()
+    definition["metadata"].update(
+        {
+            "description": "Orders must remain complete for the payments domain.",
+            "owner": "payments@example.com",
+            "qualityDimension": "completeness",
+            "notes": "Review the upstream checkout job before disabling this monitor.",
+        }
+    )
+    definition["spec"]["measurements"] = [
+        {
+            "id": "paid_email_null_rate",
+            "type": "metric",
+            "metric": "null_rate",
+            "field": "email",
+            "filterWhen": {
+                "op": "eq",
+                "left": {"field": "status"},
+                "right": {"literal": "paid"},
+            },
+        }
+    ]
+    definition["spec"]["breachWhen"] = {
+        "op": "gt",
+        "left": {"ref": "paid_email_null_rate"},
+        "right": {"literal": 0.01},
+    }
+    definition["spec"]["policy"] = {"mode": "track", "audience": ["payments"]}
+
+    model = MonitorDefinition.model_validate(definition)
+
+    assert model.metadata.quality_dimension == "completeness"
+    assert model.spec.policy.mode == "track"
+    assert model.spec.measurements[0].filter_when is not None
+    assert predicate_stats(model) == {"predicateNodes": 2, "predicateDepth": 1}
+
+
+def test_interval_trigger_requires_a_scheduler_interval():
+    definition = valid_definition()
+    definition["spec"]["trigger"] = {"type": "interval"}
+    with pytest.raises(ValidationError, match="intervalMinutes"):
+        MonitorDefinition.model_validate(definition)
+
+    definition["spec"]["trigger"] = {"type": "interval", "intervalMinutes": 15}
+    model = MonitorDefinition.model_validate(definition)
+    assert model.spec.trigger.interval_minutes == 15
+
+
+@pytest.mark.parametrize("operator", ["not_between", "is_empty", "is_whitespace", "is_future"])
+def test_extended_predicate_operators_are_structurally_valid(operator):
+    definition = valid_definition()
+    if operator in {"is_empty", "is_whitespace", "is_future"}:
+        definition["spec"]["measurements"][0]["violationWhen"] = {
+            "op": operator,
+            "value": {"field": "status"},
+        }
+    else:
+        definition["spec"]["measurements"][0]["violationWhen"] = {
+            "op": operator,
+            "left": {"field": "amount"},
+            "right": {"literal": [1, 10]},
+        }
+    assert MonitorDefinition.model_validate(definition).spec.measurements[0].violation_when.op == operator
+
+
 @pytest.mark.asyncio
 async def test_validation_endpoint_resolves_tenant_asset_and_returns_plan():
     from app.routers.monitor_dsl import validate_monitor_definition

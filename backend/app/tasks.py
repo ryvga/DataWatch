@@ -846,16 +846,27 @@ def run_dsl_monitors(table_id: str, profile_id: str):
 async def _run_dsl_monitors_async(table_id: str, profile_id: str) -> dict:
     from sqlalchemy import select
     from app.database import AsyncSessionLocal
-    from app.models.monitor import Monitor
+    from app.models.monitor import Monitor, MonitorRevision
 
     async with AsyncSessionLocal() as db:
-        monitor_ids = (await db.scalars(
-            select(Monitor.id).where(
+        rows = (await db.execute(
+            select(Monitor.id, MonitorRevision.definition)
+            .join(
+                MonitorRevision,
+                (MonitorRevision.monitor_id == Monitor.id)
+                & (MonitorRevision.revision == Monitor.current_revision),
+            )
+            .where(
                 Monitor.table_id == table_id,
                 Monitor.mode == "dsl",
                 Monitor.status == "active",
             )
         )).all()
+        monitor_ids = [
+            monitor_id
+            for monitor_id, definition_payload in rows
+            if definition_payload.get("spec", {}).get("trigger", {}).get("type", "on_profile") == "on_profile"
+        ]
     results = [
         await _run_one_dsl_monitor(str(monitor_id), profile_id=profile_id)
         for monitor_id in monitor_ids

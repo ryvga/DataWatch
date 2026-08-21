@@ -121,9 +121,10 @@ def _evaluate(predicate: Predicate, measurements: dict[str, Any]) -> TruthValue:
     if left_value is None or right_value is None:
         return TruthValue.UNKNOWN
     left = _number(left_value)
-    if op == "between":
+    if op in {"between", "not_between"}:
         lower, upper = (_number(value) for value in right_value)
-        return _truth(lower <= left <= upper)
+        result = lower <= left <= upper
+        return _truth(not result if op == "not_between" else result)
     if op in {"in", "not_in"}:
         included = left in [_number(value) for value in right_value]
         return _truth(included if op == "in" else not included)
@@ -182,4 +183,7 @@ def evaluate_policy(*, breached: bool, policy: Policy, previous: PolicyState | N
             else:
                 transition = "recovery_pending"
 
+    if policy.mode == "track":
+        incident_action = "none"
+        notification = False
     return PolicyDecision(breached, "failed" if breached else "passed", phase, transition, incident_action, breach_streak, recovery_streak, notification, cooldown_until)

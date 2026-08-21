@@ -188,6 +188,78 @@ def test_portable_metrics_batch_into_one_aggregate_select():
     assert all(output["nullable"] for output in payload["outputs"][1:])
 
 
+def test_quality_metrics_and_filtered_measurements_compile_in_one_plan():
+    definition = valid_definition()
+    definition["spec"]["measurements"] = [
+        {
+            "id": "duplicate_emails",
+            "type": "metric",
+            "metric": "duplicate_count",
+            "field": "email",
+        },
+        {
+            "id": "paid_nulls",
+            "type": "metric",
+            "metric": "null_rate",
+            "field": "email",
+            "filterWhen": {
+                "op": "eq",
+                "left": {"field": "status"},
+                "right": {"literal": "paid"},
+            },
+        },
+        {
+            "id": "negative_amounts",
+            "type": "metric",
+            "metric": "negative_rate",
+            "field": "amount",
+        },
+        {
+            "id": "short_status",
+            "type": "metric",
+            "metric": "text_length_max",
+            "field": "status",
+        },
+    ]
+    definition["spec"]["breachWhen"] = {
+        "op": "gt",
+        "left": {"ref": "paid_nulls"},
+        "right": {"literal": 0.1},
+    }
+    payload = compile_relational_plan(
+        MonitorDefinition.model_validate(definition),
+        relation=_relation(),
+    ).payload()
+
+    assert 'COUNT("email") - COUNT(DISTINCT "email")' in payload["statement"]
+    assert '"status" = %(p0)s' in payload["statement"]
+    assert '"amount" < 0' in payload["statement"]
+    assert 'MAX(LENGTH("status"))' in payload["statement"]
+    assert payload["parameters"] == [{"name": "p0", "type": "string", "value": "paid"}]
+
+
+@pytest.mark.parametrize(
+    ("operator", "expected"),
+    [
+        ("not_between", 'NOT "amount" BETWEEN %(p0)s AND %(p1)s'),
+        ("is_empty", '"status" = \'\''),
+        ("is_whitespace", 'TRIM("status") = \'\''),
+    ],
+)
+def test_extended_validation_predicates_compile(operator, expected):
+    definition = valid_definition()
+    if operator == "not_between":
+        predicate = {"op": operator, "left": {"field": "amount"}, "right": {"literal": [1, 10]}}
+    else:
+        predicate = {"op": operator, "value": {"field": "status"}}
+    definition["spec"]["measurements"][0]["violationWhen"] = predicate
+    payload = compile_relational_plan(
+        MonitorDefinition.model_validate(definition),
+        relation=_relation(),
+    ).payload()
+    assert expected in payload["statement"]
+
+
 def test_sqlite_rejects_stddev_without_emitting_a_statement():
     definition = _metric_definition("stddev", "amount")
     with pytest.raises(MonitorPlanError, match="not available") as exc:

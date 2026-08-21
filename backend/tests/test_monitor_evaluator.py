@@ -41,6 +41,7 @@ def test_breach_evaluator_resolves_nested_numeric_measurement_predicates():
     ("body", "measurements", "expected"),
     [
         ({"op": "between", "left": {"ref": "v"}, "right": {"literal": [1, 3]}}, {"v": 2}, True),
+        ({"op": "not_between", "left": {"ref": "v"}, "right": {"literal": [1, 3]}}, {"v": 9}, True),
         ({"op": "in", "left": {"ref": "v"}, "right": {"literal": [1, 3]}}, {"v": 2}, False),
         ({"op": "not_in", "left": {"ref": "v"}, "right": {"literal": [1, 3]}}, {"v": 2}, True),
         ({"op": "is_null", "value": {"ref": "v"}}, {"v": None}, True),
@@ -151,6 +152,19 @@ def test_policy_cooldown_suppresses_ongoing_notification_without_closing_alert()
     assert decision.transition == "ongoing"
     assert decision.notification_eligible is False
     assert decision.cooldown_until == now + timedelta(minutes=30)
+
+
+def test_track_mode_keeps_measurements_without_opening_incidents():
+    decision = evaluate_policy(
+        breached=True,
+        policy=Policy(mode="track", consecutiveBreaches=1),
+        evaluated_at=datetime(2026, 7, 19, 20, 0, tzinfo=UTC),
+    )
+
+    assert decision.run_status == "failed"
+    assert decision.phase == "breached"
+    assert decision.incident_action == "none"
+    assert decision.notification_eligible is False
 
 
 def test_policy_payload_is_stable_json_shape():

@@ -123,6 +123,14 @@ def _planning_result(
         and capabilities.get("compiled_monitors") == "internal_read_only"
     )
     activation_issues = list(issues)
+    if definition.spec.trigger.type == "interval":
+        activation_issues.append(
+            {
+                "code": "interval_trigger_not_supported",
+                "path": "spec.trigger",
+                "message": "Interval triggers require a scheduler-backed monitor cadence",
+            }
+        )
     if compilation["compilationSupported"] and not compiled_runtime_supported:
         activation_issues.append(
             {

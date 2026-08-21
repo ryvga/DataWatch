@@ -38,7 +38,7 @@ async function run() {
   const tableId = await discoverTableId()
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
-  const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [] }
+  const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [], failedResponses: [] }
   page.on('console', (message) => {
     if (['error', 'warning'].includes(message.type())) diagnostics.consoleErrors.push(`${message.type()}: ${message.text()}`)
   })
@@ -46,6 +46,11 @@ async function run() {
   page.on('requestfailed', (request) => {
     const failure = request.failure()?.errorText || ''
     if (!failure.includes('ERR_ABORTED')) diagnostics.failedRequests.push(`${request.method()} ${request.url()} ${failure}`)
+  })
+  page.on('response', async (response) => {
+    if (response.status() >= 400 && !response.url().includes('/favicon')) {
+      diagnostics.failedResponses.push(`${response.status()} ${response.url()} ${await response.text().catch(() => '')}`)
+    }
   })
 
   try {
@@ -61,7 +66,11 @@ async function run() {
 
     const dialog = page.getByRole('dialog', { name: 'New typed DSL monitor' })
     await dialog.waitFor({ state: 'visible', timeout: 30000 })
-    await dialog.getByLabel('Monitor name').fill('orders-row-count-e2e')
+    await dialog.getByLabel('Monitor name').fill('orders-freshness-e2e')
+    await dialog.getByRole('combobox').nth(1).click()
+    await page.getByRole('option', { name: 'Freshness · seconds since update' }).click()
+    await dialog.getByLabel('Column').fill('created_at')
+    await dialog.getByLabel('Breach threshold').fill('3600')
     await dialog.getByRole('button', { name: 'Validate & preview' }).click()
     await dialog.getByText(/Preview valid|Preview compiled/).waitFor({ state: 'visible', timeout: 30000 })
     assert(await dialog.getByRole('textbox', { name: 'DSL definition preview' }).isVisible(), 'DSL definition preview should be visible')

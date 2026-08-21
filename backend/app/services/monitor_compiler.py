@@ -210,8 +210,23 @@ def _conditional_count(condition: exp.Expression) -> exp.Expression:
     return exp.Count(this=case)
 
 
-def _rate(numerator: exp.Expression) -> exp.Expression:
-    denominator = exp.func("NULLIF", exp.Count(this=exp.Star()), exp.Literal.number(0))
+def _conditional_value(condition: exp.Expression | None, value: exp.Expression) -> exp.Expression:
+    if condition is None:
+        return value
+    return exp.Case(ifs=[exp.If(this=condition, true=value)])
+
+
+def _rate(
+    numerator: exp.Expression,
+    denominator_condition: exp.Expression | None = None,
+) -> exp.Expression:
+    denominator = exp.func(
+        "NULLIF",
+        _conditional_count(denominator_condition)
+        if denominator_condition is not None
+        else exp.Count(this=exp.Star()),
+        exp.Literal.number(0),
+    )
     return exp.Div(
         this=exp.Mul(this=numerator, expression=exp.Literal.number("1.0")),
         expression=denominator,
@@ -241,12 +256,28 @@ def _predicate(
             "predicate_not_supported",
             f"{predicate.op} has no portable relational v1 semantics",
         )
-    if predicate.op in {"is_null", "is_not_null", "is_zero", "is_negative"}:
+    if predicate.op in {
+        "is_null", "is_not_null", "is_zero", "is_negative", "is_empty",
+        "is_whitespace", "is_true", "is_false", "is_future", "is_past",
+    }:
         target, column = _field_operand(predicate.value, relation)
         if predicate.op == "is_null":
             return exp.Is(this=target, expression=exp.Null())
         if predicate.op == "is_not_null":
             return exp.Not(this=exp.Is(this=target, expression=exp.Null()))
+        if predicate.op in {"is_empty", "is_whitespace"}:
+            _require_type(column, {LogicalType.STRING}, predicate.op)
+            right = exp.Literal.string("")
+            if predicate.op == "is_whitespace":
+                target = exp.func("TRIM", target)
+            return exp.EQ(this=target, expression=right)
+        if predicate.op in {"is_true", "is_false"}:
+            _require_type(column, {LogicalType.BOOLEAN}, predicate.op)
+            return exp.EQ(this=target, expression=exp.Boolean(this=predicate.op == "is_true"))
+        if predicate.op in {"is_future", "is_past"}:
+            _require_type(column, {LogicalType.DATE, LogicalType.TIMESTAMP}, predicate.op)
+            operator = exp.GT if predicate.op == "is_future" else exp.LT
+            return operator(this=target, expression=exp.CurrentTimestamp())
         _require_type(column, _NUMERIC_TYPES, predicate.op)
         operator = exp.EQ if predicate.op == "is_zero" else exp.LT
         return operator(this=target, expression=exp.Literal.number(0))
@@ -270,7 +301,7 @@ def _predicate(
             expressions=[binder.bind(value) for value in values],
         )
         return exp.Not(this=expression) if predicate.op == "not_in" else expression
-    if predicate.op == "between":
+    if predicate.op in {"between", "not_between"}:
         _require_type(left_column, _ORDERED_TYPES, "between")
         low, high = predicate.right.literal
         if any(value is None for value in (low, high)):
@@ -283,7 +314,8 @@ def _predicate(
                 "predicate_type_mismatch",
                 f"between values do not match {left_column.name}",
             )
-        return exp.Between(this=left, low=binder.bind(low), high=binder.bind(high))
+        expression = exp.Between(this=left, low=binder.bind(low), high=binder.bind(high))
+        return exp.Not(this=expression) if predicate.op == "not_between" else expression
     if predicate.op in {"contains", "starts_with", "ends_with"}:
         _require_type(left_column, {LogicalType.STRING}, predicate.op)
         value = predicate.right.literal
@@ -322,11 +354,21 @@ def _predicate(
 
 def _metric_expression(
     measurement: Measurement,
+    binder: _ParameterBinder,
     relation: RelationBinding,
 ) -> exp.Expression:
     metric = measurement.metric
+    filter_condition = (
+        _predicate(measurement.filter_when, binder, relation)
+        if measurement.filter_when is not None
+        else None
+    )
     if metric == "row_count":
-        return exp.Count(this=exp.Star())
+        return (
+            _conditional_count(filter_condition)
+            if filter_condition is not None
+            else exp.Count(this=exp.Star())
+        )
 
     column_binding = relation.column(measurement.field)
     if column_binding is None:
@@ -335,17 +377,25 @@ def _metric_expression(
             f"Field does not exist in the current schema: {measurement.field}",
         )
     column = _column(column_binding.name)
+    filtered_column = _conditional_value(filter_condition, column)
     if metric == "null_count":
-        return exp.Sub(
-            this=exp.Count(this=exp.Star()),
-            expression=exp.Count(this=column),
-        )
+        null_condition = exp.Is(this=column, expression=exp.Null())
+        if filter_condition is not None:
+            null_condition = exp.And(this=filter_condition, expression=null_condition)
+        return _conditional_count(null_condition)
     if metric == "null_rate":
-        null_count = exp.Sub(
-            this=exp.Count(this=exp.Star()),
-            expression=exp.Count(this=column),
-        )
-        return _rate(null_count)
+        null_condition = exp.Is(this=column, expression=exp.Null())
+        if filter_condition is not None:
+            null_condition = exp.And(this=filter_condition, expression=null_condition)
+        return _rate(_conditional_count(null_condition), filter_condition)
+    if metric == "non_null_count":
+        return exp.Count(this=filtered_column)
+    if metric == "non_null_rate":
+        return _rate(exp.Count(this=filtered_column), filter_condition)
+    if metric == "duplicate_count":
+        non_null = exp.Count(this=filtered_column)
+        distinct = exp.Count(this=exp.Distinct(expressions=[filtered_column]))
+        return exp.Sub(this=non_null, expression=distinct)
     if metric == "distinct_count":
         _require_type(
             column_binding,
@@ -363,39 +413,72 @@ def _metric_expression(
         )
         denominator = exp.func(
             "NULLIF",
-            exp.Count(this=column.copy()),
+            exp.Count(this=filtered_column.copy()),
             exp.Literal.number(0),
         )
         return exp.Div(
             this=exp.Mul(
-                this=exp.Count(this=exp.Distinct(expressions=[column])),
+                this=exp.Count(this=exp.Distinct(expressions=[filtered_column])),
                 expression=exp.Literal.number("1.0"),
             ),
             expression=denominator,
         )
+    if metric in {
+        "empty_string_count", "empty_string_rate", "whitespace_count", "whitespace_rate",
+        "zero_count", "zero_rate", "negative_count", "negative_rate",
+        "true_count", "true_rate", "false_count", "false_rate",
+    }:
+        if metric.startswith(("empty_string", "whitespace")):
+            _require_type(column_binding, {LogicalType.STRING}, metric)
+            value = exp.Literal.string("")
+            target = column if metric.startswith("empty_string") else exp.func("TRIM", column)
+            condition = exp.EQ(this=target, expression=value)
+        elif metric.startswith(("zero", "negative")):
+            _require_type(column_binding, _NUMERIC_TYPES, metric)
+            operator = exp.EQ if metric.startswith("zero") else exp.LT
+            condition = operator(this=column, expression=exp.Literal.number(0))
+        else:
+            _require_type(column_binding, {LogicalType.BOOLEAN}, metric)
+            condition = exp.EQ(
+                this=column,
+                expression=exp.Boolean(this=metric.startswith("true")),
+            )
+        if filter_condition is not None:
+            condition = exp.And(this=filter_condition, expression=condition)
+        count = _conditional_count(condition)
+        return count if metric.endswith("_count") else _rate(count, filter_condition)
+    if metric in {"text_length_min", "text_length_max", "text_length_mean"}:
+        _require_type(column_binding, {LogicalType.STRING}, metric)
+        length = exp.func("LENGTH", column)
+        aggregate = {
+            "text_length_min": exp.Min,
+            "text_length_max": exp.Max,
+            "text_length_mean": exp.Avg,
+        }[metric]
+        return aggregate(this=_conditional_value(filter_condition, length))
     if metric in {"min", "max"}:
         _require_type(column_binding, _ORDERED_TYPES, metric)
         operator = exp.Min if metric == "min" else exp.Max
-        return operator(this=column)
+        return operator(this=filtered_column)
     if metric in {"mean", "sum", "stddev"}:
         _require_type(column_binding, _NUMERIC_TYPES, metric)
         if metric == "mean":
-            return exp.Avg(this=column)
+            return exp.Avg(this=filtered_column)
         if metric == "sum":
-            return exp.Sum(this=column)
+            return exp.Sum(this=filtered_column)
         if relation.source_type == "sqlite":
             raise MonitorPlanError(
                 "metric_not_supported",
                 "stddev is not available in the SQLite runtime",
             )
-        return exp.func("STDDEV", column)
+        return exp.func("STDDEV", filtered_column)
     if metric == "freshness_seconds":
         _require_type(
             column_binding,
             {LogicalType.DATE, LogicalType.TIMESTAMP},
             metric,
         )
-        latest = exp.Max(this=column)
+        latest = exp.Max(this=filtered_column)
         if relation.source_type == "sqlite":
             return exp.Mul(
                 this=exp.Sub(
@@ -437,7 +520,7 @@ def compile_relational_plan(
             column_alias = f"dw_m{index}"
             projections.append(
                 exp.alias_(
-                    _metric_expression(measurement, relation),
+                    _metric_expression(measurement, binder, relation),
                     column_alias,
                     quoted=True,
                 )

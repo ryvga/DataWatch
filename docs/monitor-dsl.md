@@ -7,8 +7,8 @@ Implementation plan: Notion â€œDataWatch Connector & Safe Monitor DSL Overhaulâ€
 
 ## Current implementation
 
-`POST /api/v2/monitors/validate` accepts strict JSON definitions for `metric` and
-`violations` measurements. It rejects unknown fields, versions, predicate shapes,
+`POST /api/v2/monitors/validate` accepts strict JSON definitions for typed metric and
+row-validation measurements. It rejects unknown fields, versions, predicate shapes,
 duplicate IDs, unknown references, non-finite/complex literals, oversized values,
 excessive predicate depth/node counts, and cross-measurement references inside violation
 predicates. The response contains canonical JSON, a stable SHA-256 definition hash,
@@ -56,12 +56,47 @@ existing typed `monitor_dsl` incident service.
 The schema-bound subset includes row/null/distinct metrics; numeric min/max/mean/sum;
 PostgreSQL/DuckDB stddev; timestamp/date freshness; typed equality and ordered
 comparisons; field-to-field comparisons; between/membership; escaped string matching;
-null/zero/negative checks; and nested boolean predicates. SQLite explicitly rejects
-stddev. Relational `is_missing` and portable NaN semantics remain fail-closed.
+null/zero/negative/empty/whitespace/boolean/time checks; filtered metrics; duplicate,
+non-null, text-length, and completeness/validity metrics; and nested boolean predicates.
+SQLite explicitly rejects stddev. Relational `is_missing`, portable NaN semantics, and
+regular-expression predicates remain fail-closed until a connector-specific contract is
+available.
 
 Planner version `datawatch-v1alpha1-relational-2` binds the compiled preview to the
 latest successful profile fingerprint, or a deterministic DDL fingerprint before the
 first profile. The version bump invalidates attestations created by the unbound planner.
+
+## Authoring model (2026-08-21)
+
+The authoring language is intentionally declarative YAML/JSON. DataWatch does **not**
+accept embedded Python, JavaScript, `eval`, `exec`, user database functions, or free-form
+expression strings. A Python helper may generate a definition for CI, but the server only
+accepts the bounded typed document, canonicalizes it, and compiles it into an allowlisted
+read-only plan.
+
+The model follows a monitor-as-code workflow: define, compile, preview, review the target
+and capability plan, then activate an immutable revision. It has four useful authoring
+families even though they share one execution contract:
+
+- **Table health:** row volume and freshness measurements tied to the existing profile
+  cadence.
+- **Metric quality:** null/non-null, distinct/duplicate, empty/whitespace, zero/negative,
+  boolean, numeric, text-length, and filtered metrics.
+- **Row validation:** bounded predicate trees for completeness, validity, and business
+  rules, with count/rate outputs.
+- **Operational policy:** alert or track-only mode, severity, audience, consecutive
+  breach/recovery windows, cooldowns, ownership metadata, quality dimensions, and
+  profile/manual triggers.
+
+Metric measurements can include `filterWhen`, which is the safe equivalent of a `WHERE`
+scope. Its fields and literals are typed against the current schema and its literals are
+always bound as parameters. The filter never changes the declared target asset and cannot
+reference another measurement.
+
+`policy.mode: track` records measurements and policy state without opening or resolving
+incidents. This makes it possible to observe a metric before enabling alerting. Interval
+triggers, anomaly baselines, segmentation, and cross-asset comparisons remain explicit
+capability-gated extensions rather than silently falling back to unsafe execution.
 
 ## Purpose
 
@@ -116,24 +151,54 @@ spec:
     sampling: {mode: auto}
 ```
 
+Filtered metric example (the filter is compiled into the aggregate and remains
+parameterized):
+
+```yaml
+apiVersion: datawatch.io/v1alpha1
+kind: Monitor
+metadata:
+  name: paid-order-email-completeness
+  qualityDimension: completeness
+spec:
+  target: {assetId: 8efef403-4c5d-4930-a2dd-f289c16f41a9}
+  trigger: {type: on_profile}
+  measurements:
+    - id: paid_email_null_rate
+      type: metric
+      metric: null_rate
+      field: email
+      filterWhen:
+        op: eq
+        left: {field: status}
+        right: {literal: paid}
+  breachWhen: {op: gt, left: {ref: paid_email_null_rate}, right: {literal: 0.01}}
+  policy:
+    mode: alert
+    severity: P2
+    audience: [payments]
+```
+
 ## Grammar
 
 Top-level fields are exactly `apiVersion`, `kind`, `metadata`, and `spec`. Unknown fields
 are rejected at every level.
 
-Measurement types:
+Measurement types currently executable by the relational v1 planner:
 
-- `metric`: row count, null count/rate, distinct count/rate, min, max, mean, stddev,
-  sum, percentile, duplicate count, freshness seconds, document count, key count, TTL,
-  and connector-approved metadata metrics.
+- `metric`: row count; null/non-null count/rate; distinct/duplicate count/rate; min, max,
+  mean, stddev, sum; freshness seconds; empty-string/whitespace, zero/negative, true/false,
+  and text-length metrics. Metric measurements may include a typed `filterWhen` predicate.
 - `violations`: a typed predicate tree producing count and/or rate.
-- `schema`: added, removed, type-changed, required, and forbidden field rules.
-- `comparison`: absolute or relative difference between two typed measurements.
-- `metadata`: source-native metrics that do not require a data scan.
+
+Schema-change, cross-asset comparison, metadata-only, distribution-baseline, and
+segmented measurement families are reserved for later capability contracts; they are not
+silently interpreted as relational SQL.
 
 Predicate nodes are limited to `all`, `any`, `not`, comparison operators, `between`,
-set membership, null/missing/NaN/zero/negative checks, bounded text matching, and safe
-transforms (`lower`, `upper`, `trim`, `length`, `abs`, `date`, `date_trunc`, `coalesce`).
+set membership, null/missing/NaN/zero/negative/empty/whitespace/boolean/time checks, and
+bounded text matching. Safe transforms and regular-expression predicates are reserved
+until each connector has a typed implementation.
 Values are only `{field}`, `{literal}`, or `{ref}`. Free-form expression strings are not
 part of the grammar.
 
