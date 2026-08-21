@@ -1,0 +1,248 @@
+{
+  "ci_gate": "full backend suite with REQUIRE_TEST_SERVICES=1 and no silent integration skips",
+  "connectors": {
+    "bigquery": {
+      "capabilities": {
+        "compiled_monitors": "none",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "BigQueryConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": null,
+      "profile_dialect": "bigquery",
+      "readiness": "experimental"
+    },
+    "cassandra": {
+      "capabilities": {
+        "compiled_monitors": "internal_partition_read_only",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "none",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "CassandraConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": "partition",
+      "profile_dialect": null,
+      "readiness": "experimental"
+    },
+    "clickhouse": {
+      "capabilities": {
+        "compiled_monitors": "none",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "ClickHouseConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": null,
+      "profile_dialect": "clickhouse",
+      "readiness": "experimental"
+    },
+    "databricks": {
+      "capabilities": {
+        "compiled_monitors": "none",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "DatabricksConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": null,
+      "profile_dialect": "databricks",
+      "readiness": "experimental"
+    },
+    "duckdb": {
+      "capabilities": {
+        "compiled_monitors": "internal_read_only",
+        "connection_test": true,
+        "custom_monitors": "legacy_sql_scalar",
+        "discovery": true,
+        "profiling": "full",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "DuckDBConnector",
+      "monitor_dialect": "duckdb",
+      "native_profile_kind": null,
+      "profile_dialect": "duckdb",
+      "readiness": "beta"
+    },
+    "mariadb": {
+      "capabilities": {
+        "compiled_monitors": "internal_read_only",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "MySQLConnector",
+      "monitor_dialect": "mysql",
+      "native_profile_kind": null,
+      "profile_dialect": "mysql",
+      "readiness": "experimental"
+    },
+    "mongodb": {
+      "capabilities": {
+        "compiled_monitors": "internal_document_read_only",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": true,
+        "schema": true
+      },
+      "class": "MongoDBConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": "document",
+      "profile_dialect": null,
+      "readiness": "experimental"
+    },
+    "mysql": {
+      "capabilities": {
+        "compiled_monitors": "internal_read_only",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "MySQLConnector",
+      "monitor_dialect": "mysql",
+      "native_profile_kind": null,
+      "profile_dialect": "mysql",
+      "readiness": "experimental"
+    },
+    "postgres": {
+      "capabilities": {
+        "compiled_monitors": "internal_read_only",
+        "connection_test": true,
+        "custom_monitors": "legacy_sql_scalar",
+        "discovery": true,
+        "profiling": "full",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "PostgresConnector",
+      "monitor_dialect": "postgres",
+      "native_profile_kind": null,
+      "profile_dialect": "postgres",
+      "readiness": "stable"
+    },
+    "redis": {
+      "capabilities": {
+        "compiled_monitors": "internal_keyspace_read_only",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": true,
+        "schema": true
+      },
+      "class": "RedisConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": "keyspace",
+      "profile_dialect": null,
+      "readiness": "experimental"
+    },
+    "redshift": {
+      "capabilities": {
+        "compiled_monitors": "none",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "RedshiftConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": null,
+      "profile_dialect": "redshift",
+      "readiness": "experimental"
+    },
+    "snowflake": {
+      "capabilities": {
+        "compiled_monitors": "none",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "SnowflakeConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": null,
+      "profile_dialect": "snowflake",
+      "readiness": "experimental"
+    },
+    "sqlite": {
+      "capabilities": {
+        "compiled_monitors": "internal_read_only",
+        "connection_test": true,
+        "custom_monitors": "legacy_sql_scalar",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "SQLiteConnector",
+      "monitor_dialect": "sqlite",
+      "native_profile_kind": null,
+      "profile_dialect": "sqlite",
+      "readiness": "beta"
+    },
+    "sqlserver": {
+      "capabilities": {
+        "compiled_monitors": "internal_read_only",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "SQLServerConnector",
+      "monitor_dialect": "tsql",
+      "native_profile_kind": null,
+      "profile_dialect": "sqlserver",
+      "readiness": "experimental"
+    },
+    "trino": {
+      "capabilities": {
+        "compiled_monitors": "none",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "TrinoConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": null,
+      "profile_dialect": "trino",
+      "readiness": "experimental"
+    }
+  },
+  "generated_from": "executable connector method overrides and dialect declarations",
+  "generator": "backend/scripts/generate_connector_capabilities.py",
+  "schema_version": 1
+}

@@ -73,28 +73,6 @@ VERSION_OPTIONS = {
 }
 
 
-def _capabilities(
-    *,
-    connection: bool = True,
-    discovery: bool = True,
-    schema: bool = True,
-    profiling: str = "none",
-    custom_monitors: str = "none",
-    compiled_monitors: str = "none",
-    sampling: bool = False,
-) -> dict:
-    """Public capability contract; readiness tells callers how much is verified."""
-    return {
-        "connection_test": connection,
-        "discovery": discovery,
-        "schema": schema,
-        "profiling": profiling,
-        "custom_monitors": custom_monitors,
-        "compiled_monitors": compiled_monitors,
-        "sampling": sampling,
-    }
-
-
 def _field_metadata(name: str, default, required: bool) -> dict:
     metadata = FIELD_METADATA.get(name, {})
     return {
@@ -119,11 +97,6 @@ CONNECTOR_REGISTRY = {
         "label": "PostgreSQL",
         "description": "PostgreSQL / Aurora Postgres",
         "readiness": "stable",
-        "capabilities": _capabilities(
-            profiling="full",
-            custom_monitors="legacy_sql_scalar",
-            compiled_monitors="internal_read_only",
-        ),
     },
     "mysql": {
         "module": "app.connectors.mysql",
@@ -138,7 +111,6 @@ CONNECTOR_REGISTRY = {
         "label": "MySQL",
         "description": "MySQL 5.7+",
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core", compiled_monitors="internal_read_only"),
     },
     "mariadb": {
         "module": "app.connectors.mysql",
@@ -153,17 +125,15 @@ CONNECTOR_REGISTRY = {
         "label": "MariaDB",
         "description": "MariaDB 10.11+ / 11.4 LTS",
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core", compiled_monitors="internal_read_only"),
     },
     "redshift": {
         "module": "app.connectors.redshift",
         "class": "RedshiftConnector",
         "required": ["host", "database", "username", "password"],
-        "optional": {"port": 5439},
+        "optional": {"port": 5439, "schema": None},
         "label": "Amazon Redshift",
         "description": "AWS Redshift (Postgres-compatible)",
         "readiness": "experimental",
-        "capabilities": _capabilities(),
     },
     "bigquery": {
         "module": "app.connectors.bigquery",
@@ -178,7 +148,6 @@ CONNECTOR_REGISTRY = {
         "label": "Google BigQuery",
         "description": "Google Cloud BigQuery with dry-run cost enforcement",
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core"),
     },
     "snowflake": {
         "module": "app.connectors.snowflake",
@@ -193,7 +162,6 @@ CONNECTOR_REGISTRY = {
         "label": "Snowflake",
         "description": "Snowflake with scoped discovery and timeout-bounded profiling",
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core"),
     },
     "clickhouse": {
         "module": "app.connectors.clickhouse",
@@ -203,7 +171,6 @@ CONNECTOR_REGISTRY = {
         "label": "ClickHouse",
         "description": "ClickHouse OLAP database",
         "readiness": "experimental",
-        "capabilities": _capabilities(),
     },
     "databricks": {
         "module": "app.connectors.databricks",
@@ -213,7 +180,6 @@ CONNECTOR_REGISTRY = {
         "label": "Databricks",
         "description": "Databricks Lakehouse SQL",
         "readiness": "experimental",
-        "capabilities": _capabilities(),
     },
     "trino": {
         "module": "app.connectors.trino",
@@ -223,7 +189,6 @@ CONNECTOR_REGISTRY = {
         "label": "Trino / Presto",
         "description": "Trino or PrestoDB federated query",
         "readiness": "experimental",
-        "capabilities": _capabilities(),
     },
     "duckdb": {
         "module": "app.connectors.duckdb",
@@ -233,11 +198,6 @@ CONNECTOR_REGISTRY = {
         "label": "DuckDB",
         "description": "DuckDB in-process OLAP",
         "readiness": "beta",
-        "capabilities": _capabilities(
-            profiling="full",
-            custom_monitors="legacy_sql_scalar",
-            compiled_monitors="internal_read_only",
-        ),
     },
     "sqlite": {
         "module": "app.connectors.sqlite",
@@ -247,11 +207,6 @@ CONNECTOR_REGISTRY = {
         "label": "SQLite",
         "description": "SQLite file database",
         "readiness": "beta",
-        "capabilities": _capabilities(
-            profiling="core",
-            custom_monitors="legacy_sql_scalar",
-            compiled_monitors="internal_read_only",
-        ),
     },
     "cassandra": {
         "module": "app.connectors.cassandra",
@@ -270,9 +225,6 @@ CONNECTOR_REGISTRY = {
         "description": "Apache Cassandra discovery/schema and manual partition-bound typed monitors",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(
-            compiled_monitors="internal_partition_read_only",
-        ),
     },
     "mongodb": {
         "module": "app.connectors.mongodb",
@@ -286,11 +238,6 @@ CONNECTOR_REGISTRY = {
         "description": "MongoDB document database (Tier 1 — field drift detection)",
         "tier": 1,
         "readiness": "experimental",
-        "capabilities": _capabilities(
-            profiling="core",
-            compiled_monitors="internal_document_read_only",
-            sampling=True,
-        ),
     },
     "redis": {
         "module": "app.connectors.redis",
@@ -311,11 +258,6 @@ CONNECTOR_REGISTRY = {
         "description": "Redis bounded profile and metadata-only typed keyspace monitors",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(
-            profiling="core",
-            compiled_monitors="internal_keyspace_read_only",
-            sampling=True,
-        ),
     },
     "sqlserver": {
         "module": "app.connectors.sqlserver",
@@ -330,18 +272,66 @@ CONNECTOR_REGISTRY = {
         "description": "Microsoft SQL Server / Azure SQL",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core", compiled_monitors="internal_read_only"),
     },
 }
+
+
+def _connector_class(source_type: str) -> type[BaseConnector]:
+    import importlib
+
+    entry = CONNECTOR_REGISTRY[source_type]
+    module = importlib.import_module(entry["module"])
+    return getattr(module, entry["class"])
+
+
+def _overrides(connector_class: type[BaseConnector], method_name: str) -> bool:
+    return getattr(connector_class, method_name) is not getattr(BaseConnector, method_name)
+
+
+def derive_connector_capabilities(connector_class: type[BaseConnector]) -> dict:
+    """Generate the public matrix from executable adapter contracts."""
+    profile_dialect = connector_class.profile_dialect
+    has_native_profile = _overrides(connector_class, "collect_native_profile")
+    if profile_dialect in {"postgres", "duckdb"}:
+        profiling = "full"
+    elif profile_dialect or has_native_profile:
+        profiling = "core"
+    else:
+        profiling = "none"
+
+    custom_monitors = (
+        "legacy_sql_scalar"
+        if connector_class.monitor_dialect and _overrides(connector_class, "execute_monitor_query")
+        else "none"
+    )
+    compiled_monitors = "none"
+    if connector_class.monitor_dialect and _overrides(connector_class, "execute_compiled_monitor"):
+        compiled_monitors = "internal_read_only"
+    elif _overrides(connector_class, "execute_document_monitor"):
+        compiled_monitors = "internal_document_read_only"
+    elif _overrides(connector_class, "execute_partition_monitor"):
+        compiled_monitors = "internal_partition_read_only"
+    elif _overrides(connector_class, "execute_keyspace_monitor"):
+        compiled_monitors = "internal_keyspace_read_only"
+
+    return {
+        "connection_test": _overrides(connector_class, "test_connection"),
+        "discovery": _overrides(connector_class, "discover_schemas"),
+        "schema": _overrides(connector_class, "get_table_ddl"),
+        "profiling": profiling,
+        "custom_monitors": custom_monitors,
+        "compiled_monitors": compiled_monitors,
+        "sampling": has_native_profile,
+    }
 
 
 class ConnectorFactory:
     @staticmethod
     def capabilities_for(source_type: str) -> dict:
-        entry = CONNECTOR_REGISTRY.get(source_type.lower())
-        if not entry:
+        key = source_type.lower()
+        if key not in CONNECTOR_REGISTRY:
             raise ValueError(f"Unsupported source type: {source_type}")
-        return dict(entry["capabilities"])
+        return derive_connector_capabilities(_connector_class(key))
 
     @staticmethod
     def create(source_type: str, config: dict) -> BaseConnector:
@@ -349,10 +339,7 @@ class ConnectorFactory:
         entry = CONNECTOR_REGISTRY.get(key)
         if not entry:
             raise ValueError(f"Unsupported source type: {source_type}")
-        import importlib
-
-        mod = importlib.import_module(entry["module"])
-        cls = getattr(mod, entry["class"])
+        cls = _connector_class(key)
         return cls(config)
 
     @staticmethod
@@ -373,7 +360,7 @@ class ConnectorFactory:
                     "versions": VERSION_OPTIONS.get(k, ["Auto-detect"]),
                     "tier": v.get("tier", 0),
                     "readiness": v["readiness"],
-                    "capabilities": dict(v["capabilities"]),
+                    "capabilities": derive_connector_capabilities(_connector_class(k)),
                 }
             )
         return result

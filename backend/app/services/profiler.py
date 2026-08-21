@@ -141,7 +141,7 @@ class ProfilerService:
         """Quote a discovered identifier without treating it as SQL text."""
         if not identifier or "\x00" in identifier:
             raise ValueError("Database identifiers must be non-empty and contain no NUL bytes")
-        if dialect in {"mysql", "bigquery"}:
+        if dialect in {"mysql", "bigquery", "clickhouse", "databricks"}:
             return f"`{identifier.replace('`', '``')}`"
         if dialect == "sqlserver":
             return f"[{identifier.replace(']', ']]')}]"
@@ -178,6 +178,10 @@ class ProfilerService:
             "sqlserver",
             "bigquery",
             "snowflake",
+            "redshift",
+            "clickhouse",
+            "databricks",
+            "trino",
         }:
             raise ValueError(f"Unsupported profiling dialect: {dialect}")
 
@@ -186,6 +190,10 @@ class ProfilerService:
         sqlserver = dialect == "sqlserver"
         bigquery = dialect == "bigquery"
         snowflake = dialect == "snowflake"
+        redshift = dialect == "redshift"
+        clickhouse = dialect == "clickhouse"
+        databricks = dialect == "databricks"
+        trino = dialect == "trino"
         parts = [
             "COUNT(*) AS _row_count",
             # Duplicate rate: what fraction of rows are duplicates of at least one other row
@@ -220,6 +228,24 @@ class ProfilerService:
                     f"DATEDIFF('second', MAX({freshness}), CURRENT_TIMESTAMP()) "
                     "AS _freshness_seconds"
                 )
+            elif redshift:
+                parts.append(
+                    f"DATEDIFF(second, MAX({freshness}), GETDATE()) AS _freshness_seconds"
+                )
+            elif clickhouse:
+                parts.append(
+                    f"dateDiff('second', max({freshness}), now()) AS _freshness_seconds"
+                )
+            elif databricks:
+                parts.append(
+                    f"TIMESTAMPDIFF(SECOND, MAX({freshness}), CURRENT_TIMESTAMP()) "
+                    "AS _freshness_seconds"
+                )
+            elif trino:
+                parts.append(
+                    f"date_diff('second', MAX({freshness}), CURRENT_TIMESTAMP) "
+                    "AS _freshness_seconds"
+                )
             else:
                 parts.append(
                     f"EXTRACT(EPOCH FROM NOW() - MAX({freshness})) AS _freshness_seconds"
@@ -248,6 +274,21 @@ class ProfilerService:
                     f"COUNT_IF({safe} IS NULL) / NULLIF(COUNT(*), 0) "
                     f"AS {alias('null_rate')}"
                 )
+            elif clickhouse:
+                parts.append(
+                    f"countIf(isNull({safe})) / nullIf(count(), 0) "
+                    f"AS {alias('null_rate')}"
+                )
+            elif databricks:
+                parts.append(
+                    f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) * 1.0 "
+                    f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
+                )
+            elif trino:
+                parts.append(
+                    f"CAST(COUNT_IF({safe} IS NULL) AS DOUBLE) / NULLIF(COUNT(*), 0) "
+                    f"AS {alias('null_rate')}"
+                )
             elif mysql or sqlserver:
                 parts.append(
                     f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) * 1.0 "
@@ -274,6 +315,21 @@ class ProfilerService:
             elif snowflake:
                 parts.append(
                     f"COUNT(DISTINCT {safe}) / NULLIF(COUNT(*), 0) "
+                    f"AS {alias('uniqueness_ratio')}"
+                )
+            elif clickhouse:
+                parts.append(
+                    f"uniqExact({safe}) / nullIf(count(), 0) "
+                    f"AS {alias('uniqueness_ratio')}"
+                )
+            elif databricks:
+                parts.append(
+                    f"COUNT(DISTINCT {safe}) * 1.0 / NULLIF(COUNT(*), 0) "
+                    f"AS {alias('uniqueness_ratio')}"
+                )
+            elif trino:
+                parts.append(
+                    f"CAST(COUNT(DISTINCT {safe}) AS DOUBLE) / NULLIF(COUNT(*), 0) "
                     f"AS {alias('uniqueness_ratio')}"
                 )
             elif mysql or sqlserver:
@@ -342,6 +398,41 @@ class ProfilerService:
                         f"COUNT_IF({safe} < 0) / NULLIF(COUNT_IF({safe} IS NOT NULL), 0) "
                         f"AS {alias('negative_rate')}",
                     ]
+                elif redshift:
+                    parts += [
+                        f"AVG(CAST({safe} AS DOUBLE PRECISION)) AS {alias('mean')}",
+                        f"STDDEV_POP(CAST({safe} AS DOUBLE PRECISION)) AS {alias('stddev')}",
+                        f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END)::FLOAT "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('zero_rate')}",
+                        f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END)::FLOAT "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('negative_rate')}",
+                    ]
+                elif clickhouse:
+                    parts += [
+                        f"avg(toFloat64({safe})) AS {alias('mean')}",
+                        f"stddevPop(toFloat64({safe})) AS {alias('stddev')}",
+                        f"countIf({safe} = 0) / nullIf(count({safe}), 0) AS {alias('zero_rate')}",
+                        f"countIf({safe} < 0) / nullIf(count({safe}), 0) "
+                        f"AS {alias('negative_rate')}",
+                    ]
+                elif databricks:
+                    parts += [
+                        f"AVG(CAST({safe} AS DOUBLE)) AS {alias('mean')}",
+                        f"STDDEV_POP(CAST({safe} AS DOUBLE)) AS {alias('stddev')}",
+                        f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('zero_rate')}",
+                        f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('negative_rate')}",
+                    ]
+                elif trino:
+                    parts += [
+                        f"AVG(CAST({safe} AS DOUBLE)) AS {alias('mean')}",
+                        f"STDDEV_POP(CAST({safe} AS DOUBLE)) AS {alias('stddev')}",
+                        f"CAST(COUNT_IF({safe} = 0) AS DOUBLE) / NULLIF(COUNT({safe}), 0) "
+                        f"AS {alias('zero_rate')}",
+                        f"CAST(COUNT_IF({safe} < 0) AS DOUBLE) / NULLIF(COUNT({safe}), 0) "
+                        f"AS {alias('negative_rate')}",
+                    ]
                 else:
                     parts += [
                         f"AVG({safe}::FLOAT) AS {alias('mean')}",
@@ -387,6 +478,26 @@ class ProfilerService:
                         f"DATEDIFF('second', MIN({safe}), MAX({safe})) "
                         f"AS {alias('range_seconds')}"
                     )
+                elif redshift:
+                    parts.append(
+                        f"DATEDIFF(second, MIN({safe}), MAX({safe})) "
+                        f"AS {alias('range_seconds')}"
+                    )
+                elif clickhouse:
+                    parts.append(
+                        f"dateDiff('second', min({safe}), max({safe})) "
+                        f"AS {alias('range_seconds')}"
+                    )
+                elif databricks:
+                    parts.append(
+                        f"TIMESTAMPDIFF(SECOND, MIN({safe}), MAX({safe})) "
+                        f"AS {alias('range_seconds')}"
+                    )
+                elif trino:
+                    parts.append(
+                        f"date_diff('second', MIN({safe}), MAX({safe})) "
+                        f"AS {alias('range_seconds')}"
+                    )
                 else:
                     parts.append(
                         f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) "
@@ -403,12 +514,24 @@ class ProfilerService:
                     text_value = f"CAST({safe} AS STRING)"
                 elif snowflake:
                     text_value = f"TO_VARCHAR({safe})"
+                elif redshift:
+                    text_value = f"CAST({safe} AS VARCHAR)"
+                elif clickhouse:
+                    text_value = f"toString({safe})"
+                elif databricks:
+                    text_value = f"CAST({safe} AS STRING)"
+                elif trino:
+                    text_value = f"CAST({safe} AS VARCHAR)"
                 else:
                     text_value = f"{safe}::TEXT"
                 length_value = (
                     f"LEN({text_value} + N'#') - 1"
                     if sqlserver
-                    else f"{'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})"
+                    else (
+                        f"lengthUTF8({text_value})"
+                        if clickhouse
+                        else f"{'CHAR_LENGTH' if mysql else 'LENGTH'}({text_value})"
+                    )
                 )
                 parts += [
                     f"MIN({length_value}) AS {alias('min_len')}",
@@ -432,6 +555,21 @@ class ProfilerService:
                     parts.append(
                         f"COUNT_IF({text_value} = '') / NULLIF(COUNT_IF({safe} IS NOT NULL), 0) "
                         f"AS {alias('empty_rate')}"
+                    )
+                elif clickhouse:
+                    parts.append(
+                        f"countIf({text_value} = '') / nullIf(count({safe}), 0) "
+                        f"AS {alias('empty_rate')}"
+                    )
+                elif databricks:
+                    parts.append(
+                        f"SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('empty_rate')}"
+                    )
+                elif trino:
+                    parts.append(
+                        f"CAST(COUNT_IF({text_value} = '') AS DOUBLE) "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('empty_rate')}"
                     )
                 elif mysql or sqlserver:
                     parts.append(

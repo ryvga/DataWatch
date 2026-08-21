@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
@@ -11,36 +12,36 @@ class DatabricksConnector(BaseConnector):
     Config: server_hostname, http_path, access_token, catalog (optional), schema (optional).
     """
 
+    profile_dialect = "databricks"
+
     def __init__(self, config: dict):
         self._config = config
         self._conn = None
 
     async def _get_conn(self):
         if self._conn is None:
-            import asyncio
             from databricks import sql as dbsql
+
             c = self._config
-            # databricks-sql-connector is sync; run in thread executor
-            loop = asyncio.get_event_loop()
-            self._conn = await loop.run_in_executor(
-                None,
-                lambda: dbsql.connect(
+            self._conn = await asyncio.to_thread(
+                dbsql.connect,
                     server_hostname=c["server_hostname"],
                     http_path=c["http_path"],
                     access_token=c["access_token"],
-                ),
+                    catalog=c.get("catalog", "hive_metastore"),
+                    schema=c.get("schema", "default"),
             )
         return self._conn
 
     async def _execute(self, query: str, params=None):
-        import asyncio
         conn = await self._get_conn()
-        loop = asyncio.get_event_loop()
+
         def _run():
             with conn.cursor() as cur:
                 cur.execute(query, params)
                 return cur.fetchall(), [d[0] for d in (cur.description or [])]
-        return await loop.run_in_executor(None, _run)
+
+        return await asyncio.to_thread(_run)
 
     async def test_connection(self) -> bool:
         try:
@@ -52,16 +53,20 @@ class DatabricksConnector(BaseConnector):
 
     async def discover_schemas(self) -> list[SchemaInfo]:
         c = self._config
-        catalog_filter = f"AND table_catalog = '{c['catalog']}'" if c.get("catalog") else ""
-        rows, cols = await self._execute(
-            f"""
+        catalog = c.get("catalog", "hive_metastore")
+        schema = c.get("schema")
+        query = """
             SELECT table_schema, table_name, NULL as est_rows
             FROM information_schema.tables
             WHERE table_type = 'BASE TABLE'
-              {catalog_filter}
-            ORDER BY table_schema, table_name
-            """
-        )
+              AND table_catalog = ?
+        """
+        parameters = [catalog]
+        if schema:
+            query += " AND table_schema = ?"
+            parameters.append(schema)
+        query += " ORDER BY table_schema, table_name"
+        rows, _ = await self._execute(query, parameters)
         schemas: dict[str, SchemaInfo] = {}
         for row in rows:
             s = row[0]
@@ -77,20 +82,42 @@ class DatabricksConnector(BaseConnector):
         return {}
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
+        _validate_identifier(schema)
+        _validate_identifier(table)
+        configured_schema = self._config.get("schema")
+        if configured_schema and schema != configured_schema:
+            raise ValueError("Databricks schema access is restricted to the configured schema")
         rows, _ = await self._execute(
-            f"""
+            """
             SELECT column_name, data_type, is_nullable
             FROM information_schema.columns
-            WHERE table_schema = '{schema}' AND table_name = '{table}'
+            WHERE table_catalog = ? AND table_schema = ? AND table_name = ?
             ORDER BY ordinal_position
-            """
+            """,
+            [self._config.get("catalog", "hive_metastore"), schema, table],
         )
-        lines = [f"  {r[0]} {r[1]} {'NULL' if r[2]=='YES' else 'NOT NULL'}" for r in rows]
-        return f"CREATE TABLE {schema}.{table} (\n" + ",\n".join(lines) + "\n);"
+        lines = [
+            f"  {_quote_identifier(row[0])} {row[1]} "
+            f"{'NULL' if row[2] == 'YES' else 'NOT NULL'}"
+            for row in rows
+        ]
+        return (
+            f"CREATE TABLE {_quote_identifier(schema)}.{_quote_identifier(table)} (\n"
+            + ",\n".join(lines)
+            + "\n);"
+        )
 
     async def close(self) -> None:
         if self._conn:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._conn.close)
+            await asyncio.to_thread(self._conn.close)
             self._conn = None
+
+
+def _validate_identifier(value: str) -> None:
+    if not value or "\x00" in value:
+        raise ValueError("Databricks identifiers must be non-empty and contain no NUL bytes")
+
+
+def _quote_identifier(value: str) -> str:
+    _validate_identifier(value)
+    return "`" + value.replace("`", "``") + "`"

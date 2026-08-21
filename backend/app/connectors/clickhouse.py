@@ -13,6 +13,8 @@ class ClickHouseConnector(BaseConnector):
     Config: host, port (default 8123), database, username (default 'default'), password.
     """
 
+    profile_dialect = "clickhouse"
+
     def __init__(self, config: dict):
         self._config = config
         self._client = None
@@ -47,8 +49,10 @@ class ClickHouseConnector(BaseConnector):
             FROM system.tables
             WHERE engine NOT IN ('View','MaterializedView','Dictionary','Set','Join','Buffer')
               AND database NOT IN ('system','information_schema','INFORMATION_SCHEMA')
+              AND database = {database:String}
             ORDER BY database, name
-            """
+            """,
+            parameters={"database": self._config.get("database", "default")},
         )
         schemas: dict[str, SchemaInfo] = {}
         for row in result.result_rows:
@@ -60,7 +64,10 @@ class ClickHouseConnector(BaseConnector):
 
     async def execute_profile_query(self, query: str) -> dict:
         client = await self._get_client()
-        result = await client.query(query)
+        result = await client.query(
+            query,
+            settings={"readonly": 2, "max_execution_time": 120},
+        )
         if result.result_rows:
             row = result.result_rows[0]
             cols = result.column_names
@@ -68,6 +75,10 @@ class ClickHouseConnector(BaseConnector):
         return {}
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
+        _validate_identifier(schema)
+        _validate_identifier(table)
+        if schema != self._config.get("database", "default"):
+            raise ValueError("ClickHouse schema access is restricted to the configured database")
         client = await self._get_client()
         result = await client.query(
             "SELECT name, type, is_in_primary_key FROM system.columns WHERE database = {db:String} AND table = {tbl:String} ORDER BY position",
@@ -76,10 +87,24 @@ class ClickHouseConnector(BaseConnector):
         lines = []
         for row in result.result_rows:
             col_name, col_type, _ = row
-            lines.append(f"  `{col_name}` {col_type}")
-        return f"CREATE TABLE `{schema}`.`{table}` (\n" + ",\n".join(lines) + "\n);"
+            lines.append(f"  {_quote_identifier(col_name)} {col_type}")
+        return (
+            f"CREATE TABLE {_quote_identifier(schema)}.{_quote_identifier(table)} (\n"
+            + ",\n".join(lines)
+            + "\n);"
+        )
 
     async def close(self) -> None:
         if self._client:
             await self._client.close()
             self._client = None
+
+
+def _validate_identifier(value: str) -> None:
+    if not value or "\x00" in value:
+        raise ValueError("ClickHouse identifiers must be non-empty and contain no NUL bytes")
+
+
+def _quote_identifier(value: str) -> str:
+    _validate_identifier(value)
+    return "`" + value.replace("`", "``") + "`"
