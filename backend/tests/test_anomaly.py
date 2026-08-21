@@ -1,5 +1,4 @@
 """Unit tests for AnomalyService — no DB required."""
-import pytest
 from unittest.mock import MagicMock
 import pickle
 

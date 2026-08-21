@@ -15,12 +15,11 @@ Fixtures:
 import asyncio
 import os
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -49,7 +48,6 @@ os.environ.setdefault("ENVIRONMENT", "test")
 
 from app.database import Base
 from app.main import app
-from app.config import settings
 
 
 # ── Engine ─────────────────────────────────────────────────────────────────────

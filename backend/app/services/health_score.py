@@ -7,7 +7,6 @@ Formula (weighted by severity):
 Returns 0–100. Color: green ≥80, yellow 60–79, red <60.
 """
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 
 
 SEVERITY_WEIGHTS = {

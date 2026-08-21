@@ -134,7 +134,7 @@ async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: D
 
     # Collect already-active monitors to avoid duplicates in recommendations
     existing_custom = (await db.scalars(
-        select(CustomMonitor).where(CustomMonitor.table_id == table.id, CustomMonitor.is_active == True)
+        select(CustomMonitor).where(CustomMonitor.table_id == table.id, CustomMonitor.is_active.is_(True))
     )).all()
     existing_monitors: list[dict] = [
         {"monitor_type": "custom_sql", "name": m.name, "column_name": None}
@@ -196,7 +196,7 @@ async def run_table_autopilot(db: AsyncSession, table: MonitoredTable, source: D
         select(AlertConfig).where(
             AlertConfig.org_id == org.id,
             AlertConfig.table_id == table.id,
-            AlertConfig.is_active == True,
+            AlertConfig.is_active.is_(True),
         ).limit(1)
     )).first())
     steps["alerts"] = {

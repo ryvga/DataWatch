@@ -15,7 +15,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-import pytest_asyncio
 
 from tests.conftest import MOCK_NARRATION, seed_profiles
 
@@ -178,7 +177,7 @@ async def test_schema_drift_detection(client, auth_headers, db_session, test_org
     db_session.add(drifted_profile)
     await db_session.flush()
 
-    result = await run_anomaly_checks_directly(db_session, table_id, str(drifted_profile.id))
+    await run_anomaly_checks_directly(db_session, table_id, str(drifted_profile.id))
 
     resp = await client.get("/api/v1/incidents?status=open", headers=auth_headers)
     incidents = resp.json()

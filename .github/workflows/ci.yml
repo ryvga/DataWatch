@@ -41,9 +41,17 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - name: Install backend dependencies
-        run: python -m pip install -r backend/requirements.txt
+        run: python -m pip install -r backend/requirements-dev.txt
+      - name: Lint backend
+        working-directory: backend
+        run: ruff check app tests
+      - name: Type-check safe monitor core
+        working-directory: backend
+        run: mypy --ignore-missing-imports --follow-imports=skip app/services/monitor_dsl.py app/services/monitor_evaluator.py app/services/monitor_attestation.py app/services/schema_binding.py
       - name: Create isolated PostgreSQL test database
         env:
           PGPASSWORD: datawatch

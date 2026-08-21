@@ -130,7 +130,6 @@ def profile_table(self, table_id: str):
 
 async def _profile_table_async(table_id: str) -> dict:
     from sqlalchemy import select
-    from sqlalchemy.ext.asyncio import AsyncSession
 
     from app.database import AsyncSessionLocal
     from app.models.data_source import DataSource
@@ -316,10 +315,10 @@ def run_anomaly_checks(table_id: str, profile_id: str):
 
 
 async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
-    from datetime import timedelta, timezone
+    from datetime import timedelta
 
     import redis
-    from sqlalchemy import desc, select
+    from sqlalchemy import select
 
     from app.database import AsyncSessionLocal
     from app.models.check_result import CheckResult
@@ -585,8 +584,8 @@ async def _run_custom_monitors_async(table_id: str, profile_id: str | None = Non
         monitors = (await db.scalars(
             select(CustomMonitor).where(
                 CustomMonitor.table_id == table_id,
-                CustomMonitor.is_active == True,
-                CustomMonitor.run_on_profile == True,
+                CustomMonitor.is_active.is_(True),
+                CustomMonitor.run_on_profile.is_(True),
             )
         )).all()
 
@@ -1009,7 +1008,7 @@ async def _send_alerts_async(incident_id: str) -> dict:
         configs = (await db.scalars(
             select(AlertConfig).where(
                 AlertConfig.org_id == incident.org_id,
-                AlertConfig.is_active == True,
+                AlertConfig.is_active.is_(True),
                 or_(
                     AlertConfig.table_id == incident.table_id,
                     AlertConfig.table_id.is_(None),

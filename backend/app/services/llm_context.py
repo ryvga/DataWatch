@@ -144,9 +144,12 @@ async def build_context(incident_id: str) -> str:
                     mn = m.get("mean")
                     ur = m.get("uniqueness_ratio")
                     bits = []
-                    if nr is not None: bits.append(f"null={nr:.3f}")
-                    if mn is not None: bits.append(f"mean={mn:.2f}")
-                    if ur is not None: bits.append(f"uniq={ur:.3f}")
+                    if nr is not None:
+                        bits.append(f"null={nr:.3f}")
+                    if mn is not None:
+                        bits.append(f"mean={mn:.2f}")
+                    if ur is not None:
+                        bits.append(f"uniq={ur:.3f}")
                     vals.append(f"[{p.collected_at.strftime('%m/%d')} {','.join(bits)}]")
             if vals:
                 trend_lines.append(f"  {col}: {' → '.join(vals)}")
@@ -161,7 +164,7 @@ async def build_context(incident_id: str) -> str:
             .where(Inc.table_id == table.id, Inc.created_at >= cutoff_30d)
         ) or 0
     if recent_count > 1:
-        lines += ["", f"=== INCIDENT FREQUENCY ===",
+        lines += ["", "=== INCIDENT FREQUENCY ===",
                   f"This table has had {recent_count} incidents in the past 30 days."]
 
     # ── Schema change note ────────────────────────────────────────────────────

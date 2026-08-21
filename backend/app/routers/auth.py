@@ -213,7 +213,7 @@ async def staff_login(body: StaffLoginRequest, request: Request, db: AsyncSessio
     # Strict rate limit for staff login — more sensitive target
     _check_rate_limit(f"staff:{request.client.host if request.client else 'unknown'}")
     staff = await db.scalar(
-        select(StaffUser).where(StaffUser.email == body.email, StaffUser.is_active == True)
+        select(StaffUser).where(StaffUser.email == body.email, StaffUser.is_active.is_(True))
     )
     if not staff or not verify_password(body.password, staff.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")

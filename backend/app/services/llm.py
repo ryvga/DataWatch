@@ -213,7 +213,6 @@ def generate_narration(context: str, org_api_key: str | None = None, org_model: 
         return result.model_dump()
     except (json.JSONDecodeError, ValidationError) as e:
         logger.warning("LLM attempt 1 failed validation: %s", e)
-        raw1 = raw or "(no response)"
     except Exception as e:
         logger.error("LLM API error on attempt 1: %s", e)
         return {"error": "narration_failed", "reason": "AI analysis temporarily unavailable"}

@@ -50,7 +50,7 @@ async def _ensure_unique_active_sql(
         select(CustomMonitor).where(
             CustomMonitor.table_id == table_id,
             CustomMonitor.org_id == org_id,
-            CustomMonitor.is_active == True,
+            CustomMonitor.is_active.is_(True),
         )
     )).all()
     for monitor in monitors:

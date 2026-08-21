@@ -11,7 +11,6 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +64,7 @@ async def enforce_table_limit(org, db: AsyncSession) -> None:
     )).all()
     count = await db.scalar(
         select(func.count()).select_from(MonitoredTable)
-        .where(MonitoredTable.source_id.in_(source_ids), MonitoredTable.is_active == True)
+        .where(MonitoredTable.source_id.in_(source_ids), MonitoredTable.is_active.is_(True))
     )
     if count >= max_tables:
         raise HTTPException(

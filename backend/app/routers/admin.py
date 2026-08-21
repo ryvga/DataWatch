@@ -3,10 +3,10 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import and_, desc, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import generate_api_key, generate_invite_token, hash_password
+from app.auth import generate_api_key, hash_password
 from app.database import get_db
 from app.models.data_source import DataSource
 from app.models.incident import Incident
@@ -611,7 +611,6 @@ async def get_stats(
     _staff: StaffUser = Depends(get_current_staff),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.services.plans import PLAN_LIMITS
     now = datetime.now(UTC)
     week_ago = now - timedelta(days=7)
     thirty_ago = now - timedelta(days=30)

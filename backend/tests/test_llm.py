@@ -1,6 +1,6 @@
 """Unit tests for LLM validation — mocks OpenRouter call, no API key required."""
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

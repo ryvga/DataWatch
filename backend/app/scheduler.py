@@ -74,7 +74,7 @@ async def start_scheduler() -> None:
 
     async with AsyncSessionLocal() as db:
         tables = (await db.scalars(
-            select(MonitoredTable).where(MonitoredTable.is_active == True)
+            select(MonitoredTable).where(MonitoredTable.is_active.is_(True))
         )).all()
 
     now = datetime.now(UTC)

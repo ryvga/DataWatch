@@ -102,20 +102,10 @@ class ProfilerService:
     async def get_columns(
         self, connector: BaseConnector, schema: str, table: str
     ) -> list[ColumnInfo]:
-        """Fetch column metadata from information_schema."""
-        query = f"""
-            SELECT column_name, data_type, is_nullable
-            FROM information_schema.columns
-            WHERE table_schema = '{schema}' AND table_name = '{table}'
-            ORDER BY ordinal_position
-        """
-        try:
-            rows = await connector.execute_profile_query(query)
-            # execute_profile_query returns a single dict — we need multiple rows
-            # Use a different approach: wrap in a subquery that returns JSON
-            return await self._get_columns_raw(connector, schema, table)
-        except Exception:
-            return await self._get_columns_raw(connector, schema, table)
+        """Fetch column metadata from the connector's DDL snapshot."""
+        # The profiling contract returns exactly one aggregate row, so column
+        # discovery uses the connector's deterministic DDL snapshot instead.
+        return await self._get_columns_raw(connector, schema, table)
 
     async def _get_columns_raw(
         self, connector: BaseConnector, schema: str, table: str

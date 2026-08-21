@@ -118,7 +118,7 @@ async def recommend_monitors(
     existing_monitors: list[dict] = []
     if body.table_id:
         existing_custom = (await db.scalars(
-            select(CustomMonitor).where(CustomMonitor.table_id == body.table_id, CustomMonitor.is_active == True)
+            select(CustomMonitor).where(CustomMonitor.table_id == body.table_id, CustomMonitor.is_active.is_(True))
         )).all()
         existing_monitors = [{"monitor_type": "custom_sql", "name": m.name} for m in existing_custom]
         table = await db.get(MonitoredTable, body.table_id)

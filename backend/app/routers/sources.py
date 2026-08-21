@@ -15,7 +15,7 @@ from app.database import get_db
 from app.models.data_source import DataSource
 from app.models.monitored_table import MonitoredTable
 from app.models.organization import Organization
-from app.routers.auth import get_current_org_from_api_key, get_current_org_from_jwt
+from app.routers.auth import get_current_org_from_jwt
 from app.services.crypto import decrypt_config, encrypt_config
 from app.services.error_safety import safe_connection_error
 
@@ -278,7 +278,7 @@ async def pause_source(
     src.status = "paused"  # soft delete — preserves profile history
     await _invalidate_discovery_cache(org.id, source_id)
     tables = (await db.scalars(
-        select(MonitoredTable).where(MonitoredTable.source_id == src.id, MonitoredTable.is_active == True)
+        select(MonitoredTable).where(MonitoredTable.source_id == src.id, MonitoredTable.is_active.is_(True))
     )).all()
 
     from app.scheduler import remove_table_job

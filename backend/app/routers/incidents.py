@@ -60,7 +60,7 @@ async def _get_incident_or_404(
 
 
 def _duration_minutes(i: Incident) -> int | None:
-    from datetime import timezone, timedelta
+    from datetime import timezone
     if not i.created_at:
         return None
     end = i.resolved_at or datetime.now(timezone.utc)

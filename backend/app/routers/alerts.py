@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -143,7 +143,7 @@ async def list_alert_configs(
     db: AsyncSession = Depends(get_db),
 ):
     configs = (await db.scalars(
-        select(AlertConfig).where(AlertConfig.org_id == org.id, AlertConfig.is_active == True)
+        select(AlertConfig).where(AlertConfig.org_id == org.id, AlertConfig.is_active.is_(True))
     )).all()
     return [_resp(c) for c in configs]
 

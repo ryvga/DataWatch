@@ -13,7 +13,7 @@ from app.models.organization import Organization
 from app.models.data_source import DataSource
 from app.models.user import User
 from app.routers.auth import get_current_org_from_jwt
-from app.services.health_score import compute_health_score, HealthBreakdown
+from app.services.health_score import compute_health_score
 
 router = APIRouter(prefix="/orgs", tags=["orgs"])
 
@@ -113,7 +113,7 @@ async def get_org_health(
         select(__import__("sqlalchemy", fromlist=["func"]).func.count())
         .select_from(MonitoredTable)
         .join(DataSource, MonitoredTable.source_id == DataSource.id)
-        .where(DataSource.org_id == org.id, MonitoredTable.is_active == True)
+        .where(DataSource.org_id == org.id, MonitoredTable.is_active.is_(True))
     ) or 0
 
     # Map check_results to simple dicts for health score

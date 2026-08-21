@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 
 from app.services.paypal import PayPalClient
 
