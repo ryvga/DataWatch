@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.routers import billing
+from app.config import settings
 
 
 class FakeDb:
@@ -37,7 +38,7 @@ async def test_create_order_uses_plan_price_and_paypal_checkout(monkeypatch):
     assert result.approval_url == "https://paypal.example/approve"
     assert calls["order"][0] == 49.0
     assert "starter" in calls["order"][1]
-    assert calls["order"][2] == "https://acme.datawatch.io/billing/paypal/return"
+    assert calls["order"][2] == f"https://acme.{settings.BASE_DOMAIN}/billing/paypal/return"
 
 
 @pytest.mark.asyncio
