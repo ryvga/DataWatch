@@ -1,16 +1,26 @@
 # DataWatch — Architecture
 
-## Planned AI governance control plane
+## AI governance control plane — phase one active
 
-The next product evolution is a database-native AI governance layer: an inventory of AI
-systems and immutable versions, explicit mappings from each version to its training, RAG,
-inference, evaluation, and logging data, versioned governance policies, continuous evidence,
-review/exception workflows, and governance incidents. It will reuse connector profiles,
-schema bindings, typed monitors, ordered run audits, teams, incidents, and alerts.
+The first database-native governance vertical is active for PostgreSQL/pgvector RAG data
+supply chains. Eight tenant-owned tables separate mutable system/deployment posture from
+append-only versions, data-use revisions, release manifests, and terminal evaluations.
+Composite foreign keys prove organization ownership across every relationship. A generic
+PostgreSQL trigger rejects update/delete mutations on audit records.
+Phase one retains governance audit records indefinitely and uses `RESTRICT` to block an
+organization purge while they exist. A later retention workflow must export evidence,
+authorize the purge, and remove the records explicitly; ordinary tenant deletion cannot
+silently cascade through the ledger.
 
-The implementation remains evidence-oriented and fail-closed: it distinguishes machine
-observations, customer assertions, human approvals, and framework mappings; it does not
-claim legal certification or let an LLM decide mandatory controls. See
+Manifest activation is compare-and-swap over deployment generation, previous active hash,
+and the exact canonical manifest hash. The evaluator keeps `pass`, `fail`, `unknown`,
+`unsupported`, `not_applicable`, and `error` distinct. Its bounded PostgreSQL observation
+uses a read-only transaction, server timeout, and conservative relation-size budget,
+returning aggregate vector counts and role metadata only. Failures create one active
+governance incident per stable dedupe key and reuse org-wide alert routes. The system does
+not claim legal certification or let an LLM decide mandatory controls. The demo source
+databases mirror that boundary with separate administrative owners and non-superuser,
+`SELECT`-only connector roles, so local evidence does not rely on owner privileges. See
 [`docs/ai-governance.md`](ai-governance.md) for the domain model, policy DSL, enforcement
 ladder, standards mapping, PFE evaluation plan, and first vertical slice.
 
@@ -21,14 +31,14 @@ DataWatch is a multi-tenant data quality monitoring platform. It is structured a
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Browser — React 18 SPA (Vite + Tailwind + Recharts)                │
-│  Overview · Table Detail · Incident Detail · Settings               │
+│  Overview · Tables · Monitors · AI Governance · Incidents           │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ REST / JSON
 ┌──────────────────────────▼──────────────────────────────────────────┐
 │  FastAPI (Python 3.12, async)                                        │
 │                                                                      │
 │  Routers:  /auth  /orgs  /api/v1/sources  /tables                   │
-│            /api/v1/incidents  /api/v1/alerts                         │
+│            /api/v1/incidents  /api/v1/alerts  /api/v1/ai             │
 │                                                                      │
 │  APScheduler (lifespan) — one IntervalTrigger job per active table  │
 └─────────┬────────────────────────────┬────────────────────────────-─┘
@@ -37,7 +47,7 @@ DataWatch is a multi-tenant data quality monitoring platform. It is structured a
 ┌─────────▼─────────────┐   ┌──────────▼──────────────┐
 │  Celery Worker         │   │  PostgreSQL 16           │
 │                        │   │                          │
-│  profile_table         │   │  14+ tables              │
+│  profile_table         │   │  28 tables               │
 │  bootstrap_autopilot   │   │  JSONB for metrics,      │
 │  run_anomaly_checks    │   │  narration, config,      │
 │  generate_llm_narration│   │  autopilot state         │
@@ -593,7 +603,7 @@ Output validated by `NarrationResult` Pydantic model. 1 retry on validation fail
 | Concern | Implementation |
 |---|---|
 | Credential storage | Fernet encryption with HKDF per-org key — cross-org decryption impossible |
-| API authentication | bcrypt-hashed API keys OR 15-min JWT. Never plaintext. |
+| API authentication | bcrypt-hashed API keys OR 8-hour JWT. Never plaintext. |
 | Org isolation | Every DB query on tenant data includes `org_id` filter. 404 instead of 403 (no info leak). |
 | Credential in logs | `connection_config` never returned in any API response — stripped at Pydantic schema level |
 | Rate limiting | Redis counters per org per day — prevents abuse on free tier |

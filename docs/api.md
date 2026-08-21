@@ -19,7 +19,7 @@ Keys are staff/API-key managed and prefixed `dw_`. Only bcrypt hashes are stored
 ```
 Authorization: Bearer <jwt>
 ```
-Obtain via `POST /auth/login`. Expires in 15 minutes.
+Obtain via `POST /auth/login`. Expires in 8 hours.
 
 ---
 
@@ -536,6 +536,35 @@ Query params: `limit` (default 100, max 500), `cursor`
 ```
 
 ---
+
+## AI Governance Phase One — `/api/v1/ai`
+
+All routes require a workspace JWT and return `404` for cross-tenant identities. Phase one
+is observe-only: activation records an exact manifest context but never blocks an external
+deployment.
+
+| Method | Route | Contract |
+|---|---|---|
+| `GET/POST` | `/systems` | List or register stable AI-system identity, purpose, owners, lifecycle, and risk context |
+| `GET/PATCH` | `/systems/{id}` | Inventory detail/evidence timeline or mutable identity update |
+| `POST` | `/systems/{id}/versions` | Append one canonical system version; raw prompts/outputs are rejected |
+| `POST` | `/system-versions/{id}/data-use-revisions` | Append a verified asset/field declaration labeled `customer_assertion` |
+| `POST` | `/system-versions/{id}/release-manifests` | Create/replay an immutable canonical manifest and SHA-256 hash |
+| `POST` | `/release-manifests/{id}/reviews` | Append a non-gating reviewer decision and evidence snapshot hash |
+| `POST` | `/systems/{id}/deployments` | Register an environment/region/workload identity hash |
+| `POST` | `/deployments/{id}/activate-manifest` | Compare-and-swap the exact manifest ID/hash and activation generation |
+| `POST` | `/deployments/{id}/evaluate` | Run deterministic ownership, schema/freshness, role/grant, and vector controls |
+| `GET` | `/systems/{id}/evidence` | Return up to 250 append-only terminal results with evidence class and replay hash |
+
+Activation requires `manifest_id`, the same 64-character `manifest_hash`,
+`expected_generation`, and the expected previous active hash. A stale writer receives
+`409`. Evaluation requires a client idempotency key and accepts bounded timeout and scan
+budget values. Results preserve six distinct states: `pass`, `fail`, `unknown`,
+`unsupported`, `not_applicable`, and `error`.
+
+For a PostgreSQL RAG declaration, `vector_contract` identifies only verified schema fields
+and another monitored table on the same source. The connector runs one read-only aggregate,
+returns counts and role metadata, and never returns rows or embeddings.
 
 ## Incidents — `/api/v1/incidents`
 

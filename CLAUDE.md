@@ -124,7 +124,7 @@ POST /tables → scheduler.add_job()
 
 ---
 
-## Database Schema (20 tables)
+## Database Schema (28 tables)
 
 | Table | Purpose |
 |---|---|
@@ -148,6 +148,14 @@ POST /tables → scheduler.add_job()
 | `alert_configs` | Routing rules — channel (slack/email/pagerduty), config (JSONB), min_severity |
 | `user_notification_prefs` | Per-user email, Slack, severity, digest, and quiet-hour preferences |
 | `oncall_schedules` | Tenant on-call rotation configuration and escalation targets |
+| `ai_systems` | Mutable AI-system identity, accountability, purpose, lifecycle, and edit-head pointer |
+| `ai_system_versions` | Append-only canonical model/provider/config/risk snapshots |
+| `ai_data_use_revisions` | Append-only schema-bound declared data uses labeled `customer_assertion` |
+| `ai_release_manifests` | Immutable content-addressed release context and evidence cutoff |
+| `ai_deployments` | Environment/region posture and CAS-protected active manifest |
+| `ai_approvals` | Append-only non-gating reviewer attestations and evidence snapshot hashes |
+| `ai_control_evaluations` | Immutable typed control results with evidence provenance and replay hash |
+| `ai_governance_incidents` | Deduplicated observe-mode governance failures routed through alerts |
 
 ---
 
@@ -178,7 +186,7 @@ POST /tables → scheduler.add_job()
 Two auth modes, both supported on all protected routes:
 
 - **`x-api-key` header** — for programmatic/Celery use. Raw key prefixed `dw_`, bcrypt-hashed in DB.
-- **`Authorization: Bearer <jwt>`** — for the SPA. 15-min JWT, login via `POST /auth/login`.
+- **`Authorization: Bearer <jwt>`** — for the SPA. 8-hour JWT, login via `POST /auth/login`.
 
 Dependency: `get_current_org_from_jwt` or `get_current_org_from_api_key` in `app/routers/auth.py`.
 
@@ -429,6 +437,7 @@ The project is in **MVP SaaS state**. Completed milestones:
 6. **AI features** — incident explanations, monitor recommender, natural language → SQL rule builder
 7. **Frontend** — Overview, Tables, Monitors, Incidents, Incident Detail, Reports, Billing, Teams, assignments, notifications, and natural-language monitor UI
 8. **Security** — HKDF per-org Fernet keys, login never reveals workspace existence, admin subdomain env-only
+9. **AI governance phase one** — tenant-safe AI inventory, append-only versions/data-use/manifests/evaluations, PostgreSQL/pgvector supply-chain controls, CAS manifest activation, evidence timeline, governance incidents, existing alert routing, and seeded PFE scenarios; strictly observe-only
 
 **To run locally:**
 

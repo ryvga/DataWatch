@@ -2,6 +2,7 @@ import logging
 import time
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 
 from app.connectors.base import BaseConnector, ScanBudgetExceeded, SchemaInfo, TableInfo
@@ -136,12 +137,15 @@ class PostgresConnector(BaseConnector):
     ) -> None:
         """Use total relation storage as a conservative upper scan bound."""
         conn = await self._get_conn()
+        escaped_schema = schema.replace('"', '""')
+        escaped_table = table.replace('"', '""')
+        qualified_relation = f'"{escaped_schema}"."{escaped_table}"'
         try:
             await conn.rollback()
             await conn.execute("SET TRANSACTION READ ONLY")
             cursor = await conn.execute(
-                "SELECT pg_total_relation_size(format('%I.%I', %s, %s)::regclass) AS bytes",
-                (schema, table),
+                "SELECT pg_total_relation_size(%s::regclass) AS bytes",
+                (qualified_relation,),
             )
             row = await cursor.fetchone()
             relation_bytes = int(row["bytes"]) if row else max_bytes_scanned + 1
@@ -170,6 +174,99 @@ class PostgresConnector(BaseConnector):
             quoted_col = '"' + col.replace('"', '""') + '"'
             lines.append(f"  {quoted_col} {dtype} {nullable}")
         return f"CREATE TABLE {schema}.{table} (\n" + ",\n".join(lines) + "\n);"
+
+    async def collect_rag_governance_observation(
+        self,
+        *,
+        source_schema: str,
+        source_table: str,
+        source_key: str,
+        source_updated_at: str | None,
+        source_deleted_at: str | None,
+        vector_schema: str,
+        vector_table: str,
+        vector_source_key: str,
+        vector_updated_at: str | None,
+        timeout_seconds: int = 30,
+        max_bytes_scanned: int = 100_000_000,
+    ) -> dict:
+        """Collect bounded pgvector supply-chain counts and effective table grants.
+
+        Identifiers are composed with psycopg's identifier API. The query returns
+        aggregate counts and role metadata only; rows and embeddings never leave the
+        customer database.
+        """
+        await self.enforce_monitor_scan_budget(source_schema, source_table, max_bytes_scanned)
+        await self.enforce_monitor_scan_budget(vector_schema, vector_table, max_bytes_scanned)
+        conn = await self._get_conn()
+        q = sql.SQL
+        ident = sql.Identifier
+        stale_expression = q("FALSE")
+        if source_updated_at and vector_updated_at:
+            stale_expression = q("v.{} < s.{}").format(
+                ident(vector_updated_at), ident(source_updated_at)
+            )
+        deletion_expression = q("FALSE")
+        if source_deleted_at:
+            deletion_expression = q("s.{} IS NOT NULL").format(ident(source_deleted_at))
+        statement = q(
+            """
+            WITH source_metrics AS (
+              SELECT
+                COUNT(*) FILTER (WHERE v.{vector_key} IS NULL)::bigint AS missing_embeddings,
+                COUNT(*) FILTER (WHERE v.{vector_key} IS NOT NULL AND ({stale}))::bigint AS stale_embeddings,
+                COUNT(*) FILTER (WHERE v.{vector_key} IS NOT NULL AND ({deleted}))::bigint AS deletion_propagation_failures
+              FROM {source_relation} AS s
+              LEFT JOIN {vector_relation} AS v ON v.{vector_key} = s.{source_key}
+            ), orphan_metrics AS (
+              SELECT COUNT(*) FILTER (WHERE s.{source_key} IS NULL)::bigint AS orphan_embeddings
+              FROM {vector_relation} AS v
+              LEFT JOIN {source_relation} AS s ON s.{source_key} = v.{vector_key}
+            ), grants AS (
+              SELECT
+                COALESCE(jsonb_agg(DISTINCT grantee ORDER BY grantee), '[]'::jsonb) AS roles,
+                COALESCE(
+                  jsonb_agg(jsonb_build_object('role', grantee, 'privilege', privilege_type)
+                            ORDER BY grantee, privilege_type),
+                  '[]'::jsonb
+                ) AS effective_grants
+              FROM (
+                SELECT DISTINCT grantee, privilege_type
+                FROM information_schema.role_table_grants
+                WHERE ((table_schema = %s AND table_name = %s)
+                    OR (table_schema = %s AND table_name = %s))
+                  AND privilege_type IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE')
+              ) grant_rows
+            )
+            SELECT source_metrics.*, orphan_metrics.orphan_embeddings,
+                   grants.roles AS effective_roles, grants.effective_grants
+            FROM source_metrics CROSS JOIN orphan_metrics CROSS JOIN grants
+            """
+        ).format(
+            source_relation=q("{}.{}").format(ident(source_schema), ident(source_table)),
+            vector_relation=q("{}.{}").format(ident(vector_schema), ident(vector_table)),
+            source_key=ident(source_key),
+            vector_key=ident(vector_source_key),
+            stale=stale_expression,
+            deleted=deletion_expression,
+        )
+        try:
+            await conn.rollback()
+            await conn.execute("SET TRANSACTION READ ONLY")
+            await conn.execute(
+                "SELECT set_config('statement_timeout', %s, true)",
+                (str(timeout_seconds * 1000),),
+            )
+            cursor = await conn.execute(
+                statement,
+                (source_schema, source_table, vector_schema, vector_table),
+            )
+            row = await cursor.fetchone()
+            if not row:
+                raise ValueError("Governance observation returned no aggregate row")
+            return dict(row)
+        finally:
+            await conn.rollback()
 
     async def close(self) -> None:
         if self._conn and not self._conn.closed:

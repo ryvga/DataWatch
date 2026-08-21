@@ -20,6 +20,7 @@ import Teams from './pages/Teams'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import About from './pages/About'
+import AISystems from './pages/AISystems'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminLayout from './pages/admin/AdminLayout'
 import AdminStats from './pages/admin/AdminStats'
@@ -92,6 +93,8 @@ export default function App() {
               <Route path="tables" element={<Tables />} />
               <Route path="tables/:id" element={<TableDetail />} />
               <Route path="monitors" element={<Monitors />} />
+              <Route path="ai-systems" element={<AISystems />} />
+              <Route path="ai-systems/:id" element={<AISystems />} />
               <Route path="teams" element={<Teams />} />
               <Route path="incidents" element={<Incidents />} />
               <Route path="incidents/:id" element={<IncidentDetail />} />

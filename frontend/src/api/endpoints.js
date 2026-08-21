@@ -81,6 +81,19 @@ export const generateWeeklySummary = () => api.post('/api/v1/reports/weekly/ai-s
 export const recommendMonitors = (sourceId, data) => api.post(`/api/v1/sources/${sourceId}/recommend-monitors`, data, { timeout: 180000 })
 export const nlRule = (tableId, data) => api.post(`/api/v1/tables/${tableId}/nl-rule`, data, { timeout: 180000 })
 
+// AI governance (observe-only phase one)
+export const getAISystems = () => api.get('/api/v1/ai/systems')
+export const getAISystem = (id) => api.get(`/api/v1/ai/systems/${id}`)
+export const createAISystem = (data) => api.post('/api/v1/ai/systems', data)
+export const updateAISystem = (id, data) => api.patch(`/api/v1/ai/systems/${id}`, data)
+export const createAISystemVersion = (id, data) => api.post(`/api/v1/ai/systems/${id}/versions`, data)
+export const createAIDataUse = (versionId, data) => api.post(`/api/v1/ai/system-versions/${versionId}/data-use-revisions`, data)
+export const createAIReleaseManifest = (versionId, data) => api.post(`/api/v1/ai/system-versions/${versionId}/release-manifests`, data)
+export const reviewAIReleaseManifest = (manifestId, data) => api.post(`/api/v1/ai/release-manifests/${manifestId}/reviews`, data)
+export const createAIDeployment = (systemId, data) => api.post(`/api/v1/ai/systems/${systemId}/deployments`, data)
+export const activateAIManifest = (deploymentId, data) => api.post(`/api/v1/ai/deployments/${deploymentId}/activate-manifest`, data)
+export const evaluateAIDeployment = (deploymentId, data) => api.post(`/api/v1/ai/deployments/${deploymentId}/evaluate`, data, { timeout: 180000 })
+
 // Custom Monitors
 export const getAllCustomMonitors = () => api.get('/api/v1/custom-monitors')
 export const getCustomMonitors = (tableId) => api.get(`/api/v1/tables/${tableId}/custom-monitors`)

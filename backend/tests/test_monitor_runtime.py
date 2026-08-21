@@ -231,8 +231,8 @@ async def test_postgres_compiled_adapter_sets_read_only_timeout_and_bindings():
         ("ROLLBACK", None),
         ("SET TRANSACTION READ ONLY", None),
         (
-            "SELECT pg_total_relation_size(format('%I.%I', %s, %s)::regclass) AS bytes",
-            ("analytics", "orders"),
+            "SELECT pg_total_relation_size(%s::regclass) AS bytes",
+            ('"analytics"."orders"',),
         ),
         ("ROLLBACK", None),
         ("ROLLBACK", None),

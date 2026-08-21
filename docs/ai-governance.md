@@ -1,8 +1,16 @@
 # DataWatch AI Governance Control Plane
 
-Status: product and architecture proposal
+Status: phase one implemented; phases two through five remain planned
 
 Date: 2026-07-19
+
+Implementation evidence updated: 2026-08-21
+
+Phase one now provides tenant-safe system/version/deployment inventory, immutable
+schema-bound data-use revisions and release manifests, compare-and-swap activation, four
+typed PostgreSQL/pgvector RAG controls, append-only terminal evaluations, deduplicated
+governance incidents, org-wide alert reuse, inventory/detail UI, and four marked jury
+fixtures. See [`evidence/ai-governance-phase1-2026-08-21.md`](evidence/ai-governance-phase1-2026-08-21.md).
 
 Audience: product, engineering, PFE jury, security, data, and AI governance teams
 

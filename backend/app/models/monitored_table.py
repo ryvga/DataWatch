@@ -12,6 +12,7 @@ class MonitoredTable(Base):
     __tablename__ = "monitored_tables"
     __table_args__ = (
         UniqueConstraint("source_id", "schema_name", "table_name", name="uq_monitored_table_source_schema_table"),
+        UniqueConstraint("id", "source_id", name="uq_monitored_tables_id_source"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

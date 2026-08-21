@@ -212,6 +212,36 @@ CQL outside connector execution paths until typed native planners exist.
 
 ## Testing
 
+### AI governance phase-one proof
+
+```bash
+# API, tenancy, manifest replay, CAS, control semantics, incident dedupe
+cd backend
+venv/bin/pytest -q tests/test_ai_governance_phase1.py
+
+# Full backend regression
+venv/bin/pytest -q tests
+
+# Inventory/detail browser flow (requires the seeded local stack)
+cd ../frontend
+node tests/playwright/ai-governance.spec.mjs
+
+# Prove the real Alembic chain on a disposable database
+docker exec datawatch-postgres-1 createdb -U datawatch datawatch_aigov_migration_test
+(cd backend && \
+  DATABASE_URL=postgresql+asyncpg://datawatch:datawatch@localhost:5433/datawatch_aigov_migration_test \
+  venv/bin/alembic upgrade head)
+docker exec datawatch-postgres-1 dropdb -U datawatch datawatch_aigov_migration_test
+```
+
+`scripts/quickstart.py` seeds four clearly marked jury fixtures: stale knowledge,
+unauthorized effective role, missing embedding, and failed deletion propagation. Fixture
+evidence includes `fixture: true`; do not present it as an independently observed production
+fact. Use `POST /api/v1/ai/deployments/{id}/evaluate` for connector-backed evidence.
+The Compose source credentials (`readonly_user`, `analytics_ro`) are intentionally
+different from the bootstrap owners (`acme_admin`, `analytics_admin`) and must remain
+`NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`, and table-`SELECT` only.
+
 ### Unit tests (no DB, fast)
 
 ```bash

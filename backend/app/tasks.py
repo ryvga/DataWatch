@@ -1066,6 +1066,58 @@ async def _send_alerts_async(incident_id: str) -> dict:
         return {"incident_id": incident_id, "alerts_dispatched": len(results), "results": results}
 
 
+@celery_app.task(name="tasks.send_governance_alerts")
+def send_governance_alerts(incident_id: str):
+    """Dispatch a governance incident through existing org-wide alert routes."""
+    return _run(_send_governance_alerts_async(incident_id))
+
+
+async def _send_governance_alerts_async(incident_id: str) -> dict:
+    from types import SimpleNamespace
+
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.ai_governance import AIGovernanceIncident
+    from app.models.alert_config import AlertConfig
+    from app.services.alert import dispatch_alert
+    from app.services.realtime import publish_event
+
+    async with AsyncSessionLocal() as db:
+        governance_incident = await db.get(AIGovernanceIncident, incident_id)
+        if not governance_incident:
+            return {"status": "error", "error": "governance incident not found"}
+        configs = (
+            await db.scalars(
+                select(AlertConfig).where(
+                    AlertConfig.org_id == governance_incident.org_id,
+                    AlertConfig.table_id.is_(None),
+                    AlertConfig.is_active.is_(True),
+                )
+            )
+        ).all()
+        incident = SimpleNamespace(
+            id=governance_incident.id,
+            org_id=governance_incident.org_id,
+            table_id=None,
+            title=governance_incident.title,
+            severity=governance_incident.severity,
+            status=governance_incident.status,
+            created_at=governance_incident.created_at,
+            fired_checks=[{"check": governance_incident.control_id, "kind": "ai_governance"}],
+        )
+        narration = {
+            "summary": "An observe-mode AI governance control failed. Review the attached evidence before promoting the release.",
+            "recommended_actions": ["Open the AI system evidence timeline", "Confirm the declared data-use contract", "Remediate or document the unsupported observation"],
+        }
+        results = []
+        for config in configs:
+            ok = dispatch_alert(config, incident, narration)
+            results.append({"config_id": str(config.id), "channel": config.channel, "sent": ok})
+        await publish_event(str(governance_incident.org_id), "alert.dispatched", {"governanceIncidentId": str(governance_incident.id), "results": results})
+        return {"incident_id": incident_id, "alerts_dispatched": len(results), "results": results}
+
+
 @celery_app.task(name="tasks.notify_incident_assignment")
 def notify_incident_assignment(incident_id: str):
     """Placeholder: send notifications when an incident is assigned to a user or team.

@@ -62,13 +62,20 @@ jobs:
       - name: Lint backend
         working-directory: backend
         run: ruff check app tests
-      - name: Type-check safe monitor core
+      - name: Type-check safe monitor and governance cores
         working-directory: backend
-        run: mypy --ignore-missing-imports --follow-imports=skip app/services/monitor_dsl.py app/services/monitor_evaluator.py app/services/monitor_attestation.py app/services/schema_binding.py
+        run: mypy --ignore-missing-imports --follow-imports=skip app/services/monitor_dsl.py app/services/monitor_evaluator.py app/services/monitor_attestation.py app/services/schema_binding.py app/services/ai_governance.py
       - name: Create isolated PostgreSQL test database
         env:
           PGPASSWORD: datawatch
         run: psql -h 127.0.0.1 -p 5433 -U datawatch -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE datawatch_test;'
+      - name: Prove Alembic head on the isolated database
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://datawatch:datawatch@127.0.0.1:5433/datawatch_test
+          SECRET_KEY: ci-secret-key-xxxxxxxxxxxxxxxxxxxxxxxx
+          FERNET_MASTER_KEY: dGVzdC1mZXJuZXQta2V5LXBhZGRlZC10by0zMmJ5dGVzISE=
+        run: alembic upgrade head
       - name: Start connector matrix services
         run: docker compose -f docker-compose.test-dbs.yml up -d --wait test-mysql test-mariadb test-mongo test-sqlserver test-cassandra
       - name: Run backend suite without silent integration skips

@@ -13,6 +13,7 @@ from app.database import AsyncSessionLocal
 from app.routers import alerts, auth, billing, incidents, orgs, sources, tables
 from app.routers import admin, reports, custom_monitors, monitor_dsl, notifications, teams
 from app.routers import realtime
+from app.routers import ai_governance
 from app.services.realtime import realtime_manager
 
 logging.basicConfig(level=settings.LOG_LEVEL)
@@ -95,6 +96,7 @@ app.include_router(monitor_dsl.asset_router)
 app.include_router(teams.router)
 app.include_router(notifications.router)
 app.include_router(realtime.router)
+app.include_router(ai_governance.router)
 
 
 async def _dependency_health() -> dict[str, str]:

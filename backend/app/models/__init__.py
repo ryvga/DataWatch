@@ -12,6 +12,16 @@ from app.models.custom_monitor import CustomMonitor
 from app.models.oncall import OncallSchedule
 from app.models.notification_prefs import UserNotificationPrefs
 from app.models.monitor import Monitor, MonitorEvaluationState, MonitorRevision, MonitorRun
+from app.models.ai_governance import (
+    AIControlEvaluation,
+    AIApproval,
+    AIDataUseRevision,
+    AIDeployment,
+    AIGovernanceIncident,
+    AIReleaseManifest,
+    AISystem,
+    AISystemVersion,
+)
 
 __all__ = [
     "Organization",
@@ -34,4 +44,12 @@ __all__ = [
     "MonitorRevision",
     "MonitorRun",
     "MonitorEvaluationState",
+    "AISystem",
+    "AISystemVersion",
+    "AIDataUseRevision",
+    "AIReleaseManifest",
+    "AIDeployment",
+    "AIControlEvaluation",
+    "AIApproval",
+    "AIGovernanceIncident",
 ]

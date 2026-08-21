@@ -48,6 +48,19 @@ CREATE TABLE IF NOT EXISTS feature_flags (
 
 -- ── Access grants ──────────────────────────────────────────────────────────
 
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'analytics_ro') THEN
+    CREATE ROLE analytics_ro WITH LOGIN PASSWORD 'readonly_pass'
+      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+  END IF;
+END$$;
+ALTER ROLE analytics_ro NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+GRANT CONNECT ON DATABASE analyticsdb TO analytics_ro;
+GRANT USAGE ON SCHEMA public TO analytics_ro;
+
 -- Write user for the simulator
 DO $$
 BEGIN
@@ -55,6 +68,7 @@ BEGIN
     CREATE ROLE write_user WITH LOGIN PASSWORD 'write_pass';
   END IF;
 END$$;
+ALTER ROLE write_user NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
 GRANT CONNECT ON DATABASE analyticsdb TO write_user;
 GRANT USAGE ON SCHEMA public TO write_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO write_user;
@@ -62,7 +76,6 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO write_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO write_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO write_user;
 
--- analytics_ro is the container's default postgres superuser
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO analytics_ro;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO analytics_ro;
 

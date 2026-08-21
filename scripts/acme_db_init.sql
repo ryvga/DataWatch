@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS events (
 
 -- ── Access grants ──────────────────────────────────────────────────────────
 
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'readonly_user') THEN
+    CREATE ROLE readonly_user WITH LOGIN PASSWORD 'readonly_pass'
+      NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+  END IF;
+END$$;
+ALTER ROLE readonly_user NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
+GRANT CONNECT ON DATABASE "acmedb" TO readonly_user;
+GRANT USAGE ON SCHEMA public TO readonly_user;
+
 -- Write user for the simulator
 DO $$
 BEGIN
@@ -79,6 +92,7 @@ BEGIN
     CREATE ROLE write_user WITH LOGIN PASSWORD 'write_pass';
   END IF;
 END$$;
+ALTER ROLE write_user NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT;
 GRANT CONNECT ON DATABASE "acmedb" TO write_user;
 GRANT USAGE ON SCHEMA public TO write_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO write_user;
@@ -86,7 +100,6 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO write_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO write_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO write_user;
 
--- readonly_user is the container's default postgres superuser, grant read access explicitly
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO readonly_user;
 

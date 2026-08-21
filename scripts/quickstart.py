@@ -425,9 +425,9 @@ def seed_acme(conn, org_id, team_ids: dict, use_local: bool = False):
     fp_events   = compute_real_fingerprint(acme_write_url, "public", "events")
 
     if fp_orders:
-        print(f"    ✓ computed real schema fingerprints from acme-db")
+        print("    ✓ computed real schema fingerprints from acme-db")
     else:
-        print(f"    i could not reach acme-db for fingerprints (schema drift will fire once)")
+        print("    i could not reach acme-db for fingerprints (schema drift will fire once)")
 
     # 30 days of healthy profile history (every 6 hours = 120 profiles for orders)
     base_orders = 8500
@@ -470,6 +470,124 @@ def seed_acme(conn, org_id, team_ids: dict, use_local: bool = False):
     return {"orders": orders_tid, "users": users_tid, "products": products_tid, "events": events_tid}
 
 
+def seed_ai_governance_jury_scenarios(conn, org_id, table_ids: dict):
+    """Seed explicit, visibly marked governance fixtures for the jury walkthrough.
+
+    These are deterministic demonstration observations, not claims that the demo
+    database was independently assessed. The live evaluator remains available for
+    connector-backed evidence.
+    """
+    if not table_ids or "products" not in table_ids:
+        return
+    namespace = uuid.UUID("5e1379db-d7e8-4d81-81cf-0df58c40986c")
+    def uid(name):
+        return uuid.uuid5(namespace, f"{org_id}:{name}")
+    system_id, version_id, data_use_id = uid("system"), uid("version"), uid("data-use")
+    manifest_id, deployment_id = uid("manifest"), uid("deployment")
+    table_id = table_ids["products"]
+    owner_id = get_user_id(conn, "mounir@acme.io")
+    with conn.cursor() as cur:
+        cur.execute("SELECT source_id FROM monitored_tables WHERE id = %s", (str(table_id),))
+        source_id = cur.fetchone()[0]
+        cur.execute("SELECT schema_fingerprint FROM table_profiles WHERE table_id = %s AND schema_fingerprint IS NOT NULL ORDER BY collected_at DESC LIMIT 1", (str(table_id),))
+        row = cur.fetchone()
+        fingerprint = row[0] if row else "fixture-schema-unknown"
+        version_definition = {
+            "provider": "jury-fixture", "model": "support-rag-v1",
+            "artifactHash": "sha256:fixture-model", "promptConfigHash": "hmac:fixture-config",
+            "capabilities": ["retrieval", "answer-drafting"],
+            "limitations": ["Demonstration fixture; not a production assessment"],
+        }
+        version_hash = hashlib.sha256(json.dumps(version_definition, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        data_definition = {
+            "useKind": "rag", "assetId": str(table_id), "fields": ["id", "name", "description", "updated_at"],
+            "purpose": "Retrieve approved product knowledge", "necessity": "Answer product questions",
+            "steward": "Platform", "sensitivityCeiling": "internal", "expectedDbRoles": ["rag_runtime"],
+            "schemaFingerprint": fingerprint, "evidenceClass": "customer_assertion",
+            "vectorContract": {"fixture": True, "vectorTableId": str(table_id), "embeddingField": "fixture_only"},
+        }
+        data_hash = hashlib.sha256(json.dumps(data_definition, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        manifest = {
+            "schemaVersion": "datawatch.io/aigov-manifest/v1", "systemId": str(system_id),
+            "version": {"id": str(version_id), "definitionHash": version_hash},
+            "dataUses": [{"id": str(data_use_id), "definitionHash": data_hash}],
+            "policyRevisions": [], "evaluationSuites": [], "evidenceCutoff": "2026-08-21T00:00:00+00:00",
+            "normalization": "rfc8785-compatible-sorted-json-v1", "hashAlgorithm": "sha256", "mode": "observe",
+        }
+        manifest_hash = hashlib.sha256(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        cur.execute("""
+            INSERT INTO ai_systems (id, org_id, slug, name, lifecycle_status, intended_purpose,
+                prohibited_uses, autonomy_level, human_oversight, business_owner_id,
+                technical_owner_id, risk_owner_id, risk_context, created_by)
+            VALUES (%s,%s,'support-rag-jury','Support knowledge assistant','production',%s,%s,
+                'assistive',%s,%s,%s,%s,%s,%s) ON CONFLICT (org_id, slug) DO NOTHING
+        """, (str(system_id), str(org_id), "Answer support questions from approved product knowledge.", json.dumps(["automated account termination"]), "Agents review every response before delivery.", owner_id, owner_id, owner_id, json.dumps({"fixture": True, "impact": "customer-facing"}), owner_id))
+        cur.execute("""
+            INSERT INTO ai_system_versions (id, org_id, system_id, version_number, definition,
+                definition_hash, provider, model, artifact_hash, prompt_config_hash,
+                change_rationale, created_by)
+            VALUES (%s,%s,%s,1,%s,%s,'jury-fixture','support-rag-v1','sha256:fixture-model',
+                'hmac:fixture-config','Initial jury fixture',%s) ON CONFLICT (system_id, version_number) DO NOTHING
+        """, (str(version_id), str(org_id), str(system_id), json.dumps(version_definition), version_hash, owner_id))
+        cur.execute("UPDATE ai_systems SET current_version_id = %s WHERE id = %s AND org_id = %s", (str(version_id), str(system_id), str(org_id)))
+        cur.execute("""
+            INSERT INTO ai_data_use_revisions (id, org_id, system_id, version_id, source_id,
+                table_id, ordinal, use_kind, fields, purpose, necessity, steward,
+                sensitivity_ceiling, residency, allowed_transformations, expected_db_roles,
+                vector_contract, schema_fingerprint, canonical_definition, definition_hash,
+                evidence_class, change_rationale, created_by)
+            VALUES (%s,%s,%s,%s,%s,%s,1,'rag',%s,%s,%s,'Platform','internal','[]','["chunk","embed"]',
+                '["rag_runtime"]',%s,%s,%s,%s,'customer_assertion','Jury fixture binding',%s)
+            ON CONFLICT (version_id, ordinal) DO NOTHING
+        """, (str(data_use_id), str(org_id), str(system_id), str(version_id), str(source_id), str(table_id), json.dumps(data_definition["fields"]), data_definition["purpose"], data_definition["necessity"], json.dumps(data_definition["vectorContract"]), fingerprint, json.dumps(data_definition), data_hash, owner_id))
+        cur.execute("""
+            INSERT INTO ai_release_manifests (id, org_id, system_id, version_id, schema_version,
+                canonical_manifest, manifest_hash, evidence_cutoff, created_by)
+            VALUES (%s,%s,%s,%s,'datawatch.io/aigov-manifest/v1',%s,%s,NOW(),%s)
+            ON CONFLICT DO NOTHING
+        """, (str(manifest_id), str(org_id), str(system_id), str(version_id), json.dumps(manifest), manifest_hash, owner_id))
+        cur.execute("""
+            INSERT INTO ai_deployments (id, org_id, system_id, environment, region, status,
+                active_manifest_id, active_manifest_hash, activation_generation)
+            VALUES (%s,%s,%s,'production','ma','observing',%s,%s,1)
+            ON CONFLICT (org_id, system_id, environment, region) DO NOTHING
+        """, (str(deployment_id), str(org_id), str(system_id), str(manifest_id), manifest_hash))
+        cur.execute("""
+            INSERT INTO ai_approvals (id, org_id, system_id, manifest_id, reviewer_id,
+                reviewer_role, decision, rationale, evidence_snapshot_hash, evidence_class)
+            VALUES (%s,%s,%s,%s,%s,'risk_owner','noted',%s,%s,'reviewer_decision')
+            ON CONFLICT DO NOTHING
+        """, (str(uid("review")), str(org_id), str(system_id), str(manifest_id), owner_id,
+              "Jury fixture reviewed; this attestation is non-gating in phase one.", manifest_hash))
+        scenarios = [
+            ("rag-source-freshness", "source_stale", {"freshnessSeconds": 172800}, {"maximumAgeSeconds": 86400}),
+            ("effective-db-role-drift", "unexpected_effective_role", {"effectiveRoles": ["rag_runtime", "exporter"], "unexpectedRoles": ["exporter"]}, {"allowedRoles": ["rag_runtime"]}),
+            ("vector-missing-embedding", "missing_embedding", {"missingEmbeddings": 7}, {"missingEmbeddings": 0}),
+            ("vector-deletion-propagation", "deletion_propagation_failure", {"deletionPropagationFailures": 3}, {"deletionPropagationFailures": 0}),
+        ]
+        for control_id, reason, observed, expected in scenarios:
+            evaluation_id = uid(f"evaluation:{control_id}")
+            incident_id = uid(f"incident:{control_id}")
+            input_hash = hashlib.sha256(json.dumps({"observed": observed, "expected": expected, "fixture": True}, sort_keys=True).encode()).hexdigest()
+            idem = hashlib.sha256(f"jury:{manifest_hash}:{control_id}".encode()).hexdigest()
+            cur.execute("""
+                INSERT INTO ai_control_evaluations (id, org_id, system_id, deployment_id,
+                    manifest_id, data_use_revision_id, control_id, status, evidence_class,
+                    observed, expected, reason_code, evaluator_version, input_hash, idempotency_key)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'fail','connector_observation',%s,%s,%s,
+                    'aigov-jury-fixture/1.0',%s,%s) ON CONFLICT DO NOTHING
+            """, (str(evaluation_id), str(org_id), str(system_id), str(deployment_id), str(manifest_id), str(data_use_id), control_id, json.dumps({**observed, "fixture": True}), json.dumps(expected), reason, input_hash, idem))
+            dedupe = hashlib.sha256(f"jury:{deployment_id}:{control_id}".encode()).hexdigest()
+            cur.execute("""
+                INSERT INTO ai_governance_incidents (id, org_id, system_id, deployment_id,
+                    evaluation_id, control_id, dedupe_key, severity, status, title)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'P2','open',%s)
+                ON CONFLICT (org_id, dedupe_key) WHERE status IN ('open','acknowledged') DO NOTHING
+            """, (str(incident_id), str(org_id), str(system_id), str(deployment_id), str(evaluation_id), control_id, dedupe, f"Jury scenario: {reason.replace('_', ' ')}"))
+    conn.commit()
+    print("  + AI governance: stale knowledge, unauthorized role, missing embedding, failed deletion propagation")
+
+
 def seed_startup(conn, org_id, team_ids: dict, use_local: bool = False):
     print("  → Seeding startup-io tables + 30-day profile history...")
     ws = next(w for w in WORKSPACES if w["slug"] == "startup-io")
@@ -504,7 +622,7 @@ def seed_startup(conn, org_id, team_ids: dict, use_local: bool = False):
     fp_ss = compute_real_fingerprint(analytics_write_url, "public", "sessions")
     fp_us = compute_real_fingerprint(analytics_write_url, "public", "users")
     if fp_ev:
-        print(f"    ✓ computed real schema fingerprints from analytics-db")
+        print("    ✓ computed real schema fingerprints from analytics-db")
 
     # 30 days healthy history
     base_events = 500000
@@ -955,27 +1073,35 @@ def run_full(use_local: bool = False):
                 all_table_ids["startup-io"] = seed_startup(conn, org_id, team_ids, use_local)
         except Exception as e:
             print(f"  WARNING data seed for {ws['slug']}: {e}")
-            import traceback; traceback.print_exc()
+            import traceback
+            traceback.print_exc()
+
+    print("\n10. AI governance jury scenarios...")
+    try:
+        acme_org_id = get_org_id(conn, "acme-corp")
+        seed_ai_governance_jury_scenarios(conn, acme_org_id, all_table_ids.get("acme-corp", {}))
+    except Exception as e:
+        print(f"  WARNING AI governance seed failed: {e}")
 
     conn.close()
 
-    print("\n10. Injecting initial anomalies into live databases...")
+    print("\n11. Injecting initial anomalies into live databases...")
     inject_anomalies(use_local=use_local)
 
-    print("\n11. Triggering DataWatch profile runs...")
+    print("\n12. Triggering DataWatch profile runs...")
     try:
         trigger_profiles()
     except Exception as e:
         print(f"  WARNING: profile trigger failed: {e}")
         print("  (The APScheduler will run profiles automatically on the configured interval)")
 
-    print("\n12. Waiting for incidents from detection pipeline...")
+    print("\n13. Waiting for incidents from detection pipeline...")
     try:
         wait_for_incidents(max_wait=90)
     except Exception as e:
         print(f"  WARNING: wait failed: {e}")
 
-    print("\n13. Triggering AI autopilot (monitor recommendations for each table)...")
+    print("\n14. Triggering AI autopilot (monitor recommendations for each table)...")
     try:
         trigger_autopilot()
     except Exception as e:
@@ -1080,8 +1206,8 @@ def _print_credentials():
         print(f"    Password: {ws['password']}")
         for u in EXTRA_USERS.get(ws["slug"], []):
             print(f"    + {u['email']} ({u['role']})")
-    print(f"\n  Staff Admin Portal")
-    print(f"    URL:      http://admin.localhost:5173")
+    print("\n  Staff Admin Portal")
+    print("    URL:      http://admin.localhost:5173")
     print(f"    Email:    {STAFF_EMAIL}")
     print(f"    Password: {STAFF_PASSWORD}")
     print()

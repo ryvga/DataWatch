@@ -55,15 +55,15 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: acmedb
-      POSTGRES_USER: readonly_user
-      POSTGRES_PASSWORD: readonly_pass
+      POSTGRES_USER: acme_admin
+      POSTGRES_PASSWORD: acme_admin_local
     volumes:
       - acme_db_data:/var/lib/postgresql/data
       - ./scripts/acme_db_init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5434:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U readonly_user -d acmedb"]
+      test: ["CMD-SHELL", "pg_isready -U acme_admin -d acmedb"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -73,15 +73,15 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: analyticsdb
-      POSTGRES_USER: analytics_ro
-      POSTGRES_PASSWORD: readonly_pass
+      POSTGRES_USER: analytics_admin
+      POSTGRES_PASSWORD: analytics_admin_local
     volumes:
       - analytics_db_data:/var/lib/postgresql/data
       - ./scripts/startup_db_init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5435:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U analytics_ro -d analyticsdb"]
+      test: ["CMD-SHELL", "pg_isready -U analytics_admin -d analyticsdb"]
       interval: 5s
       timeout: 5s
       retries: 10
