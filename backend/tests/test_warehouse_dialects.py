@@ -324,7 +324,7 @@ async def test_trino_container_vertical():
             cursor.execute("DROP TABLE IF EXISTS memory.analytics.events")
             cursor.execute(
                 "CREATE TABLE memory.analytics.events "
-                "(id BIGINT, amount DOUBLE, status VARCHAR, created_at TIMESTAMP)"
+                "(id BIGINT, amount DOUBLE, status VARCHAR, created_at TIMESTAMP WITH TIME ZONE)"
             )
             cursor.execute(
                 "INSERT INTO memory.analytics.events VALUES "
