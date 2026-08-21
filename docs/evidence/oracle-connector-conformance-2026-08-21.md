@@ -44,10 +44,16 @@ backend/venv/bin/python -m pytest -q backend/tests
 cd frontend && npm run build && npm audit --audit-level=high
 ```
 
-Résultat avant la documentation finale : **357 tests réussis, 4 ignorés explicitement**
-en 19,64 s ; la sélection Oracle compte **9 réussis, 1 ignoré**. Le frontend a compilé
-2 917 modules en 1,61 s et `npm audit` a signalé 0 vulnérabilité. Le total complet doit être repris du run CI lié au
-commit documentaire avant insertion dans le rapport final.
+Résultat local : **357 tests réussis, 4 ignorés explicitement** en 19,64 s ; la sélection
+Oracle compte **9 réussis, 1 ignoré**. Le frontend a compilé 2 917 modules en 1,61 s et
+`npm audit` a signalé 0 vulnérabilité.
+
+Preuve hébergée du commit fonctionnel :
+[GitHub Actions 32496502433](https://github.com/ryvga/DataWatch/actions/runs/32496502433).
+Les cinq jobs ordinaires sont verts : backend **358 réussis, 3 ignorés en 36,90 s**,
+frontend 2 917 modules et 0 vulnérabilité, deux verticales ClickHouse/Trino réussies et
+trois parcours navigateur réussis. Le job Oracle est marqué `skipped`, conformément à
+son entrée manuelle `run_oracle`; il ne constitue pas une preuve Oracle réelle.
 
 La suite `backend/tests/test_oracle_connector.py` prouve :
 
