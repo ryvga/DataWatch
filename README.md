@@ -53,7 +53,7 @@ connector is not described as fully supported merely because it can connect.
 | MongoDB | Experimental | Connect, discover, inferred schema, byte/document/field-bounded native profile, indexed scalar-date freshness; verified TLS and explicit sampling provenance | Live TLS container conformance, repeated-sample anomaly confirmation, and document DSL pending |
 | Cassandra | Experimental | Connect, discover, schema with verified-TLS and explicit server-name defaults; arbitrary CQL fails closed | Live TLS conformance, typed partition-bounded planner, and secure Astra bundle support pending |
 | Snowflake | Planned | Registry metadata only | Connector is a 501 stub |
-| Redis | Planned | Not yet a monitored source | Keyspace/TTL/stream adapter pending |
+| Redis | Experimental | Connect, bounded keyspace discovery/profile, TTL/memory/type/Hash/Streams metadata without reading values; verified TLS by default | Typed monitor plans, incident bridge, mutation corpus, and dedicated Redis 7/8 lanes pending |
 | Oracle | Planned | Not yet registered as a source | Thin-driver connection/discovery/schema/profile vertical pending |
 
 The provider-by-provider completion gates and delivery order are maintained in

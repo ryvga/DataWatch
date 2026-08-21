@@ -16,7 +16,7 @@ describe only paths backed by executable evidence.
 | Embedded SQL | SQLite | Application/local source | Beta/core | Restrict hosted paths to a managed allowlist/upload boundary and add persisted API profile test |
 | Document | MongoDB | Tier-1 document source | Experimental bounded sampled core | Live verified-TLS lane, repeated-sample drift confirmation, typed document monitor DSL |
 | Wide-column | Cassandra | Partition-scoped source | Experimental discovery/schema only | Required partition bindings and internally prepared, bounded native plans; Cassandra 4/5 lanes |
-| Key/value and streams | Redis | TTL/stream health source | Planned, not implemented | Separate source client; bounded `SCAN` provenance, TTL health, Streams length/freshness/group lag; never `KEYS` or raw-value collection |
+| Key/value and streams | Redis | TTL/stream health source | Experimental bounded native profile: `SCAN`, TTL, memory, type, Hash size, Stream length/group pending/lag; no values | Add typed immutable monitor plans, incident bridge, mutation corpus, and dedicated Redis 7/8 lanes |
 | Cloud warehouse | Snowflake | Proprietary warehouse | Planned 501 stub | Official driver with bounded login/network/statement timeouts, discovery/schema, native core dialect, secret-backed nightly conformance |
 | Open-source warehouse | ClickHouse | Networked open-source warehouse | Experimental discovery/schema shell | Verified TLS, query budgets, ClickHouse core profiler, container-backed persisted profile test |
 | Embedded analytics | DuckDB | Managed local analytical file | Beta/full | Move blocking calls off the event loop and enforce the same hosted file boundary as SQLite |

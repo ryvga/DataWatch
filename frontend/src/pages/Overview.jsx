@@ -12,8 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 const HEALTH_RING_COLOR = { green: '#10b981', yellow: '#f59e0b', red: '#ef4444' }
 
 function profileCountLabel(profile) {
-  if (profile?.profile_provenance?.count_mode === 'estimated') {
+  const countMode = profile?.profile_provenance?.count_mode
+  if (countMode === 'estimated') {
     return `≈${formatNumber(profile.row_count)} documents`
+  }
+  if (countMode === 'lower_bound') {
+    return `≥${formatNumber(profile.row_count)} keys observed`
   }
   return `${formatNumber(profile?.row_count)} rows`
 }

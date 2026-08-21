@@ -59,6 +59,10 @@ async def test_connector_types_include_registry_fields_and_versions():
     assert by_type["mongodb"]["capabilities"]["profiling"] == "core"
     assert by_type["mongodb"]["capabilities"]["sampling"] is True
     assert "database" in by_type["mongodb"]["required"]
+    assert by_type["redis"]["capabilities"]["profiling"] == "core"
+    assert by_type["redis"]["capabilities"]["sampling"] is True
+    assert by_type["redis"]["readiness"] == "experimental"
+    assert by_type["redis"]["versions"] == ["Auto-detect", "Redis 7", "Redis 8"]
     cassandra_fields = {
         field["name"]: field for field in by_type["cassandra"]["fields"]
     }

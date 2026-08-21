@@ -35,6 +35,13 @@ FIELD_METADATA = {
         "label": "Profile sample size",
         "input_type": "number",
     },
+    "key_pattern": {
+        "label": "Key pattern",
+        "input_type": "text",
+        "placeholder": "app:*",
+    },
+    "max_scan_keys": {"label": "Maximum scanned keys", "input_type": "number"},
+    "scan_count": {"label": "SCAN count hint", "input_type": "number"},
 }
 
 
@@ -52,6 +59,7 @@ VERSION_OPTIONS = {
     "sqlite": ["Auto-detect", "SQLite 3"],
     "cassandra": ["Auto-detect", "Apache Cassandra 4", "Apache Cassandra 5"],
     "mongodb": ["Auto-detect", "MongoDB 6", "MongoDB 7", "MongoDB Atlas"],
+    "redis": ["Auto-detect", "Redis 7", "Redis 8"],
     "sqlserver": ["Auto-detect", "SQL Server 2022", "SQL Server 2019", "Azure SQL"],
 }
 
@@ -262,6 +270,27 @@ CONNECTOR_REGISTRY = {
         "label": "MongoDB",
         "description": "MongoDB document database (Tier 1 — field drift detection)",
         "tier": 1,
+        "readiness": "experimental",
+        "capabilities": _capabilities(profiling="core", sampling=True),
+    },
+    "redis": {
+        "module": "app.connectors.redis",
+        "class": "RedisConnector",
+        "required": ["host"],
+        "optional": {
+            "port": 6379,
+            "database": 0,
+            "username": None,
+            "password": None,
+            "tls_mode": "verify_identity",
+            "ssl_ca": None,
+            "key_pattern": "*",
+            "max_scan_keys": 1000,
+            "scan_count": 100,
+        },
+        "label": "Redis",
+        "description": "Redis bounded keyspace, TTL, memory, Hash, and Streams metrics",
+        "tier": 2,
         "readiness": "experimental",
         "capabilities": _capabilities(profiling="core", sampling=True),
     },

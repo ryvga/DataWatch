@@ -327,6 +327,27 @@ Cassandra follows the [driver security guidance](https://docs.datastax.com/en/de
 by combining a certificate-required `SSLContext` with `ssl_options.server_hostname`
 for identity verification.
 
+### Redis native profile
+
+Redis is represented as one logical `dbN.keyspace` asset. Its native profiler walks a
+configured key pattern with cursor-based `SCAN`, a hard key ceiling, a count hint, and a
+bounded round limit. It never calls value-reading commands such as `GET`, `HGETALL`, or
+`XRANGE`. The only batched metadata commands are `TYPE`, `PTTL`, and `MEMORY USAGE`, with
+`HLEN`, `XLEN`, and `XINFO GROUPS` issued only for the matching structures. This yields
+type distribution, expiry/persistence counts, aggregate memory, Hash field totals, and
+Stream entry/group/pending/lag totals without retaining key names or stored values.
+
+Every profile records whether the cursor completed. A completed traversal is an exact
+count for the configured pattern; hitting a bound is persisted and displayed as a lower
+bound. The raw pattern is represented only by a SHA-256 digest in provenance. ACL-denied
+metrics are listed in `unavailable_metrics` and use `null`, never a misleading zero.
+Arbitrary caller commands are rejected. Verified TLS and hostname validation are the
+default; plaintext transport requires an explicit isolated-development setting.
+
+This slice provides discovery, deterministic schema, and bounded native profiling. Typed
+immutable Redis monitor plans and the anomaly-to-incident bridge remain required before
+the connector can advertise compiled monitoring capability.
+
 ```sql
 SELECT
   COUNT(*) AS _row_count,

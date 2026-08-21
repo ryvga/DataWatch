@@ -59,7 +59,24 @@ function formatCompactNumber(value) {
 
 function profileCountLabel(profile) {
   const value = formatCompactNumber(profile?.row_count)
-  return profile?.profile_provenance?.count_mode === 'estimated' ? `≈${value}` : value
+  const countMode = profile?.profile_provenance?.count_mode
+  if (countMode === 'estimated') return `≈${value}`
+  if (countMode === 'lower_bound') return `≥${value}`
+  return value
+}
+
+function profileCountHeading(profile) {
+  const countMode = profile?.profile_provenance?.count_mode
+  if (countMode === 'estimated') return 'Documents (est.)'
+  if (countMode === 'lower_bound') return 'Keys observed'
+  return 'Rows'
+}
+
+function profileCountTitle(profile) {
+  const countMode = profile?.profile_provenance?.count_mode
+  if (countMode === 'estimated') return 'Estimated document count'
+  if (countMode === 'lower_bound') return 'Lower bound from a bounded Redis SCAN'
+  return 'Exact row count'
 }
 
 function formatTimeAgo(value) {
@@ -369,7 +386,7 @@ export default function Tables() {
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div>
                       <div className="text-muted-foreground">
-                        {table.latest_profile?.profile_provenance?.count_mode === 'estimated' ? 'Documents (est.)' : 'Rows'}
+                        {profileCountHeading(table.latest_profile)}
                       </div>
                       <div className="mt-1 tabular-nums">{profileCountLabel(table.latest_profile)}</div>
                     </div>
@@ -412,7 +429,7 @@ export default function Tables() {
                   <TableRow>
                     <TableHead>Table</TableHead>
                     <TableHead>Source</TableHead>
-                    <TableHead>Rows</TableHead>
+                    <TableHead>Count</TableHead>
                     <TableHead>Last profile</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="w-44 text-right">Actions</TableHead>
@@ -433,7 +450,7 @@ export default function Tables() {
                       <TableCell className="text-xs text-muted-foreground">{table.sourceName}</TableCell>
                       <TableCell
                         className="tabular-nums text-muted-foreground"
-                        title={table.latest_profile?.profile_provenance?.count_mode === 'estimated' ? 'Estimated document count' : 'Exact row count'}
+                        title={profileCountTitle(table.latest_profile)}
                       >
                         {profileCountLabel(table.latest_profile)}
                       </TableCell>
