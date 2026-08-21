@@ -36,6 +36,10 @@ is accepted in governance JSON.
 
 ## Verification snapshot
 
+- Hosted Python 3.12/Node 20 proof: [GitHub Actions run 32500835546](https://github.com/ryvga/DataWatch/actions/runs/32500835546)
+  passed backend, frontend, required warehouse containers, managed-smoke gating, and the
+  seeded full-stack browser job at commit `e586c26` (the opt-in Oracle Free lane was
+  correctly skipped because it was not requested).
 - Targeted governance and monitor-runtime suite: 29 passed in 2.32 seconds.
 - Full backend regression: 365 passed, 4 skipped in 23.51 seconds.
 - Frontend production build: 2,918 modules transformed in 1.71 seconds; production dependency audit found zero vulnerabilities.
