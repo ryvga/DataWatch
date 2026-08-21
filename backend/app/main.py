@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
 
@@ -96,8 +97,7 @@ app.include_router(notifications.router)
 app.include_router(realtime.router)
 
 
-@app.get("/health", tags=["infra"])
-async def health():
+async def _dependency_health() -> dict[str, str]:
     db_status = "disconnected"
     redis_status = "disconnected"
 
@@ -116,10 +116,31 @@ async def health():
     except Exception as e:
         logger.error("Redis health check failed: %s", e)
 
-    from app.scheduler import scheduler
     return {
-        "status": "ok",
         "db": db_status,
         "redis": redis_status,
+    }
+
+
+@app.get("/health", tags=["infra"])
+async def health():
+    """Liveness plus dependency diagnostics; remains HTTP 200 for process probes."""
+    from app.scheduler import scheduler
+
+    dependencies = await _dependency_health()
+    return {
+        "status": "ok" if all(value == "connected" for value in dependencies.values()) else "degraded",
+        **dependencies,
         "scheduler_jobs": len(scheduler.get_jobs()),
     }
+
+
+@app.get("/ready", tags=["infra"])
+async def readiness():
+    """Return 503 until required runtime dependencies can serve requests."""
+    dependencies = await _dependency_health()
+    ready = all(value == "connected" for value in dependencies.values())
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready", **dependencies},
+    )

@@ -119,6 +119,12 @@ services:
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
       - SMTP_USE_TLS=false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+      start_period: 5s
     depends_on:
       postgres:
         condition: service_healthy
@@ -176,7 +182,8 @@ services:
       VITE_ADMIN_SUBDOMAIN: ${VITE_ADMIN_SUBDOMAIN:-admin}
       VITE_BASE_DOMAIN: ${VITE_BASE_DOMAIN:-panopta.app}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   # ── Optional: seed (docker compose --profile seed up seed) ───────────────────
   #
@@ -204,7 +211,7 @@ services:
       migrate:
         condition: service_completed_successfully
       api:
-        condition: service_started
+        condition: service_healthy
       acme-db:
         condition: service_healthy
       analytics-db:
