@@ -141,10 +141,12 @@ async function run() {
     await page.getByRole('button', { name: /Test SQL/i }).last().click()
     await page.waitForFunction(() => /0 violations|\d+ violations? found/i.test(document.body.innerText), null, { timeout: 120000 })
     await page.getByRole('button', { name: /Save as Monitor/i }).click()
-    const saveButton = page.getByRole('button', { name: /^Save$/ })
+    const saveDialog = page.getByRole('dialog').filter({ hasText: 'Save as custom monitor' })
+    await saveDialog.getByText('Save as custom monitor').waitFor({ state: 'visible', timeout: 10000 })
+    const saveButton = saveDialog.getByRole('button', { name: /^Save monitor$/ })
     await page.waitForFunction(() => {
       const buttons = [...document.querySelectorAll('button')]
-      const save = buttons.find((button) => /^Save$/.test(button.textContent || ''))
+      const save = buttons.find((button) => /^Save monitor$/.test(button.textContent || ''))
       return save && !save.disabled
     }, null, { timeout: 10000 })
     assert(!(await saveButton.isDisabled()), 'NL save should be enabled after current SQL is tested')

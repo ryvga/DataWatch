@@ -92,7 +92,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -322,7 +321,7 @@ function NotificationsTab() {
                 onChange={e => update(key, e.target.checked)}
               />
               <div className={`relative w-9 h-5 rounded-full transition-colors ${
-                prefs?.[key] ? 'bg-blue-600' : 'bg-muted'
+                prefs?.[key] ? 'bg-primary' : 'bg-muted'
               }`}>
                 <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-background rounded-full shadow transition-transform ${
                   prefs?.[key] ? 'translate-x-4' : ''
@@ -346,7 +345,7 @@ function NotificationsTab() {
                 onChange={e => update('daily_digest', e.target.checked)}
               />
               <div className={`relative w-9 h-5 rounded-full transition-colors ${
-                prefs?.daily_digest ? 'bg-blue-600' : 'bg-muted'
+                prefs?.daily_digest ? 'bg-primary' : 'bg-muted'
               }`}>
                 <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-background rounded-full shadow transition-transform ${
                   prefs?.daily_digest ? 'translate-x-4' : ''
@@ -501,14 +500,13 @@ function SourceForm({ open, onOpenChange, onCreated }) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Add data source</SheetTitle>
-          <SheetDescription>Store encrypted connection details for a warehouse connector.</SheetDescription>
-        </SheetHeader>
-        <form onSubmit={submit} className="flex flex-1 flex-col">
-          <div className="flex flex-1 flex-col gap-4 px-4">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Add data source</DialogTitle>
+          <DialogDescription>Store encrypted connection details for a warehouse connector.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="source-name">Name</Label>
               <Input id="source-name" value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} required />
@@ -539,14 +537,13 @@ function SourceForm({ open, onOpenChange, onCreated }) {
               <p className="text-xs text-muted-foreground">Credentials are encrypted with HKDF per-org keys.</p>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
-          </div>
-          <SheetFooter>
+          <DialogFooter>
             <Button type="submit" disabled={saving}>{saving ? 'Creating...' : 'Create source'}</Button>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          </SheetFooter>
+          </DialogFooter>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -605,14 +602,13 @@ function TableForm({ open, onOpenChange, sources, onCreated }) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Add monitored table</SheetTitle>
-          <SheetDescription>Choose a warehouse table and the profiling cadence for scheduled checks.</SheetDescription>
-        </SheetHeader>
-        <form onSubmit={submit} className="flex flex-1 flex-col">
-          <div className="flex flex-1 flex-col gap-4 px-4">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Add monitored table</DialogTitle>
+          <DialogDescription>Choose a warehouse table and the profiling cadence for scheduled checks.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label>Source</Label>
               <Select
@@ -675,14 +671,13 @@ function TableForm({ open, onOpenChange, sources, onCreated }) {
               </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <SheetFooter>
+          <DialogFooter>
             <Button type="submit" disabled={saving || !form.source_id}>{saving ? 'Adding...' : 'Add table'}</Button>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          </SheetFooter>
+          </DialogFooter>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1957,7 +1952,7 @@ const ROLES = [
 
 const ROLE_BADGE = {
   owner: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
-  admin: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
+  admin: 'bg-muted text-foreground border-border',
   member: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
   viewer: 'bg-muted text-muted-foreground border-border',
 }
@@ -1983,6 +1978,7 @@ function TeamTab() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [revoking, setRevoking] = useState({})
+  const [inviteOpen, setInviteOpen] = useState(false)
 
   // Read current user role from storage to gate invite form
   const { storage: _s } = (() => { try { return { storage: window.localStorage } } catch { return { storage: null } } })()
@@ -2021,6 +2017,7 @@ function TeamTab() {
       if (created?.id) setInvites((prev) => [created, ...prev])
       else await load()
       setEmail('')
+      setInviteOpen(false)
       notify.ok(`Invite sent to ${invitedEmail}`)
     } catch (err) {
       notify.err(getApiError(err, 'Failed to send invite'))
@@ -2092,16 +2089,41 @@ function TeamTab() {
         )}
       </Card>
 
-      {/* Invite form — only shown to owner/admin */}
+      {/* Invite dialog — only shown to owner/admin */}
       {canInvite ? (
         <Card>
-          <CardContent className="flex flex-col gap-4 pt-6">
+          <CardContent className="flex items-center justify-between gap-4 pt-6">
             <div>
               <h2 className="flex items-center gap-2 text-base font-medium"><Send className="size-4 text-muted-foreground" />Invite team members</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Members are isolated to your workspace and cannot access other workspaces.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Invite colleagues without leaving the member directory.</p>
             </div>
-            <form onSubmit={invite} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px_auto]">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="colleague@company.com" required />
+            <Button type="button" onClick={() => setInviteOpen(true)}>
+              <Send data-icon="inline-start" />
+              Send invite
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-muted-foreground">Only workspace owners and admins can invite new members.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invite a team member</DialogTitle>
+            <DialogDescription>They will receive an invitation for this workspace only.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={invite} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="invite-email">Email address</Label>
+              <Input id="invite-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="colleague@company.com" required />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>Workspace role</Label>
               <Select value={role} onValueChange={setRole}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -2112,20 +2134,18 @@ function TeamTab() {
                   </SelectGroup>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">{ROLES.find((item) => item.value === role)?.desc}</p>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={sending || !email}>
                 {sending && <Loader2 data-icon="inline-start" className="animate-spin" />}
                 {sending ? 'Sending…' : 'Send invite'}
               </Button>
-            </form>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">Only workspace owners and admins can invite new members.</p>
-          </CardContent>
-        </Card>
-      )}
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Pending invites */}
       {canInvite && (
@@ -2403,13 +2423,13 @@ function BillingTab() {
   return (
     <div className="flex flex-col gap-4">
       {/* Sandbox notice */}
-      <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-300">
+      <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
         <Info className="mt-0.5 size-4 shrink-0" />
         <div>
           <span className="font-medium">Sandbox mode</span> — Use PayPal sandbox credentials or test card{' '}
-          <code className="rounded bg-blue-100 px-1 font-mono text-xs dark:bg-blue-900">4032034785726736</code>{' '}
-          / expiry <code className="rounded bg-blue-100 px-1 font-mono text-xs dark:bg-blue-900">01/27</code>{' '}
-          / CVV <code className="rounded bg-blue-100 px-1 font-mono text-xs dark:bg-blue-900">123</code>
+          <code className="rounded bg-background px-1 font-mono text-xs">4032034785726736</code>{' '}
+          / expiry <code className="rounded bg-background px-1 font-mono text-xs">01/27</code>{' '}
+          / CVV <code className="rounded bg-background px-1 font-mono text-xs">123</code>
         </div>
       </div>
 

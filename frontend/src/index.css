@@ -51,7 +51,7 @@
     BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* ── "Ops Steel" — Electric Teal × Deep Navy ── */
+/* ── "Graphite Ops" — neutral graphite with semantic status colors ── */
 @layer base {
   :root {
     /* Light: clean data-ops workspace */
@@ -64,8 +64,8 @@
     --popover:      0 0% 100%;
     --popover-foreground: 215 35% 12%;
 
-    /* Electric teal — data streams, monitoring precision */
-    --primary:      199 88% 44%;
+    /* Graphite action color — semantic status colors carry meaning */
+    --primary:      215 24% 18%;
     --primary-foreground: 0 0% 100%;
 
     --secondary:    203 22% 92%;
@@ -82,9 +82,9 @@
 
     --border:       203 22% 85%;
     --input:        203 22% 87%;
-    --ring:         199 88% 44%;
+    --ring:         215 24% 18%;
 
-    --chart-1:      199 88% 44%;
+    --chart-1:      215 24% 18%;
     --chart-2:      157 60% 38%;
     --chart-3:      38 90% 50%;
     --chart-4:      0 78% 54%;
@@ -94,59 +94,58 @@
 
     --sidebar:          210 30% 93%;
     --sidebar-foreground:    215 30% 16%;
-    --sidebar-primary:       199 88% 44%;
+    --sidebar-primary:       215 24% 18%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent:        203 24% 86%;
     --sidebar-accent-foreground: 215 30% 14%;
     --sidebar-border:        203 22% 82%;
-    --sidebar-ring:          199 88% 44%;
+    --sidebar-ring:          215 24% 18%;
   }
 
   .dark {
-    /* Dark: deep navy control room */
-    --background:   215 45% 7%;
-    --foreground:   210 28% 92%;
+    /* Dark: black/graphite workspace. Status colors stay semantic; chrome stays neutral. */
+    --background:   0 0% 5%;
+    --foreground:   0 0% 93%;
 
-    --card:         215 38% 10%;
-    --card-foreground: 210 28% 92%;
+    --card:         0 0% 8%;
+    --card-foreground: 0 0% 93%;
 
-    --popover:      215 42% 12%;
-    --popover-foreground: 210 28% 92%;
+    --popover:      0 0% 10%;
+    --popover-foreground: 0 0% 93%;
 
-    /* Bright teal in dark mode — glowing data streams */
-    --primary:      199 88% 58%;
-    --primary-foreground: 215 45% 8%;
+    --primary:      0 0% 86%;
+    --primary-foreground: 0 0% 7%;
 
-    --secondary:    215 30% 16%;
-    --secondary-foreground: 210 24% 84%;
+    --secondary:    0 0% 14%;
+    --secondary-foreground: 0 0% 86%;
 
-    --muted:        215 30% 14%;
-    --muted-foreground: 215 18% 56%;
+    --muted:        0 0% 13%;
+    --muted-foreground: 0 0% 62%;
 
-    --accent:       157 56% 50%;
-    --accent-foreground: 215 45% 8%;
+    --accent:       0 0% 72%;
+    --accent-foreground: 0 0% 7%;
 
     --destructive:  0 78% 62%;
     --destructive-foreground: 0 0% 100%;
 
-    --border:       215 28% 17%;
-    --input:        215 28% 19%;
-    --ring:         199 88% 58%;
+    --border:       0 0% 19%;
+    --input:        0 0% 22%;
+    --ring:         0 0% 78%;
 
-    --chart-1:      199 88% 58%;
-    --chart-2:      157 56% 50%;
-    --chart-3:      38 90% 56%;
-    --chart-4:      0 78% 62%;
-    --chart-5:      270 56% 64%;
+    --chart-1:      0 0% 82%;
+    --chart-2:      0 0% 62%;
+    --chart-3:      38 78% 62%;
+    --chart-4:      0 72% 65%;
+    --chart-5:      0 0% 46%;
 
-    --sidebar:          215 50% 5%;
-    --sidebar-foreground:    210 26% 88%;
-    --sidebar-primary:       199 88% 58%;
-    --sidebar-primary-foreground: 215 45% 8%;
-    --sidebar-accent:        215 34% 12%;
-    --sidebar-accent-foreground: 210 26% 88%;
-    --sidebar-border:        215 30% 13%;
-    --sidebar-ring:          199 88% 58%;
+    --sidebar:          0 0% 4%;
+    --sidebar-foreground:    0 0% 88%;
+    --sidebar-primary:       0 0% 86%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent:        0 0% 11%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border:        0 0% 15%;
+    --sidebar-ring:          0 0% 78%;
   }
 
   * {

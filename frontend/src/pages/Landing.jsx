@@ -52,10 +52,10 @@ function MockupShell({ sidebarSlot, mainSlot }) {
   return (
     <div className="rounded-xl overflow-hidden border shadow-2xl flex h-[420px] bg-background text-foreground text-xs select-none">
       {/* Sidebar */}
-      <div className="w-44 shrink-0 bg-[#0f172a] flex flex-col py-4 gap-1">
+      <div className="w-44 shrink-0 bg-[#0a0a0a] flex flex-col py-4 gap-1">
         <div className="px-4 mb-3">
           <div className="flex items-center gap-1.5">
-            <div className="size-5 rounded bg-blue-500 flex items-center justify-center">
+            <div className="size-5 rounded bg-white/15 flex items-center justify-center">
               <Eye className="size-3 text-white" />
             </div>
             <span className="text-white text-xs font-bold">Panopta</span>
@@ -75,7 +75,7 @@ function SidebarItem({ label, active }) {
   return (
     <div className={cn(
       'mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-[11px] font-medium cursor-pointer',
-      active ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white',
+      active ? 'bg-white/12 text-white' : 'text-slate-400 hover:text-white',
     )}>
       {label}
     </div>
@@ -123,7 +123,7 @@ function DashboardMockup() {
                 { sev: 'P1', label: 'orders.payment_status — null rate spike', color: 'bg-red-500/15 border-red-500/30 text-red-500' },
                 { sev: 'P2', label: 'users.email — cardinality drop (-34%)', color: 'bg-amber-500/15 border-amber-500/30 text-amber-600' },
                 { sev: 'P2', label: 'events.created_at — freshness breach', color: 'bg-amber-500/15 border-amber-500/30 text-amber-600' },
-                { sev: 'P3', label: 'products.sku — schema drift detected', color: 'bg-blue-500/15 border-blue-500/30 text-blue-500' },
+                { sev: 'P3', label: 'products.sku — schema drift detected', color: 'bg-muted/60 border-border text-foreground' },
               ].map((inc, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-bold ${inc.color}`}>{inc.sev}</span>
@@ -149,9 +149,9 @@ function IncidentMockup() {
             <span className="rounded border border-red-500/30 bg-red-500/15 px-1.5 py-0.5 text-[9px] font-bold text-red-500">P1</span>
             <span className="text-[11px] font-semibold truncate">orders.payment_status — null rate spike (0.8% → 18.4%)</span>
           </div>
-          <div className="rounded-lg border bg-blue-500/5 border-blue-500/20 p-2.5">
+          <div className="rounded-lg border bg-muted/40 border-border p-2.5">
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wide">AI Analysis</span>
+              <span className="text-[9px] font-bold text-foreground uppercase tracking-wide">AI Analysis</span>
               <span className="rounded-full bg-green-500/15 border border-green-500/30 px-1.5 py-0.5 text-[9px] text-green-600 font-semibold">High Confidence</span>
             </div>
             <p className="text-[10px] text-muted-foreground leading-relaxed">
@@ -200,11 +200,11 @@ function TeamsMockup() {
           </div>
           <div className="flex flex-col gap-1.5">
             {[
-              { name: 'Data Engineering', dot: 'bg-blue-500', members: '2 members', oncall: 'Alice Chen on-call', open: true },
+              { name: 'Data Engineering', dot: 'bg-foreground', members: '2 members', oncall: 'Alice Chen on-call', open: true },
               { name: 'Analytics', dot: 'bg-green-500', members: '1 member', oncall: '' },
               { name: 'Platform', dot: 'bg-purple-500', members: '1 member', oncall: '' },
             ].map((t, i) => (
-              <div key={i} className={cn('rounded-lg border p-2 bg-card', t.open && 'border-blue-500/30')}>
+              <div key={i} className={cn('rounded-lg border p-2 bg-card', t.open && 'border-border')}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className={`size-1.5 rounded-full ${t.dot}`} />
@@ -212,7 +212,7 @@ function TeamsMockup() {
                   </div>
                   <span className="text-[9px] text-muted-foreground">{t.members}</span>
                 </div>
-                {t.oncall && <p className="text-[9px] text-blue-500 mt-1 ml-3.5">{t.oncall}</p>}
+                {t.oncall && <p className="text-[9px] text-foreground mt-1 ml-3.5">{t.oncall}</p>}
               </div>
             ))}
           </div>
@@ -221,7 +221,7 @@ function TeamsMockup() {
             <div className="flex gap-1 items-end h-12">
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
                 <div key={d} className="flex-1 flex flex-col items-center gap-1">
-                  <div className={cn('w-full rounded-sm', i < 3 ? 'h-8 bg-blue-500/40' : i < 5 ? 'h-6 bg-green-500/40' : 'h-4 bg-slate-400/30')} />
+                  <div className={cn('w-full rounded-sm', i < 3 ? 'h-8 bg-foreground/40' : i < 5 ? 'h-6 bg-green-500/40' : 'h-4 bg-slate-400/30')} />
                   <span className="text-[8px] text-muted-foreground">{d}</span>
                 </div>
               ))}
@@ -252,7 +252,7 @@ function ReportsMockup() {
             </div>
             <div className="flex items-end gap-0.5 h-10">
               {sparkHeights.map((h, i) => (
-                <div key={i} className="flex-1 rounded-sm bg-blue-500/60" style={{ height: `${h}%` }} />
+                <div key={i} className="flex-1 rounded-sm bg-foreground/60" style={{ height: `${h}%` }} />
               ))}
             </div>
           </div>
@@ -282,7 +282,7 @@ function ReportsMockup() {
                       'rounded border px-1 py-0.5 text-[8px] font-bold',
                       r.sev === 'P1' ? 'border-red-500/30 bg-red-500/15 text-red-500'
                         : r.sev === 'P2' ? 'border-amber-500/30 bg-amber-500/15 text-amber-600'
-                        : 'border-blue-500/30 bg-blue-500/15 text-blue-500',
+                        : 'border-border bg-muted/60 text-foreground',
                     )}>{r.sev}</span>
                     <span className="text-[10px] truncate max-w-[100px]">{r.table}</span>
                   </div>
@@ -697,11 +697,11 @@ export default function Landing() {
             <div className="pt-2 border-t">
               <p className="text-xs font-sans text-muted-foreground mb-2 font-semibold uppercase tracking-wide">Debug query</p>
               <div className="rounded-lg bg-muted/60 p-3 text-xs">
-                <span className="text-blue-500">SELECT</span> * <span className="text-blue-500">FROM</span> orders{' '}
-                <span className="text-blue-500">WHERE</span> payment_status <span className="text-blue-500">IS NULL</span>{' '}
-                <span className="text-blue-500">AND</span> created_at{' '}
-                <span className="text-blue-500">&gt;=</span> NOW() - <span className="text-blue-500">INTERVAL</span>{' '}
-                <span className="text-green-500">'24 hours'</span> <span className="text-blue-500">LIMIT</span> 100;
+                        <span className="text-foreground">SELECT</span> * <span className="text-foreground">FROM</span> orders{' '}
+                        <span className="text-foreground">WHERE</span> payment_status <span className="text-foreground">IS NULL</span>{' '}
+                        <span className="text-foreground">AND</span> created_at{' '}
+                        <span className="text-foreground">&gt;=</span> NOW() - <span className="text-foreground">INTERVAL</span>{' '}
+                        <span className="text-green-500">'24 hours'</span> <span className="text-foreground">LIMIT</span> 100;
               </div>
             </div>
           </div>

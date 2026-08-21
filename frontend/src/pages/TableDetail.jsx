@@ -13,6 +13,8 @@ import { notify } from '@/lib/notify'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 // ── Monitor type metadata ─────────────────────────────────────────────────────
@@ -319,7 +321,7 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
                 ) : step.status === 'queued' || step.status === 'pending' ? (
                   <Loader2 className="size-4 text-muted-foreground animate-spin" />
                 ) : step.status === 'needs_review' ? (
-                  <Info className="size-4 text-blue-500" />
+                  <Info className="size-4 text-muted-foreground" />
                 ) : (
                   <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400" />
                 )}
@@ -340,7 +342,7 @@ function AutopilotPanel({ table, onMonitorSaved, onRefreshTable }) {
           <p className="rounded-md border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">{state.recommended_next_action}</p>
         )}
         {(state.status === 'queued' || state.status === 'profiling_complete') && (
-          <p className="rounded-md border bg-blue-500/10 border-blue-500/20 px-3 py-2 text-sm text-blue-600 dark:text-blue-400">
+          <p className="rounded-md border bg-muted/40 border-border px-3 py-2 text-sm text-muted-foreground">
             AI analysis is running in the background — no action needed. This page will reflect progress automatically.
           </p>
         )}
@@ -926,28 +928,30 @@ function NLRuleBuilder({ tableId, tableName, onMonitorSaved }) {
                   }
                 </span>
               )}
-              <Button size="sm" variant="outline" onClick={() => setShowSaveForm((v) => !v)}>
+              <Button size="sm" variant="outline" onClick={() => setShowSaveForm(true)} disabled={!testResult || lastTestedSql !== sqlDraft.trim()}>
                 <PlusCircle className="size-3.5 mr-1" />
                 Save as Monitor
               </Button>
             </div>
-            {showSaveForm && (
-              <div className="rounded-lg border bg-muted/20 p-3 flex flex-col gap-2">
-                <p className="text-xs font-medium text-muted-foreground">Monitor name</p>
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-                    value={saveName}
-                    onChange={e => setSaveName(e.target.value)}
-                    placeholder="Monitor name"
-                  />
-                  <Button size="sm" onClick={saveAsMonitor} disabled={saving || !saveName.trim() || lastTestedSql !== sqlDraft.trim() || !testResult}>
-                    {saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Save'}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setShowSaveForm(false)}>Cancel</Button>
+            <Dialog open={showSaveForm} onOpenChange={setShowSaveForm}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Save as custom monitor</DialogTitle>
+                  <DialogDescription>The tested SQL will run on every profile for this table.</DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="nl-monitor-name">Monitor name</label>
+                  <input id="nl-monitor-name" className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" value={saveName} onChange={e => setSaveName(e.target.value)} placeholder="Monitor name" autoFocus />
                 </div>
-              </div>
-            )}
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setShowSaveForm(false)}>Cancel</Button>
+                  <Button type="button" onClick={saveAsMonitor} disabled={saving || !saveName.trim() || lastTestedSql !== sqlDraft.trim() || !testResult}>
+                    {saving && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                    {saving ? 'Saving…' : 'Save monitor'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
     </div>
@@ -1125,7 +1129,7 @@ function AlertRoutingPanel({ tableId, onRouteSaved }) {
           <Bell className="size-4 text-primary" />
           Alert Routing
         </CardTitle>
-        {!showForm && availableChannels.length > 0 && (
+        {availableChannels.length > 0 && (
           <Button size="sm" variant="outline" onClick={() => setShowForm(true)}>
             <PlusCircle className="size-3.5 mr-1" />
             Add route
@@ -1135,9 +1139,13 @@ function AlertRoutingPanel({ tableId, onRouteSaved }) {
       <CardContent className="flex flex-col gap-3">
         {loading && <div className="h-10 animate-pulse rounded-lg border bg-muted/40" />}
 
-        {showForm && (
-          <form onSubmit={handleSave} className="rounded-lg border bg-muted/20 p-4 flex flex-col gap-3">
-            <p className="text-sm font-medium">New alert route for this table</p>
+        <Dialog open={showForm} onOpenChange={setShowForm}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>New alert route</DialogTitle>
+              <DialogDescription>Choose a destination and minimum severity for this table's incidents.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleSave} className="flex flex-col gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground font-medium">Channel</label>
@@ -1157,14 +1165,15 @@ function AlertRoutingPanel({ tableId, onRouteSaved }) {
               </div>
             </div>
             {renderConfigFields()}
-            <div className="flex gap-2">
-              <Button type="submit" size="sm" disabled={saving}>{saving ? <Loader2 className="size-3.5 animate-spin" /> : 'Save route'}</Button>
-              <Button type="button" size="sm" variant="ghost" onClick={resetForm}>Cancel</Button>
-            </div>
-          </form>
-        )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={resetForm}>Cancel</Button>
+                <Button type="submit" disabled={saving}>{saving ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}{saving ? 'Saving…' : 'Save route'}</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
 
-        {!loading && tableAlerts.length === 0 && workspaceAlerts.length === 0 && !showForm && (
+        {!loading && tableAlerts.length === 0 && workspaceAlerts.length === 0 && (
           <p className="text-sm text-muted-foreground">
             {availableChannels.length === 0
               ? 'No alert channels available on your plan. Upgrade to enable Slack, email, or PagerDuty routing.'
@@ -1200,6 +1209,7 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
   const [runningId, setRunningId] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [togglingId, setTogglingId] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
 
   // Add form state
   const [addName, setAddName] = useState('')
@@ -1337,12 +1347,14 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
     } finally { setRunningId(null) }
   }
 
-  const handleDelete = async (m) => {
-    if (!window.confirm(`Delete monitor "${m.name}"? This cannot be undone.`)) return
+  const confirmDelete = async () => {
+    const m = pendingDelete
+    if (!m) return
     setDeletingId(m.id)
     try {
       await deleteCustomMonitor(tableId, m.id)
       toast.success('Monitor deleted')
+      setPendingDelete(null)
       load()
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to delete monitor')
@@ -1366,14 +1378,18 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
           <Code2 className="size-4 text-primary" />
           <span className="text-sm font-medium">SQL monitors</span>
         </div>
-        <Button size="sm" variant="outline" onClick={() => { setShowAddForm((v) => !v); setEditingId(null) }}>
+        <Button size="sm" variant="outline" onClick={() => { setShowAddForm(true); setEditingId(null) }}>
           <PlusCircle className="size-3.5 mr-1" />
           Add monitor
         </Button>
       </div>
-        {showAddForm && (
-          <form onSubmit={handleAdd} className="rounded-lg border bg-muted/20 p-4 flex flex-col gap-3">
-            <p className="text-sm font-medium">New custom monitor</p>
+      <Dialog open={showAddForm} onOpenChange={(open) => { setShowAddForm(open); if (!open) resetAddForm() }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>New custom SQL monitor</DialogTitle>
+            <DialogDescription>Test the read-only query before saving it to this table's profile cadence.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAdd} className="flex flex-col gap-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-muted-foreground font-medium">Name *</label>
@@ -1431,10 +1447,11 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
               <Button type="submit" size="sm" disabled={addSaving || !addName.trim() || !addSql.trim() || !addSqlTested}>
                 {addSaving ? <Loader2 className="size-3.5 animate-spin" /> : 'Save monitor'}
               </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={resetAddForm}>Cancel</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => { setShowAddForm(false); resetAddForm() }}>Cancel</Button>
             </div>
           </form>
-        )}
+        </DialogContent>
+      </Dialog>
 
         {loading && <div className="flex flex-col gap-2">{[1, 2].map(i => <div key={i} className="h-12 animate-pulse rounded-lg border bg-muted/40" />)}</div>}
 
@@ -1446,55 +1463,7 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
           <div className="flex flex-col gap-2">
             {monitors.map((m) => (
               <div key={m.id} className="rounded-lg border bg-muted/10">
-                {editingId === m.id ? (
-                  <form onSubmit={(e) => handleEdit(e, m.id)} className="p-4 flex flex-col gap-3">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="flex flex-col gap-1">
-                        <label className="text-xs text-muted-foreground font-medium">Name *</label>
-                        <input
-                          className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-                          value={editName} onChange={e => setEditName(e.target.value)} required
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="text-xs text-muted-foreground font-medium">Severity</label>
-                        <select
-                          className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-                          value={editSeverity} onChange={e => setEditSeverity(e.target.value)}
-                        >
-                          <option value="P1">P1 — Critical</option>
-                          <option value="P2">P2 — High</option>
-                          <option value="P3">P3 — Medium</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-muted-foreground font-medium">Description (optional)</label>
-                      <input
-                        className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary"
-                        value={editDescription} onChange={e => setEditDescription(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs text-muted-foreground font-medium">SQL query *</label>
-                      <textarea
-                        className="rounded-md border bg-background px-3 py-2 text-sm font-mono outline-none focus:ring-1 focus:ring-primary min-h-[80px] resize-y"
-                        value={editSql} onChange={e => setEditSql(e.target.value)} required
-                      />
-                    </div>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="checkbox" checked={editRunOnProfile} onChange={e => setEditRunOnProfile(e.target.checked)} className="rounded" />
-                      Run on every profile
-                    </label>
-                    <div className="flex gap-2">
-                      <Button type="submit" size="sm" disabled={editSaving}>
-                        {editSaving ? <Loader2 className="size-3.5 animate-spin" /> : 'Update'}
-                      </Button>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="px-3 py-2.5 flex flex-col gap-1.5">
+                <div className="px-3 py-2.5 flex flex-col gap-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant="outline" className={SEVERITY_BADGE_CLASSES[m.severity] || ''}>
                         {m.severity}
@@ -1520,7 +1489,7 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
                         <Button size="sm" variant="ghost" onClick={() => startEdit(m)} className="h-7 px-2">
                           <Edit3 className="size-3.5" />
                         </Button>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(m)} disabled={deletingId === m.id} className="h-7 px-2 text-destructive hover:text-destructive">
+                        <Button size="sm" variant="ghost" onClick={() => setPendingDelete(m)} disabled={deletingId === m.id} className="h-7 px-2 text-destructive hover:text-destructive" aria-label={`Delete ${m.name}`}>
                           {deletingId === m.id ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
                         </Button>
                       </div>
@@ -1528,12 +1497,66 @@ function CustomMonitors({ tableId, refreshKey = 0 }) {
                     {m.last_run_at && (
                       <p className="text-xs text-muted-foreground">Last run: {formatDateTime(m.last_run_at)}</p>
                     )}
-                  </div>
-                )}
+                </div>
               </div>
             ))}
           </div>
         )}
+        <Dialog open={Boolean(editingId)} onOpenChange={(open) => { if (!open) setEditingId(null) }}>
+          <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Edit custom SQL monitor</DialogTitle>
+              <DialogDescription>Update the monitor definition and keep its execution cadence explicit.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={(e) => handleEdit(e, editingId)} className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="edit-monitor-name">Name *</label>
+                  <input id="edit-monitor-name" className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" value={editName} onChange={e => setEditName(e.target.value)} required />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-muted-foreground" htmlFor="edit-monitor-severity">Severity</label>
+                  <select id="edit-monitor-severity" className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" value={editSeverity} onChange={e => setEditSeverity(e.target.value)}>
+                    <option value="P1">P1 — Critical</option>
+                    <option value="P2">P2 — High</option>
+                    <option value="P3">P3 — Medium</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="edit-monitor-description">Description</label>
+                <input id="edit-monitor-description" className="rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" value={editDescription} onChange={e => setEditDescription(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="edit-monitor-sql">SQL query *</label>
+                <textarea id="edit-monitor-sql" className="min-h-[120px] resize-y rounded-md border bg-background px-3 py-2 text-sm font-mono outline-none focus:ring-1 focus:ring-primary" value={editSql} onChange={e => setEditSql(e.target.value)} required />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={editRunOnProfile} onChange={e => setEditRunOnProfile(e.target.checked)} className="rounded" />
+                Run on every profile
+              </label>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingId(null)}>Cancel</Button>
+                <Button type="submit" disabled={editSaving}>
+                  {editSaving && <Loader2 data-icon="inline-start" className="animate-spin" />}
+                  {editSaving ? 'Saving…' : 'Save changes'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+        <AlertDialog open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) setPendingDelete(null) }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete custom monitor?</AlertDialogTitle>
+              <AlertDialogDescription>{pendingDelete ? `“${pendingDelete.name}” will be permanently removed from this table.` : ''}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDelete}>Delete monitor</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
     </div>
   )
 }
@@ -1660,8 +1683,8 @@ const SAFE_RUN_STYLES = {
   passed: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
   failed: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
   error: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
-  queued: 'border-blue-600/25 bg-blue-600/10 text-blue-700 dark:text-blue-300',
-  running: 'border-blue-600/25 bg-blue-600/10 text-blue-700 dark:text-blue-300',
+  queued: 'border-border bg-muted text-muted-foreground',
+  running: 'border-border bg-muted text-muted-foreground',
   cancelled: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
 }
 

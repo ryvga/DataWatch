@@ -10,9 +10,9 @@ const CATEGORIES = [
   {
     id: 'statistical',
     label: 'Statistical Methods',
-    color: 'text-blue-600 dark:text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/20',
+    color: 'text-foreground',
+    bg: 'bg-muted/60',
+    border: 'border-border',
     icon: BarChart2,
   },
   {

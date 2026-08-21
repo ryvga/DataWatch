@@ -59,7 +59,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
   Dialog,
   DialogContent,
@@ -127,7 +126,7 @@ function getApiError(err, fallback) {
   return detail || fallback
 }
 
-// ── Team sheet (create / edit) ─────────────────────────────────────────────
+// ── Team dialog (create / edit) ────────────────────────────────────────────
 
 function TeamSheet({ open, onOpenChange, team, onSaved }) {
   const isEdit = Boolean(team)
@@ -164,16 +163,15 @@ function TeamSheet({ open, onOpenChange, team, onSaved }) {
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>{isEdit ? 'Edit team' : 'New team'}</SheetTitle>
-          <SheetDescription>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? 'Edit team' : 'New team'}</DialogTitle>
+          <DialogDescription>
             {isEdit ? 'Update team details.' : 'Create a team to group members and assign on-call schedules.'}
-          </SheetDescription>
-        </SheetHeader>
-        <form onSubmit={submit} className="flex flex-1 flex-col">
-          <div className="flex flex-1 flex-col gap-4 px-4">
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="team-name">Name <span className="text-destructive">*</span></Label>
               <Input
@@ -216,17 +214,16 @@ function TeamSheet({ open, onOpenChange, team, onSaved }) {
                 ))}
               </div>
             </div>
-          </div>
-          <SheetFooter>
+          <DialogFooter>
             <Button type="submit" disabled={saving || !form.name.trim()}>
               {saving && <Loader2 data-icon="inline-start" className="animate-spin" />}
               {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create team'}
             </Button>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          </SheetFooter>
+          </DialogFooter>
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -238,6 +235,7 @@ function MembersTab({ team, userRole }) {
   const [addUserId, setAddUserId] = useState('')
   const [addRole, setAddRole] = useState('member')
   const [adding, setAdding] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
 
   const canManage = userRole === 'owner' || userRole === 'admin'
 
@@ -258,6 +256,7 @@ function MembersTab({ team, userRole }) {
       setMembers(prev => [...prev, res.data])
       setAddUserId('')
       setAddRole('member')
+      setAddOpen(false)
       notify.ok('Member added')
     } catch (err) {
       notify.err(getApiError(err, 'Failed to add member'))
@@ -296,10 +295,63 @@ function MembersTab({ team, userRole }) {
     )
   }
 
+  const addMemberDialog = canManage && (
+    <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Add team member</DialogTitle>
+          <DialogDescription>Select an existing workspace member and assign their team role.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`team-member-${team.id}`}>Workspace member</Label>
+            <UserPicker
+              value={addUserId}
+              onChange={setAddUserId}
+              placeholder="Select org member…"
+              excludeIds={existingIds}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label>Team role</Label>
+            <Select value={addRole} onValueChange={setAddRole}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="lead">Lead</SelectItem>
+                <SelectItem value="member">Member</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+          <Button type="button" onClick={handleAdd} disabled={!addUserId || adding}>
+            {adding ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <UserPlus data-icon="inline-start" />}
+            {adding ? 'Adding…' : 'Add member'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+
   return (
     <div className="flex flex-col gap-4">
+      {canManage && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm text-muted-foreground">Manage membership and team roles.</p>
+          <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
+            <UserPlus data-icon="inline-start" />
+            Add member
+          </Button>
+        </div>
+      )}
       {members.length === 0 ? (
-        <EmptyState icon={Users} title="No members yet" description="Add org members to this team." />
+        <EmptyState
+          icon={Users}
+          title="No members yet"
+          description="Add org members to this team."
+          action={canManage && <Button type="button" onClick={() => setAddOpen(true)}><UserPlus data-icon="inline-start" />Add member</Button>}
+        />
       ) : (
         <div className="dw-table-wrap">
           <Table>
@@ -375,36 +427,7 @@ function MembersTab({ team, userRole }) {
         </div>
       )}
 
-      {canManage && (
-        <div className="rounded-lg border bg-muted/30 p-4">
-          <p className="mb-3 text-sm font-medium">Add member</p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <UserPicker
-                value={addUserId}
-                onChange={setAddUserId}
-                placeholder="Select org member…"
-                excludeIds={existingIds}
-              />
-            </div>
-            <div className="w-32">
-              <Select value={addRole} onValueChange={setAddRole}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="lead">Lead</SelectItem>
-                  <SelectItem value="member">Member</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="button" onClick={handleAdd} disabled={!addUserId || adding}>
-              {adding ? <Loader2 data-icon="inline-start" className="animate-spin" /> : <UserPlus data-icon="inline-start" />}
-              {adding ? 'Adding…' : 'Add'}
-            </Button>
-          </div>
-        </div>
-      )}
+      {addMemberDialog}
     </div>
   )
 }
@@ -863,39 +886,33 @@ function TablesTab({ team }) {
 
 // ── Team detail ────────────────────────────────────────────────────────────
 
-function TeamDetail({ team, userRole }) {
+function TeamDetail({ team, userRole, open, onOpenChange }) {
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="mb-4 flex items-center gap-2">
-          <TeamColorDot color={team.color} size="size-4" />
-          <h2 className="text-base font-semibold">{team.name}</h2>
-          {team.description && (
-            <span className="text-sm text-muted-foreground">— {team.description}</span>
-          )}
-        </div>
-        <Tabs defaultValue="members">
-          <TabsList>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto p-0 sm:max-w-4xl">
+        <DialogHeader className="border-b px-6 py-5">
+          <div className="flex items-center gap-2 pr-8">
+            <TeamColorDot color={team.color} size="size-4" />
+            <DialogTitle>{team.name}</DialogTitle>
+          </div>
+          <DialogDescription>{team.description || 'Manage members, on-call coverage, incidents, and assigned tables.'}</DialogDescription>
+        </DialogHeader>
+        <div className="px-6 pb-6">
+          <Tabs defaultValue="members">
+            <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="oncall">On-call</TabsTrigger>
             <TabsTrigger value="incidents">Incidents</TabsTrigger>
             <TabsTrigger value="tables">Tables</TabsTrigger>
-          </TabsList>
-          <TabsContent value="members" className="mt-4">
-            <MembersTab team={team} userRole={userRole} />
-          </TabsContent>
-          <TabsContent value="oncall" className="mt-4">
-            <OncallTab team={team} />
-          </TabsContent>
-          <TabsContent value="incidents" className="mt-4">
-            <IncidentsTab team={team} />
-          </TabsContent>
-          <TabsContent value="tables" className="mt-4">
-            <TablesTab team={team} />
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+            </TabsList>
+            <TabsContent value="members" className="mt-4"><MembersTab team={team} userRole={userRole} /></TabsContent>
+            <TabsContent value="oncall" className="mt-4"><OncallTab team={team} /></TabsContent>
+            <TabsContent value="incidents" className="mt-4"><IncidentsTab team={team} /></TabsContent>
+            <TabsContent value="tables" className="mt-4"><TablesTab team={team} /></TabsContent>
+          </Tabs>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -905,7 +922,8 @@ export default function Teams() {
   const [teams, setTeams] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedTeam, setSelectedTeam] = useState(null)
-  const [sheetOpen, setSheetOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
   const [editTeam, setEditTeam] = useState(null)
 
   // Derive user role from storage (consistent with Settings.jsx pattern)
@@ -949,12 +967,12 @@ export default function Teams() {
 
   const openCreate = () => {
     setEditTeam(null)
-    setSheetOpen(true)
+    setDialogOpen(true)
   }
 
   const openEdit = (team) => {
     setEditTeam(team)
-    setSheetOpen(true)
+    setDialogOpen(true)
   }
 
   return (
@@ -1006,8 +1024,8 @@ export default function Teams() {
                   {teams.map(team => (
                     <TableRow
                       key={team.id}
-                      className={cn('cursor-pointer', selectedTeam?.id === team.id && 'bg-muted/50')}
-                      onClick={() => setSelectedTeam(prev => prev?.id === team.id ? null : team)}
+                      className={cn('cursor-pointer', selectedTeam?.id === team.id && detailOpen && 'bg-muted/50')}
+                      onClick={() => { setSelectedTeam(team); setDetailOpen(true) }}
                     >
                       <TableCell>
                         <span className="flex items-center gap-2">
@@ -1084,15 +1102,15 @@ export default function Teams() {
         </CardContent>
       </Card>
 
-      {/* Team detail panel */}
+      {/* Team detail dialog */}
       {selectedTeam && (
-        <TeamDetail key={selectedTeam.id} team={selectedTeam} userRole={userRole} />
+        <TeamDetail key={selectedTeam.id} team={selectedTeam} userRole={userRole} open={detailOpen} onOpenChange={setDetailOpen} />
       )}
 
-      {/* Create / Edit sheet */}
+      {/* Create / Edit dialog */}
       <TeamSheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
         team={editTeam}
         onSaved={handleSaved}
       />

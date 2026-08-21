@@ -9,7 +9,7 @@ const STATUS_STYLES = {
   resolved: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
   warning: 'border-amber-600/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
   acknowledged: 'border-amber-600/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
-  investigating: 'border-blue-600/25 bg-blue-600/10 text-blue-700 dark:text-blue-300',
+  investigating: 'border-border bg-muted text-foreground',
   muted: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
   ignored: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
   pending: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',

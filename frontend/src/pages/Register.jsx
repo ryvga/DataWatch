@@ -126,7 +126,7 @@ export default function Register() {
       <div className="w-full max-w-5xl overflow-hidden rounded-xl border border-gray-800 bg-gray-900 shadow-2xl lg:grid lg:grid-cols-[1fr_440px]">
 
         {/* Left panel */}
-        <div className="hidden lg:flex flex-col justify-between border-r border-gray-800 bg-gradient-to-br from-blue-950/40 via-gray-900 to-gray-900 p-10">
+        <div className="hidden lg:flex flex-col justify-between border-r border-gray-800 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-900 p-10">
           <div>
             <img src="/panopta-no-text.svg" alt="Panopta" className="mb-4 h-9 w-auto invert" />
             <h1 className="text-3xl font-bold text-white leading-tight">
@@ -143,7 +143,7 @@ export default function Register() {
               { step: '3', label: 'Get incident reports', desc: 'AI-written explanations with root cause and recommended actions.' },
             ].map((item) => (
               <div key={item.step} className="flex items-start gap-3 rounded-lg border border-gray-700 bg-gray-800/50 p-3">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-xs font-bold text-blue-400">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-bold text-gray-300">
                   {item.step}
                 </div>
                 <div>
@@ -180,7 +180,7 @@ export default function Register() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-400">Organisation name</label>
                 <input
-                  className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-blue-500 ${errors.org_name ? 'border-red-500' : 'border-gray-700'}`}
+                  className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-gray-400 ${errors.org_name ? 'border-red-500' : 'border-gray-700'}`}
                   value={form.org_name}
                   onChange={set('org_name')}
                   placeholder="Acme Corp"
@@ -192,7 +192,7 @@ export default function Register() {
               {/* Workspace URL */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-400">Workspace URL</label>
-                <div className={`flex items-center rounded-lg border bg-gray-800 px-3 py-2 text-sm transition-colors focus-within:ring-1 focus-within:ring-blue-500 ${errors.org_slug ? 'border-red-500' : 'border-gray-700'}`}>
+                <div className={`flex items-center rounded-lg border bg-gray-800 px-3 py-2 text-sm transition-colors focus-within:ring-1 focus-within:ring-gray-400 ${errors.org_slug ? 'border-red-500' : 'border-gray-700'}`}>
                   <span className="shrink-0 select-none text-gray-500">app.panopta.app/</span>
                   <input
                     className="min-w-0 flex-1 bg-transparent font-mono text-white outline-none ml-1 placeholder-gray-600"
@@ -217,7 +217,7 @@ export default function Register() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-400">Full name</label>
                 <input
-                  className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-blue-500 ${errors.full_name ? 'border-red-500' : 'border-gray-700'}`}
+                  className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-gray-400 ${errors.full_name ? 'border-red-500' : 'border-gray-700'}`}
                   value={form.full_name}
                   onChange={set('full_name')}
                   placeholder="Jane Doe"
@@ -229,7 +229,7 @@ export default function Register() {
               <div>
                 <label className="mb-1 block text-xs font-medium text-gray-400">Email address</label>
                 <input
-                  className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-blue-500 ${errors.email ? 'border-red-500' : 'border-gray-700'}`}
+                  className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-gray-400 ${errors.email ? 'border-red-500' : 'border-gray-700'}`}
                   type="email"
                   value={form.email}
                   onChange={set('email')}
@@ -243,7 +243,7 @@ export default function Register() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-400">Password</label>
                   <input
-                    className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-blue-500 ${errors.password ? 'border-red-500' : 'border-gray-700'}`}
+                    className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-gray-400 ${errors.password ? 'border-red-500' : 'border-gray-700'}`}
                     type="password"
                     value={form.password}
                     onChange={set('password')}
@@ -254,7 +254,7 @@ export default function Register() {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-400">Confirm password</label>
                   <input
-                    className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-blue-500 ${errors.confirm_password ? 'border-red-500' : 'border-gray-700'}`}
+                    className={`w-full rounded-lg border bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:ring-1 focus:ring-gray-400 ${errors.confirm_password ? 'border-red-500' : 'border-gray-700'}`}
                     type="password"
                     value={form.confirm_password}
                     onChange={set('confirm_password')}
@@ -266,7 +266,7 @@ export default function Register() {
 
               {/* Global error messages */}
               {globalError?.type === 'slug_taken' && (
-                <div className="flex gap-3 rounded-lg border border-blue-700 bg-blue-950/50 p-3 text-sm text-blue-200">
+                <div className="flex gap-3 rounded-lg border border-gray-600 bg-gray-800 p-3 text-sm text-gray-300">
                   <span className="shrink-0">ℹ️</span>
                   <div>
                     <span className="font-semibold">This workspace name is already taken.</span>{' '}
@@ -292,14 +292,14 @@ export default function Register() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Creating workspace…' : 'Create workspace'}
               </button>
 
               <p className="text-center text-xs text-gray-500">
                 Already have a workspace?{' '}
-                <Link to="/" className="text-blue-400 underline underline-offset-4 hover:text-blue-300">
+                <Link to="/" className="text-gray-300 underline underline-offset-4 hover:text-white">
                   Sign in
                 </Link>
               </p>
