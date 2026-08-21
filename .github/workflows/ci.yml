@@ -79,3 +79,46 @@ jobs:
       - name: Audit production dependencies
         working-directory: frontend
         run: npm audit --audit-level=high
+
+  fullstack-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create deterministic CI environment
+        run: |
+          cp .env.example .env
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.env')
+          text = path.read_text()
+          replacements = {
+              'SECRET_KEY=': 'SECRET_KEY=ci-secret-key-xxxxxxxxxxxxxxxxxxxxxxxx',
+              'FERNET_MASTER_KEY=': 'FERNET_MASTER_KEY=dGVzdC1mZXJuZXQta2V5LXBhZGRlZC10by0zMmJ5dGVzISE=',
+              'OPENROUTER_API_KEY=': 'OPENROUTER_API_KEY=',
+              'STAFF_PASSWORD=': 'STAFF_PASSWORD=admin1234',
+          }
+          for prefix, value in replacements.items():
+              text = '\n'.join(value if line.startswith(prefix) else line for line in text.splitlines()) + '\n'
+          path.write_text(text)
+          PY
+      - name: Start seeded application stack
+        run: |
+          docker compose up -d --build --wait postgres redis mailhog acme-db analytics-db
+          docker compose run --rm migrate
+          docker compose up -d --build --wait api worker frontend
+      - name: Seed deterministic demo workspaces
+        run: docker compose --profile seed run --rm seed
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install browser test dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Run seeded browser smoke suite
+        working-directory: frontend
+        run: npm run test:e2e
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v --remove-orphans
