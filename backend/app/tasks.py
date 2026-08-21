@@ -679,8 +679,14 @@ def _monitor_execution_error_code(error) -> str:
     code = getattr(error, "code", None)
     if code == "execution_timeout":
         return "execution_timeout"
-    if code == "connector_execution_not_supported":
-        return "connector_execution_not_supported"
+    if code in {
+        "connector_execution_not_supported",
+        "query_concurrency_exceeded",
+        "query_lease_unavailable",
+        "scan_budget_exceeded",
+        "scan_budget_not_supported",
+    }:
+        return code
     return "execution_failed"
 
 
@@ -749,6 +755,7 @@ async def _run_one_dsl_monitor(
         reserve_run,
     )
     from app.services.monitor_runtime import execute_compiled_plan
+    from app.services.query_lease import source_query_lease
     from app.services.realtime import publish_event
     from app.services.schema_binding import build_relation_binding
 
@@ -803,7 +810,12 @@ async def _run_one_dsl_monitor(
                 latest_schema_fingerprint=profile_schema_fingerprint,
             )
             plan = compile_relational_plan(load_persisted_definition(revision.definition), relation=relation)
-            measurements = await execute_compiled_plan(connector, plan)
+            async with source_query_lease(
+                str(source.org_id),
+                str(source.id),
+                ttl_seconds=plan.timeout_seconds + 30,
+            ):
+                measurements = await execute_compiled_plan(connector, plan)
         except Exception as exc:
             try:
                 await finalize_error(

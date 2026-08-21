@@ -33,6 +33,10 @@ TERMINAL_STATUSES = {"passed", "failed", "error", "cancelled"}
 SAFE_ERROR_MESSAGES = {
     "execution_timeout": "Compiled monitor exceeded its timeout",
     "connector_execution_not_supported": "Connector cannot execute compiled monitors",
+    "query_concurrency_exceeded": "Another query is already running for this source",
+    "query_lease_unavailable": "Shared query capacity control is unavailable",
+    "scan_budget_exceeded": "Compiled monitor exceeds maxBytesScanned",
+    "scan_budget_not_supported": "Connector cannot enforce maxBytesScanned",
     "execution_failed": "Compiled monitor execution failed",
     "evaluation_failed": "Compiled monitor evaluation failed",
     "plan_context_mismatch": "Compiled plan no longer matches the reserved run",
