@@ -71,9 +71,14 @@ const FIELD_LABELS = {
   key_pattern: 'Key pattern',
   max_scan_keys: 'Maximum scanned keys',
   scan_count: 'SCAN count hint',
+  service_name: 'Service name',
+  wallet_location: 'Wallet directory',
+  wallet_password: 'Wallet password',
+  connect_timeout_seconds: 'Connect timeout (seconds)',
+  call_timeout_ms: 'Call timeout (milliseconds)',
 }
 
-const SECRET_FIELDS = new Set(['password', 'credentials_json', 'uri', 'access_token'])
+const SECRET_FIELDS = new Set(['password', 'wallet_password', 'credentials_json', 'uri', 'access_token'])
 
 export function normalizeConnector(connector) {
   const required = connector.required || []

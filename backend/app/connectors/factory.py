@@ -44,6 +44,11 @@ FIELD_METADATA = {
     },
     "max_scan_keys": {"label": "Maximum scanned keys", "input_type": "number"},
     "scan_count": {"label": "SCAN count hint", "input_type": "number"},
+    "service_name": {"label": "Service name", "input_type": "text", "placeholder": "FREEPDB1"},
+    "wallet_location": {"label": "Wallet directory", "input_type": "text"},
+    "wallet_password": {"label": "Wallet password", "input_type": "password", "secret": True},
+    "connect_timeout_seconds": {"label": "Connect timeout (seconds)", "input_type": "number"},
+    "call_timeout_ms": {"label": "Call timeout (milliseconds)", "input_type": "number"},
 }
 
 
@@ -70,6 +75,7 @@ VERSION_OPTIONS = {
     "mongodb": ["Auto-detect", "MongoDB 6", "MongoDB 7", "MongoDB Atlas"],
     "redis": ["Auto-detect", "Redis 7", "Redis 8"],
     "sqlserver": ["Auto-detect", "SQL Server 2022", "SQL Server 2019", "Azure SQL"],
+    "oracle": ["Auto-detect", "Oracle Database 23ai Free", "Oracle Database 19c"],
 }
 
 
@@ -270,6 +276,24 @@ CONNECTOR_REGISTRY = {
         },
         "label": "SQL Server",
         "description": "Microsoft SQL Server / Azure SQL",
+        "tier": 2,
+        "readiness": "experimental",
+    },
+    "oracle": {
+        "module": "app.connectors.oracle",
+        "class": "OracleConnector",
+        "required": ["host", "service_name", "username", "password"],
+        "optional": {
+            "port": 1521,
+            "schema": None,
+            "tls_mode": "verify_identity",
+            "wallet_location": None,
+            "wallet_password": None,
+            "connect_timeout_seconds": 15,
+            "call_timeout_ms": 120000,
+        },
+        "label": "Oracle Database",
+        "description": "Oracle Database 19c+ / 23ai using the async thin driver",
         "tier": 2,
         "readiness": "experimental",
     },

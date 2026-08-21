@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # production opt-in; local embedded databases require a confined root.
     SOURCE_ALLOW_PRIVATE_NETWORKS: bool = False
     SOURCE_LOCAL_PATH_ROOT: str = ""
+    ORACLE_WALLET_ROOT: str = ""
     SOURCE_PREVIEW_RATE_LIMIT: int = 10
     SOURCE_PREVIEW_RATE_WINDOW_SECONDS: int = 60
 

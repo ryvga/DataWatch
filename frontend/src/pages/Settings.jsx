@@ -103,7 +103,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import SourceConnectionDialog from '@/components/SourceConnectionDialog'
 import TableSetupDialog from '@/components/TableSetupDialog'
 
-const SOURCE_TYPES = ['postgres', 'mysql', 'mariadb', 'mongodb', 'cassandra', 'redis', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'databricks', 'trino', 'duckdb', 'sqlite']
+const SOURCE_TYPES = ['postgres', 'mysql', 'mariadb', 'mongodb', 'cassandra', 'redis', 'redshift', 'bigquery', 'snowflake', 'clickhouse', 'sqlserver', 'oracle', 'databricks', 'trino', 'duckdb', 'sqlite']
 
 const SOURCE_TYPE_LABELS = {
   postgres: 'PostgreSQL',
@@ -117,6 +117,7 @@ const SOURCE_TYPE_LABELS = {
   snowflake: 'Snowflake',
   clickhouse: 'ClickHouse',
   sqlserver: 'SQL Server',
+  oracle: 'Oracle Database',
   databricks: 'Databricks',
   trino: 'Trino / Presto',
   duckdb: 'DuckDB',
@@ -133,6 +134,7 @@ const SOURCE_CONFIG_TEMPLATES = {
   cassandra: '{\n  "hosts": "node1.cassandra.io,node2.cassandra.io",\n  "port": 9042,\n  "keyspace": "my_keyspace",\n  "username": "cassandra",\n  "password": ""\n}',
   redis: '{\n  "host": "localhost",\n  "port": 6379,\n  "database": 0,\n  "username": null,\n  "password": null,\n  "tls_mode": "verify_identity",\n  "key_pattern": "app:*",\n  "max_scan_keys": 1000,\n  "scan_count": 100\n}',
   sqlserver: '{\n  "host": "localhost",\n  "port": 1433,\n  "database": "MyDB",\n  "username": "sa",\n  "password": ""\n}',
+  oracle: '{\n  "host": "localhost",\n  "port": 1521,\n  "service_name": "FREEPDB1",\n  "username": "PANOPTA_MONITOR",\n  "password": "",\n  "schema": "PANOPTA_MONITOR",\n  "tls_mode": "verify_identity",\n  "wallet_location": null,\n  "connect_timeout_seconds": 15,\n  "call_timeout_ms": 120000\n}',
   clickhouse: '{\n  "host": "localhost",\n  "port": 8123,\n  "database": "default",\n  "username": "default",\n  "password": ""\n}',
   databricks: '{\n  "server_hostname": "adb-xxx.azuredatabricks.net",\n  "http_path": "/sql/1.0/warehouses/xxx",\n  "access_token": "dapi...",\n  "catalog": "hive_metastore"\n}',
   trino: '{\n  "host": "localhost",\n  "port": 8080,\n  "user": "trino",\n  "catalog": "tpch",\n  "schema": "tiny",\n  "http_scheme": "http"\n}',

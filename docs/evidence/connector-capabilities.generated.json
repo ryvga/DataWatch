@@ -129,6 +129,22 @@
       "profile_dialect": "mysql",
       "readiness": "experimental"
     },
+    "oracle": {
+      "capabilities": {
+        "compiled_monitors": "none",
+        "connection_test": true,
+        "custom_monitors": "none",
+        "discovery": true,
+        "profiling": "core",
+        "sampling": false,
+        "schema": true
+      },
+      "class": "OracleConnector",
+      "monitor_dialect": null,
+      "native_profile_kind": null,
+      "profile_dialect": "oracle",
+      "readiness": "experimental"
+    },
     "postgres": {
       "capabilities": {
         "compiled_monitors": "internal_read_only",

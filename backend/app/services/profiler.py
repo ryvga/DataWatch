@@ -28,7 +28,7 @@ NUMERIC_TYPES = {
 TIMESTAMP_TYPES = {
     "timestamp", "timestamp without time zone", "timestamp with time zone",
     "timestamptz", "datetime", "datetime2", "smalldatetime", "datetimeoffset",
-    "TIMESTAMP", "DATETIME",
+    "TIMESTAMP", "DATETIME", "TIMESTAMP WITH LOCAL TIME ZONE",
 }
 DATE_TYPES = {"date", "DATE"}
 TEXT_TYPES = {
@@ -182,6 +182,7 @@ class ProfilerService:
             "clickhouse",
             "databricks",
             "trino",
+            "oracle",
         }:
             raise ValueError(f"Unsupported profiling dialect: {dialect}")
 
@@ -194,8 +195,9 @@ class ProfilerService:
         clickhouse = dialect == "clickhouse"
         databricks = dialect == "databricks"
         trino = dialect == "trino"
+        oracle = dialect == "oracle"
         parts = [
-            "COUNT(*) AS _row_count",
+            'COUNT(*) AS "_row_count"' if oracle else "COUNT(*) AS _row_count",
             # Duplicate rate: what fraction of rows are duplicates of at least one other row
             # Approximated via: 1 - (COUNT(DISTINCT all_cols) / COUNT(*))
             # We approximate per-column uniqueness instead (cheaper)
@@ -246,6 +248,11 @@ class ProfilerService:
                     f"date_diff('second', MAX({freshness}), CURRENT_TIMESTAMP) "
                     "AS _freshness_seconds"
                 )
+            elif oracle:
+                parts.append(
+                    f"(CAST(SYSTIMESTAMP AS DATE) - CAST(MAX({freshness}) AS DATE)) * 86400 "
+                    'AS "_freshness_seconds"'
+                )
             else:
                 parts.append(
                     f"EXTRACT(EPOCH FROM NOW() - MAX({freshness})) AS _freshness_seconds"
@@ -289,7 +296,7 @@ class ProfilerService:
                     f"CAST(COUNT_IF({safe} IS NULL) AS DOUBLE) / NULLIF(COUNT(*), 0) "
                     f"AS {alias('null_rate')}"
                 )
-            elif mysql or sqlserver:
+            elif mysql or sqlserver or oracle:
                 parts.append(
                     f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) * 1.0 "
                     f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
@@ -299,7 +306,21 @@ class ProfilerService:
                     f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END)::FLOAT "
                     f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
                 )
-            # Distinct count — all types
+            oracle_type = col.data_type.upper().strip()
+            oracle_lob = oracle and oracle_type.startswith(
+                ("BLOB", "CLOB", "NCLOB", "BFILE", "LONG")
+            )
+            if oracle_lob:
+                if oracle_type.startswith(("BLOB", "CLOB", "NCLOB")):
+                    lob_length = f"DBMS_LOB.GETLENGTH({safe})"
+                    parts += [
+                        f"MIN({lob_length}) AS {alias('min_len')}",
+                        f"MAX({lob_length}) AS {alias('max_len')}",
+                        f"AVG({lob_length}) AS {alias('avg_len')}",
+                    ]
+                continue
+
+            # Distinct count — all supported scalar types
             parts.append(f"COUNT(DISTINCT {safe}) AS {alias('distinct_count')}")
             # Uniqueness ratio — 1.0 means all values unique, lower = many duplicates
             if sqlite:
@@ -332,7 +353,7 @@ class ProfilerService:
                     f"CAST(COUNT(DISTINCT {safe}) AS DOUBLE) / NULLIF(COUNT(*), 0) "
                     f"AS {alias('uniqueness_ratio')}"
                 )
-            elif mysql or sqlserver:
+            elif mysql or sqlserver or oracle:
                 parts.append(
                     f"COUNT(DISTINCT {safe}) * 1.0 / NULLIF(COUNT(*), 0) "
                     f"AS {alias('uniqueness_ratio')}"
@@ -433,6 +454,15 @@ class ProfilerService:
                         f"CAST(COUNT_IF({safe} < 0) AS DOUBLE) / NULLIF(COUNT({safe}), 0) "
                         f"AS {alias('negative_rate')}",
                     ]
+                elif oracle:
+                    parts += [
+                        f"AVG(CAST({safe} AS BINARY_DOUBLE)) AS {alias('mean')}",
+                        f"STDDEV_POP(CAST({safe} AS BINARY_DOUBLE)) AS {alias('stddev')}",
+                        f"SUM(CASE WHEN {safe} = 0 THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('zero_rate')}",
+                        f"SUM(CASE WHEN {safe} < 0 THEN 1 ELSE 0 END) * 1.0 "
+                        f"/ NULLIF(COUNT({safe}), 0) AS {alias('negative_rate')}",
+                    ]
                 else:
                     parts += [
                         f"AVG({safe}::FLOAT) AS {alias('mean')}",
@@ -498,6 +528,11 @@ class ProfilerService:
                         f"date_diff('second', MIN({safe}), MAX({safe})) "
                         f"AS {alias('range_seconds')}"
                     )
+                elif oracle:
+                    parts.append(
+                        f"(CAST(MAX({safe}) AS DATE) - CAST(MIN({safe}) AS DATE)) * 86400 "
+                        f"AS {alias('range_seconds')}"
+                    )
                 else:
                     parts.append(
                         f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) "
@@ -522,6 +557,8 @@ class ProfilerService:
                     text_value = f"CAST({safe} AS STRING)"
                 elif trino:
                     text_value = f"CAST({safe} AS VARCHAR)"
+                elif oracle:
+                    text_value = f"TO_CHAR({safe})"
                 else:
                     text_value = f"{safe}::TEXT"
                 length_value = (
@@ -571,6 +608,10 @@ class ProfilerService:
                         f"CAST(COUNT_IF({text_value} = '') AS DOUBLE) "
                         f"/ NULLIF(COUNT({safe}), 0) AS {alias('empty_rate')}"
                     )
+                elif oracle:
+                    # Oracle treats empty strings as NULL, so a distinct empty-rate
+                    # metric would be misleading and is intentionally omitted.
+                    pass
                 elif mysql or sqlserver:
                     parts.append(
                         f"SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END) * 1.0 "
