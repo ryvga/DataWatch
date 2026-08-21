@@ -141,13 +141,15 @@ class ProfilerService:
         """Quote a discovered identifier without treating it as SQL text."""
         if not identifier or "\x00" in identifier:
             raise ValueError("Database identifiers must be non-empty and contain no NUL bytes")
-        if dialect == "mysql":
+        if dialect in {"mysql", "bigquery"}:
             return f"`{identifier.replace('`', '``')}`"
         if dialect == "sqlserver":
             return f"[{identifier.replace(']', ']]')}]"
         return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
 
     def _qualified_table(self, schema: str, table: str, dialect: str = "postgres") -> str:
+        if dialect == "bigquery":
+            return self._quote_identifier(f"{schema}.{table}", dialect)
         return (
             f"{self._quote_identifier(schema, dialect)}."
             f"{self._quote_identifier(table, dialect)}"
@@ -168,12 +170,13 @@ class ProfilerService:
         Build a single SELECT with all aggregate metrics.
         Returns (query_string, metric_keys_in_order).
         """
-        if dialect not in {"postgres", "duckdb", "sqlite", "mysql", "sqlserver"}:
+        if dialect not in {"postgres", "duckdb", "sqlite", "mysql", "sqlserver", "bigquery"}:
             raise ValueError(f"Unsupported profiling dialect: {dialect}")
 
         sqlite = dialect == "sqlite"
         mysql = dialect == "mysql"
         sqlserver = dialect == "sqlserver"
+        bigquery = dialect == "bigquery"
         parts = [
             "COUNT(*) AS _row_count",
             # Duplicate rate: what fraction of rows are duplicates of at least one other row
@@ -198,6 +201,11 @@ class ProfilerService:
                     f"DATEDIFF_BIG(SECOND, MAX({freshness}), SYSUTCDATETIME()) "
                     "AS _freshness_seconds"
                 )
+            elif bigquery:
+                parts.append(
+                    f"TIMESTAMP_DIFF(CURRENT_TIMESTAMP(), MAX(TIMESTAMP({freshness})), SECOND) "
+                    "AS _freshness_seconds"
+                )
             else:
                 parts.append(
                     f"EXTRACT(EPOCH FROM NOW() - MAX({freshness})) AS _freshness_seconds"
@@ -216,6 +224,11 @@ class ProfilerService:
                     f"CAST(SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) AS REAL) "
                     f"/ NULLIF(COUNT(*), 0) AS {alias('null_rate')}"
                 )
+            elif bigquery:
+                parts.append(
+                    f"SAFE_DIVIDE(COUNTIF({safe} IS NULL), COUNT(*)) "
+                    f"AS {alias('null_rate')}"
+                )
             elif mysql or sqlserver:
                 parts.append(
                     f"SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END) * 1.0 "
@@ -232,6 +245,11 @@ class ProfilerService:
             if sqlite:
                 parts.append(
                     f"CAST(COUNT(DISTINCT {safe}) AS REAL) / NULLIF(COUNT(*), 0) "
+                    f"AS {alias('uniqueness_ratio')}"
+                )
+            elif bigquery:
+                parts.append(
+                    f"SAFE_DIVIDE(COUNT(DISTINCT {safe}), COUNT(*)) "
                     f"AS {alias('uniqueness_ratio')}"
                 )
             elif mysql or sqlserver:
@@ -282,6 +300,15 @@ class ProfilerService:
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
                         f"AS {alias('negative_rate')}",
                     ]
+                elif bigquery:
+                    parts += [
+                        f"AVG(CAST({safe} AS FLOAT64)) AS {alias('mean')}",
+                        f"STDDEV_POP(CAST({safe} AS FLOAT64)) AS {alias('stddev')}",
+                        f"SAFE_DIVIDE(COUNTIF({safe} = 0), COUNTIF({safe} IS NOT NULL)) "
+                        f"AS {alias('zero_rate')}",
+                        f"SAFE_DIVIDE(COUNTIF({safe} < 0), COUNTIF({safe} IS NOT NULL)) "
+                        f"AS {alias('negative_rate')}",
+                    ]
                 else:
                     parts += [
                         f"AVG({safe}::FLOAT) AS {alias('mean')}",
@@ -317,6 +344,11 @@ class ProfilerService:
                         f"DATEDIFF_BIG(SECOND, MIN({safe}), MAX({safe})) "
                         f"AS {alias('range_seconds')}"
                     )
+                elif bigquery:
+                    parts.append(
+                        f"TIMESTAMP_DIFF(MAX(TIMESTAMP({safe})), MIN(TIMESTAMP({safe})), SECOND) "
+                        f"AS {alias('range_seconds')}"
+                    )
                 else:
                     parts.append(
                         f"EXTRACT(EPOCH FROM MAX({safe}) - MIN({safe})) "
@@ -329,6 +361,8 @@ class ProfilerService:
                     text_value = f"CAST({safe} AS CHAR)"
                 elif sqlserver:
                     text_value = f"CAST({safe} AS NVARCHAR(MAX))"
+                elif bigquery:
+                    text_value = f"CAST({safe} AS STRING)"
                 else:
                     text_value = f"{safe}::TEXT"
                 length_value = (
@@ -347,6 +381,11 @@ class ProfilerService:
                     parts.append(
                         f"CAST(SUM(CASE WHEN {text_value} = '' THEN 1 ELSE 0 END) AS REAL) "
                         f"/ NULLIF(COUNT(*) - SUM(CASE WHEN {safe} IS NULL THEN 1 ELSE 0 END), 0) "
+                        f"AS {alias('empty_rate')}"
+                    )
+                elif bigquery:
+                    parts.append(
+                        f"SAFE_DIVIDE(COUNTIF({text_value} = ''), COUNTIF({safe} IS NOT NULL)) "
                         f"AS {alias('empty_rate')}"
                     )
                 elif mysql or sqlserver:
