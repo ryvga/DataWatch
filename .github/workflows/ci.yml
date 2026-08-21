@@ -95,6 +95,29 @@ jobs:
         working-directory: frontend
         run: npm audit --audit-level=high
 
+  warehouse-containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+      - name: Start practical warehouse services
+        run: docker compose -f docker-compose.test-dbs.yml up -d --wait test-clickhouse test-trino
+      - name: Run ClickHouse and Trino vertical conformance
+        env:
+          RUN_WAREHOUSE_CONTAINER_TESTS: '1'
+        run: python -m pytest -q backend/tests/test_warehouse_dialects.py -k container_vertical
+      - name: Capture warehouse service logs
+        if: failure()
+        run: docker compose -f docker-compose.test-dbs.yml logs --no-color test-clickhouse test-trino
+
   fullstack-browser:
     runs-on: ubuntu-latest
     steps:

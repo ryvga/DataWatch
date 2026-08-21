@@ -1,3 +1,5 @@
+import asyncio
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -251,3 +253,105 @@ async def test_trino_schema_and_table_are_bound_not_interpolated():
     assert '"event""id" bigint NOT NULL' in ddl
     with pytest.raises(ValueError, match="restricted"):
         await connector.get_table_ddl("other", "events")
+
+
+def _warehouse_container_lane_enabled() -> bool:
+    return os.environ.get("RUN_WAREHOUSE_CONTAINER_TESTS", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+@pytest.mark.asyncio
+async def test_clickhouse_container_vertical():
+    if not _warehouse_container_lane_enabled():
+        pytest.skip("set RUN_WAREHOUSE_CONTAINER_TESTS=1 for live warehouse conformance")
+    connector = ClickHouseConnector(
+        {
+            "host": "127.0.0.1",
+            "port": 8124,
+            "database": "analytics",
+            "username": "datawatch",
+            "password": "datawatch",
+        }
+    )
+    client = await connector._get_client()
+    try:
+        await client.command("DROP TABLE IF EXISTS analytics.events")
+        await client.command(
+            "CREATE TABLE analytics.events "
+            "(id Int64, amount Float64, status String, created_at DateTime) ENGINE = Memory"
+        )
+        await client.command(
+            "INSERT INTO analytics.events VALUES "
+            "(1, 10.5, 'ok', now()), (2, -1.0, '', now())"
+        )
+
+        assert await connector.test_connection() is True
+        schemas = await connector.discover_schemas()
+        profile = await ProfilerService().profile(
+            connector, "analytics", "events", "created_at"
+        )
+
+        assert any(table.name == "events" for table in schemas[0].tables)
+        assert profile.error is None
+        assert profile.row_count == 2
+        assert profile.column_metrics["amount"]["negative_rate"] == pytest.approx(0.5)
+    finally:
+        await client.command("DROP TABLE IF EXISTS analytics.events")
+        await connector.close()
+
+
+@pytest.mark.asyncio
+async def test_trino_container_vertical():
+    if not _warehouse_container_lane_enabled():
+        pytest.skip("set RUN_WAREHOUSE_CONTAINER_TESTS=1 for live warehouse conformance")
+    import trino
+
+    config = {
+        "host": "127.0.0.1",
+        "port": 8081,
+        "user": "datawatch",
+        "catalog": "memory",
+        "schema": "analytics",
+    }
+
+    def _seed():
+        conn = trino.dbapi.connect(**config)
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE SCHEMA IF NOT EXISTS memory.analytics")
+            cursor.execute("DROP TABLE IF EXISTS memory.analytics.events")
+            cursor.execute(
+                "CREATE TABLE memory.analytics.events "
+                "(id BIGINT, amount DOUBLE, status VARCHAR, created_at TIMESTAMP)"
+            )
+            cursor.execute(
+                "INSERT INTO memory.analytics.events VALUES "
+                "(1, 10.5, 'ok', CURRENT_TIMESTAMP), "
+                "(2, -1.0, '', CURRENT_TIMESTAMP)"
+            )
+        conn.close()
+
+    def _cleanup():
+        conn = trino.dbapi.connect(**config)
+        with conn.cursor() as cursor:
+            cursor.execute("DROP TABLE IF EXISTS memory.analytics.events")
+        conn.close()
+
+    await asyncio.to_thread(_seed)
+    connector = TrinoConnector(config)
+    try:
+        assert await connector.test_connection() is True
+        schemas = await connector.discover_schemas()
+        profile = await ProfilerService().profile(
+            connector, "analytics", "events", "created_at"
+        )
+
+        assert any(table.name == "events" for table in schemas[0].tables)
+        assert profile.error is None
+        assert profile.row_count == 2
+        assert profile.column_metrics["amount"]["negative_rate"] == pytest.approx(0.5)
+    finally:
+        await connector.close()
+        await asyncio.to_thread(_cleanup)
