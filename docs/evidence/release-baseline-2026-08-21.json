@@ -10,6 +10,15 @@
     "/api/v1/tables": {"p50_ms": 3.89, "p95_ms": 4.30, "min_ms": 3.63, "max_ms": 4.91},
     "/api/v1/incidents?limit=20": {"p50_ms": 3.49, "p95_ms": 3.91, "min_ms": 3.27, "max_ms": 4.27},
     "/orgs/me/health": {"p50_ms": 129.05, "p95_ms": 144.27, "min_ms": 88.05, "max_ms": 237.96},
-    "persisted_profile_runs": {"runs": 120, "p50_ms": 49.0, "p95_ms": 410.0, "min_ms": 20.0, "max_ms": 574.0}
+    "persisted_profile_runs": {"runs": 120, "p50_ms": 49.0, "p95_ms": 410.0, "min_ms": 20.0, "max_ms": 574.0},
+    "llm_pipeline_failure_fixture": {
+      "runs": 1,
+      "context_tokens_estimated": 409,
+      "wall_time_seconds": 183.32,
+      "model_pricing_tier": "configured :free model",
+      "provider_cost_usd": 0.0,
+      "pydantic_validation": "passed",
+      "jury_readiness": "passed"
+    }
   }
 }

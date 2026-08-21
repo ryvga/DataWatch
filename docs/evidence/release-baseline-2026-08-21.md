@@ -35,6 +35,18 @@ No warm-up samples were discarded. These measurements include local networking a
 | Compute organization health | 30 | 129.05 ms | 144.27 ms | 88.05 ms | 237.96 ms |
 | Persisted profile execution | 120 | 49 ms | 410 ms | 20 ms | 574 ms |
 
+### Real-provider LLM fixture
+
+The `pipeline_failure` fixture was executed once through the configured OpenRouter-compatible `:free` model after fixing the container path in `scripts/test_llm_prompt.py`.
+
+- Estimated input context: **409 tokens** (13.6% of the 3,000-token budget)
+- End-to-end command wall time: **183.32 seconds**
+- Provider charge for the configured free model: **$0.00**
+- Pydantic structured-output validation: **passed**
+- Automated jury-readiness checks: **passed**
+
+This single call is evidence of correctness and a warning about latency, not a latency distribution. The output offered useful high/medium/low hypotheses and actions, but also suggested a PostgreSQL replication query without evidence that replication was relevant; this supports retaining human review and confidence disclosure.
+
 ## Interpretation
 
 - CRUD/list endpoints remain below 5 ms at p95 in the seeded local environment.
@@ -51,9 +63,9 @@ No warm-up samples were discarded. These measurements include local networking a
 
 ## Limitations and next measurements
 
-- This run does not measure concurrency, sustained throughput, production network latency, LLM token/cost behavior, or detector precision/recall.
+- This run does not measure concurrency, sustained throughput, production network latency, an LLM latency distribution, or detector precision/recall.
 - The persisted profile sample combines several seeded tables; future studies must stratify by connector, row count, and schema width.
 - Production claims require a controlled 10k/100k/1m-row benchmark with repeated cold/warm runs and confidence intervals.
-- LLM and alert latency need a deterministic provider fixture plus a separate real-provider cost study with secrets and payloads excluded from artifacts.
+- LLM and alert latency need repeated runs across paid and free models, with provider-reported usage captured while secrets and sensitive payloads remain excluded from artifacts.
 
 The machine-readable observations are stored in `docs/evidence/release-baseline-2026-08-21.json`.
