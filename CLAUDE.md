@@ -13,10 +13,10 @@ DataWatch is a **multi-tenant data quality monitoring SaaS**. Its registry cover
 The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions.
 
 **Multi-tenancy model:**
-- Each customer gets a workspace at `{slug}.datawatch.io`
+- Each customer gets a workspace at `{slug}.panopta.app`
 - Login always requires `org_slug` (workspace identifier)
-- Main domain `datawatch.io` → landing page only
-- `admin.datawatch.io` (configurable) → staff portal (manage orgs, plans, LLM keys)
+- Main domain `panopta.app` → landing page only
+- `admin.panopta.app` (configurable) → staff portal (manage orgs, plans, LLM keys)
 
 ---
 
@@ -115,7 +115,7 @@ POST /tables → scheduler.add_job()
                     ↓ (if new incident)
              generate_llm_narration.delay(incident_id)
                     ↓
-             build_context() → Claude API → NarrationResult validated
+             build_context() → OpenAI-compatible provider → NarrationResult validated
                     ↓
              send_alerts.delay(incident_id)
                     ↓
@@ -219,9 +219,9 @@ Returns HTTP 402 with `{"error": "plan_limit_exceeded", "upgrade_url": ...}` on 
 | `FERNET_MASTER_KEY` | Credential encryption master key | ✅ |
 | `DATABASE_URL` | `postgresql+asyncpg://...` | ✅ |
 | `REDIS_URL` | `redis://...` | ✅ |
-| `BASE_DOMAIN` | Root domain (default: `datawatch.io`) | Optional |
+| `BASE_DOMAIN` | Root domain (default: `panopta.app`) | Optional |
 | `ADMIN_SUBDOMAIN` | Admin portal subdomain (default: `admin`) | Optional |
-| `STAFF_EMAIL` | Seed staff email (default: `admin@datawatch.io`) | Optional |
+| `STAFF_EMAIL` | Seed staff email (default: `admin@panopta.app`) | Optional |
 | `STAFF_PASSWORD` | Seed staff password — **set this to enable seeding** | Optional |
 | `STAFF_FULL_NAME` | Seed staff name | Optional |
 | `OPENROUTER_API_KEY` | Global LLM fallback key (per-org keys override via admin portal) | Optional |
@@ -404,13 +404,13 @@ When working on this project with Claude Code, these skills are relevant:
 ## Auth Architecture
 
 **Client login flow:**
-1. User visits `{slug}.datawatch.io` → Login page pre-fills workspace from hostname
+1. User visits `{slug}.panopta.app` → Login page pre-fills workspace from hostname
 2. POST `/auth/login` with `{email, password, org_slug}` → returns JWT + org_slug + user_role
 3. JWT carries `{sub: user_id, org_id, org_slug, type: "user"}`
 4. All protected routes validated via `get_current_org_from_jwt` dependency
 
 **Staff login flow:**
-1. Staff visits `admin.datawatch.io/login` → AdminLogin page
+1. Staff visits `admin.panopta.app/login` → AdminLogin page
 2. POST `/auth/staff/login` with `{email, password}` → returns staff JWT
 3. JWT carries `{sub: staff_id, email, type: "staff"}`
 4. Admin routes validated via `get_current_staff` dependency
@@ -422,7 +422,7 @@ When working on this project with Claude Code, these skills are relevant:
 The project is in **MVP SaaS state**. Completed milestones:
 
 1. **Subdomain-first multi-tenancy** — `localhost` = landing, `slug.localhost` = workspace, `admin.localhost` = admin (env-configured subdomain, never guessable)
-2. **Capability-aware connector registry and safe DSL foundation** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and `datawatch.io/v1alpha1` provides strict validation, immutable revisions with separate edit/active pointers, schema-bound compiled previews, attestations, internal read-only execution, deterministic policy evaluation, and an idempotent ordered run state machine while scheduling, incident integration, and activation remain gated
+2. **Capability-aware connector registry and safe DSL runtime** — 13 adapters are visible with separate capabilities; PostgreSQL is stable, DuckDB/SQLite profile paths are exercised, and the stable `datawatch.io/v1alpha1` protocol namespace provides strict validation, immutable revisions, schema-bound previews, attestations, activation, scheduled/manual execution, policy evaluation, run persistence, and a typed incident bridge for supported runtimes
 3. **7 anomaly detection methods** — Z-Score, Isolation Forest, STL Seasonal, Cardinality Drop, Row Growth Rate, Rule-Based, **Enum/Category Drift** (new)
 4. **Staff admin portal** — org management, plan control, per-org LLM key (set by staff only), staff CRUD
 5. **Reports system** — weekly reliability report, per-incident report, health score (0–100 weighted)
@@ -442,11 +442,11 @@ The project is in **MVP SaaS state**. Completed milestones:
 8. `backend/venv/bin/python scripts/quickstart.py --reset --local`
 9. **Workspace**: `http://acme-corp.localhost:5173` → `mounir@acme.io` / `demo1234`
 10. **Landing**: `http://localhost:5173`
-11. **Admin**: `http://admin.localhost:5173` → `admin@datawatch.io` / `admin1234`
+11. **Admin**: `http://admin.localhost:5173` → `admin@panopta.app` / `admin1234`
 12. Tests: `cd backend && pytest tests/test_anomaly.py tests/test_llm.py -v`
 
 **What's next:**
-- Complete typed-DSL activation, scheduling, and monitor-specific incident bridge
+- Extend typed-DSL execution and conformance beyond PostgreSQL, DuckDB, and SQLite
 - Replace the remaining assignment-notification task stub
 - Finish production conformance for experimental and planned connectors
 - Webhook alert channel and production verification for MS Teams

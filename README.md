@@ -1,4 +1,4 @@
-# DataWatch
+# Panopta (DataWatch engine)
 
 Data quality monitoring platform with LLM-powered incident narration.
 
@@ -20,7 +20,7 @@ Monitors your warehouse tables, detects anomalies (z-score, Isolation Forest, ST
        │ Celery tasks             │ SQLAlchemy async
 ┌──────▼──────────┐    ┌──────────▼──────────┐
 │  Celery Worker  │    │  PostgreSQL 16       │
-│  profile_table  │    │  9 tables, indexes   │
+│  profile_table  │    │  20 tables, indexes  │
 │  anomaly_checks │    └─────────────────────┘
 │  llm_narration  │
 │  send_alerts    │    ┌─────────────────────┐
@@ -182,6 +182,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 | POST | `/auth/register` | — | Create org + user, returns API key |
 | POST | `/auth/login` | — | Returns JWT token |
 | GET | `/health` | — | DB + Redis + scheduler status |
+| GET | `/ready` | — | HTTP 503 until DB and Redis can serve requests |
 | GET | `/api/v1/sources` | JWT | List data sources |
 | POST | `/api/v1/sources` | JWT | Register new source |
 | POST | `/api/v1/sources/{id}/test` | JWT | Test connection |
@@ -198,6 +199,10 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## Railway Deploy
 
+`railway.toml` deploys the API and worker services. Deploy the frontend as a
+separate service from `frontend/Dockerfile`; see `docs/deployment.md` for the
+complete service and environment-variable setup.
+
 ```bash
 # Install Railway CLI
 npm install -g @railway/cli && railway login
@@ -207,7 +212,7 @@ railway init
 
 # Add plugins: Postgres + Redis via Railway dashboard
 
-# Deploy
+# Deploy the configured backend services
 railway up
 
 # Set env vars
@@ -225,6 +230,9 @@ railway run alembic upgrade head
 | Rule-Based | row_count=0, freshness breach, schema drift, null spike >20pp | 0 |
 | Isolation Forest | multivariate anomaly score < -0.1 | 21 profiles |
 | STL Seasonal | row_count residual > 3σ of historical residuals | 21 daily profiles |
+| Cardinality Drop | distinct ratio drops by more than 30% from baseline | 7 profiles |
+| Row Growth Rate | row-count delta deviates from the rolling baseline | 7 profiles |
+| Enum / Category Drift | new or disappearing categorical values | 3 profiles |
 
 ## Incident Severity
 
