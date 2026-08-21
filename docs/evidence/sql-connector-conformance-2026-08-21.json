@@ -31,7 +31,15 @@
     "focused_contracts": "99 passed, 1 live SQL Server test deselected",
     "mysql_mariadb_live": "2 passed",
     "sqlserver_live": "1 passed",
-    "ruff": "passed"
+    "ruff": "passed",
+    "hosted_ci": {
+      "head_commit": "320966c127d7fabb2de6ba4769586701151cf198",
+      "run_url": "https://github.com/ryvga/DataWatch/actions/runs/32483412747",
+      "backend": "294 passed, 0 skipped; Python 3.12.14; required connector services",
+      "quality": "Ruff passed; scoped mypy passed",
+      "frontend": "production build and high-severity dependency audit passed",
+      "browser": "3 deterministic seeded Playwright flows passed"
+    }
   },
   "claim_boundary": "Tiny warm regression baseline only; not throughput, scale, cold-start, WAN, production TLS, or SLA evidence."
 }

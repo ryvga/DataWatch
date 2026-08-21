@@ -39,8 +39,10 @@ execution rather than silently substituting a different metric.
 | SQL Server 2022 + ODBC Driver 18 real-driver vertical | 1 passed |
 | Ruff on application, tests, and benchmark harness | Passed |
 
-The required hosted CI result is recorded separately after the commit is pushed, because
-this document must not predict a green run.
+Hosted CI [run 32483412747](https://github.com/ryvga/DataWatch/actions/runs/32483412747)
+passed at head `320966c`: **294 backend tests, 0 skipped** on Python 3.12.14 with all
+required connector services, Ruff, scoped mypy, frontend build/audit, and all three
+deterministic seeded Playwright flows.
 
 ## Timing method
 
