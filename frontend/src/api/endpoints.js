@@ -93,6 +93,10 @@ export const retryAutopilot = (tableId) => api.post(`/api/v1/tables/${tableId}/r
 // Safe Monitor DSL
 export const getSafeMonitors = (assetId) => api.get(`/api/v2/assets/${assetId}/monitors`)
 export const getSafeMonitorRuns = (monitorId) => api.get(`/api/v2/monitors/${monitorId}/runs`)
+export const validateSafeMonitorDefinition = (definition) => api.post('/api/v2/monitors/validate', definition)
+export const previewSafeMonitorDefinition = (definition) => api.post('/api/v2/monitors/preview', definition)
+export const createSafeMonitorDraft = (assetId, definition) => api.post(`/api/v2/assets/${assetId}/monitors`, definition)
+export const activateSafeMonitor = (monitorId, data) => api.post(`/api/v2/monitors/${monitorId}/activate`, data)
 export const runSafeMonitorNow = (monitorId, clientIdempotencyKey) => api.post(
   `/api/v2/monitors/${monitorId}/run`,
   { clientIdempotencyKey },

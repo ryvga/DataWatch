@@ -1689,6 +1689,7 @@ const SAFE_RUN_STYLES = {
 }
 
 function SafeMonitorRunsPanel({ tableId }) {
+  const nav = useNavigate()
   const [monitors, setMonitors] = useState([])
   const [runsByMonitor, setRunsByMonitor] = useState({})
   const [loading, setLoading] = useState(true)
@@ -1708,7 +1709,8 @@ function SafeMonitorRunsPanel({ tableId }) {
       setRunsByMonitor(Object.fromEntries(runEntries))
       setError('')
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Safe monitor runtime is temporarily unavailable.')
+      const detail = err?.response?.data?.detail
+      setError(typeof detail === 'string' ? detail : detail?.message || 'Safe monitor runtime is temporarily unavailable.')
     } finally {
       if (!quiet) setLoading(false)
     }
@@ -1743,9 +1745,54 @@ function SafeMonitorRunsPanel({ tableId }) {
     }
   }
 
-  if (loading && monitors.length === 0) return null
-  if (error && monitors.length === 0) return null
-  if (monitors.length === 0) return null
+  if (loading && monitors.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="size-4 text-primary" />
+            Safe monitor runtime
+          </CardTitle>
+        </CardHeader>
+        <CardContent><p className="text-sm text-muted-foreground">Loading typed DSL monitors…</p></CardContent>
+      </Card>
+    )
+  }
+  if (error && monitors.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="size-4 text-primary" />
+            Safe monitor runtime
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">{error}</p>
+          <Button type="button" variant="outline" className="w-fit" onClick={() => nav(`/monitors?table=${tableId}`)}>Open DSL monitor setup</Button>
+        </CardContent>
+      </Card>
+    )
+  }
+  if (monitors.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <ShieldCheck className="size-4 text-primary" />
+            Safe monitor runtime
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-medium">No typed DSL monitors on this table</p>
+            <p className="mt-1 text-sm text-muted-foreground">Create a schema-bound monitor from the Monitors control plane, then its revision, run state, and incidents will appear here.</p>
+          </div>
+          <Button type="button" variant="outline" className="w-fit" onClick={() => nav(`/monitors?table=${tableId}`)}>Create DSL monitor</Button>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <Card>

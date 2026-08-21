@@ -1,18 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Activity, Code2, Database, FileCode2, Loader2, Play, RefreshCw, ShieldCheck, Table2 } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Activity, CheckCircle2, Code2, Database, FileCode2, Loader2, Play, RefreshCw, ShieldCheck, Table2, XCircle } from 'lucide-react'
 import {
+  activateSafeMonitor,
+  createSafeMonitorDraft,
   getAllCustomMonitors,
   getSafeMonitorRuns,
   getSafeMonitors,
   getTables,
+  previewSafeMonitorDefinition,
   runSafeMonitorNow,
 } from '../api/endpoints'
 import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatDateTime } from '../components/app-ui'
 import { notify } from '@/lib/notify'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 
 const FILTERS = [
   { value: 'all', label: 'All monitors' },
@@ -39,6 +48,328 @@ function tableLabel(table) {
 
 function statusLabel(value) {
   return String(value || 'unknown').replaceAll('_', ' ')
+}
+
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 63)
+}
+
+function parseLiteral(value) {
+  const text = String(value ?? '').trim()
+  if (text === '') return ''
+  if (text === 'true') return true
+  if (text === 'false') return false
+  if (text === 'null') return null
+  if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text)
+  return text
+}
+
+const INITIAL_DSL_FORM = {
+  tableId: '',
+  name: '',
+  kind: 'row_count',
+  breachOperator: 'gt',
+  threshold: '0',
+  field: '',
+  predicateOperator: 'is_null',
+  predicateValue: '',
+  output: 'rate',
+  severity: 'P2',
+  consecutiveBreaches: '1',
+  recoveryPasses: '1',
+}
+
+function BuildDslDefinition({ form }) {
+  const metadataName = slugify(form.name)
+  const threshold = parseLiteral(form.threshold)
+  const isRowCount = form.kind === 'row_count'
+  const measurementId = isRowCount ? 'rows' : 'violations'
+  const breachRef = isRowCount ? 'rows' : `violations.${form.output}`
+  const predicate = ['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative'].includes(form.predicateOperator)
+    ? { op: form.predicateOperator, value: { field: form.field.trim() } }
+    : {
+      op: form.predicateOperator,
+      left: { field: form.field.trim() },
+      right: { literal: parseLiteral(form.predicateValue) },
+    }
+
+  return {
+    apiVersion: 'datawatch.io/v1alpha1',
+    kind: 'Monitor',
+    metadata: { name: metadataName },
+    spec: {
+      target: { assetId: form.tableId },
+      trigger: { type: 'on_profile' },
+      measurements: [isRowCount
+        ? { id: measurementId, type: 'metric', metric: 'row_count' }
+        : { id: measurementId, type: 'violations', violationWhen: predicate, output: [form.output] }],
+      breachWhen: {
+        op: form.breachOperator,
+        left: { ref: breachRef },
+        right: { literal: threshold },
+      },
+      policy: {
+        severity: form.severity,
+        consecutiveBreaches: Number(form.consecutiveBreaches) || 1,
+        recoveryPasses: Number(form.recoveryPasses) || 1,
+        cooldownMinutes: 60,
+        notifyOnExecutionError: true,
+      },
+      execution: { timeoutSeconds: 30, sampling: { mode: 'auto' } },
+    },
+  }
+}
+
+function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreated }) {
+  const [form, setForm] = useState({ ...INITIAL_DSL_FORM, tableId: initialTableId || '' })
+  const [preview, setPreview] = useState(null)
+  const [definition, setDefinition] = useState(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setForm((current) => ({ ...current, tableId: current.tableId || initialTableId || tables[0]?.id || '' }))
+  }, [initialTableId, open, tables])
+
+  const set = (key) => (event) => {
+    const value = event?.target ? event.target.value : event
+    setForm((current) => ({ ...current, [key]: value }))
+    setPreview(null)
+    setError('')
+  }
+
+  const validateForm = () => {
+    if (!form.tableId) return 'Choose a monitored table.'
+    if (!slugify(form.name)) return 'Add a name using lowercase letters, numbers, or hyphens.'
+    if (!form.threshold.trim() || !Number.isFinite(Number(form.threshold))) return 'Enter a numeric breach threshold.'
+    if (form.kind === 'violations' && !form.field.trim()) return 'Choose the column this rule should inspect.'
+    if (form.kind === 'violations' && !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative'].includes(form.predicateOperator) && !form.predicateValue.trim()) {
+      return 'Enter the value the column should be compared with.'
+    }
+    return ''
+  }
+
+  const previewDefinition = async () => {
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+    const nextDefinition = BuildDslDefinition({ form })
+    setBusy('preview')
+    setError('')
+    try {
+      const response = await previewSafeMonitorDefinition(nextDefinition)
+      setDefinition(nextDefinition)
+      setPreview(response.data)
+    } catch (err) {
+      setPreview(null)
+      setError(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Definition validation failed.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const createAndActivate = async () => {
+    if (!preview || !definition) return
+    setBusy('create')
+    setError('')
+    try {
+      const draftResponse = await createSafeMonitorDraft(form.tableId, definition)
+      const draft = draftResponse.data
+      const attestation = preview.preview?.attestation
+      const activationSupported = preview.capabilityPlan?.activationSupported
+      if (attestation && activationSupported) {
+        await activateSafeMonitor(draft.id, {
+          expectedRevision: draft.currentRevision,
+          previewAttestation: attestation,
+        })
+        notify.ok('Typed DSL monitor activated', definition.metadata.name)
+      } else {
+        notify.ok('Typed DSL draft created', `${definition.metadata.name} needs activation review`)
+      }
+      onCreated?.()
+      onOpenChange(false)
+    } catch (err) {
+      setError(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Could not create the DSL monitor.')
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const close = (nextOpen) => {
+    if (!nextOpen) {
+      setPreview(null)
+      setDefinition(null)
+      setError('')
+      setBusy('')
+      setForm({ ...INITIAL_DSL_FORM, tableId: initialTableId || tables[0]?.id || '' })
+    }
+    onOpenChange(nextOpen)
+  }
+
+  const capabilityPlan = preview?.capabilityPlan
+  const predicateValueOperators = !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative'].includes(form.predicateOperator)
+
+  return (
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto p-0 sm:max-w-3xl">
+        <DialogHeader className="border-b px-6 py-5">
+          <DialogTitle>New typed DSL monitor</DialogTitle>
+          <DialogDescription>Build a schema-bound monitor, preview its connector plan, then activate the immutable revision.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-5 px-6 py-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="dsl-target">Monitored table</Label>
+              <Select value={form.tableId} onValueChange={set('tableId')}>
+                <SelectTrigger id="dsl-target" className="w-full"><SelectValue placeholder="Choose a table" /></SelectTrigger>
+                <SelectContent>
+                  {tables.map((table) => <SelectItem key={table.id} value={table.id}>{table.schema_name}.{table.table_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dsl-name">Monitor name</Label>
+              <Input id="dsl-name" value={form.name} onChange={set('name')} placeholder="orders-row-count" />
+              <p className="text-xs text-muted-foreground">Stored as: {slugify(form.name) || 'lowercase-kebab-name'}</p>
+            </div>
+            <div className="grid gap-2">
+              <Label>Rule type</Label>
+              <Select value={form.kind} onValueChange={set('kind')}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="row_count">Row count metric</SelectItem>
+                  <SelectItem value="violations">Column violations</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {form.kind === 'row_count' ? (
+            <div className="grid gap-4 rounded-md border bg-muted/20 p-4 sm:grid-cols-[1fr_1fr]">
+              <div className="grid gap-2">
+                <Label>Breach when row count is</Label>
+                <Select value={form.breachOperator} onValueChange={set('breachOperator')}>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gt">greater than</SelectItem>
+                    <SelectItem value="gte">at least</SelectItem>
+                    <SelectItem value="lt">less than</SelectItem>
+                    <SelectItem value="lte">at most</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="dsl-threshold">Row count threshold</Label>
+                <Input id="dsl-threshold" type="number" min="0" step="1" value={form.threshold} onChange={set('threshold')} />
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-4 rounded-md border bg-muted/20 p-4">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="dsl-field">Column</Label>
+                  <Input id="dsl-field" value={form.field} onChange={set('field')} placeholder="payment_status" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Column rule</Label>
+                  <Select value={form.predicateOperator} onValueChange={set('predicateOperator')}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="is_null">is null</SelectItem>
+                      <SelectItem value="is_not_null">is not null</SelectItem>
+                      <SelectItem value="eq">equals</SelectItem>
+                      <SelectItem value="ne">does not equal</SelectItem>
+                      <SelectItem value="gt">greater than</SelectItem>
+                      <SelectItem value="gte">at least</SelectItem>
+                      <SelectItem value="lt">less than</SelectItem>
+                      <SelectItem value="lte">at most</SelectItem>
+                      <SelectItem value="contains">contains</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {predicateValueOperators && (
+                <div className="grid gap-2 sm:max-w-sm">
+                  <Label htmlFor="dsl-predicate-value">Expected value</Label>
+                  <Input id="dsl-predicate-value" value={form.predicateValue} onChange={set('predicateValue')} placeholder="paid or 0" />
+                </div>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Count or rate</Label>
+                  <Select value={form.output} onValueChange={set('output')}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rate">Violation rate (0–1)</SelectItem>
+                      <SelectItem value="count">Violation count</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="dsl-violation-threshold">Breach threshold</Label>
+                  <Input id="dsl-violation-threshold" type="number" min="0" step="0.01" value={form.threshold} onChange={set('threshold')} placeholder={form.output === 'rate' ? '0.01' : '1'} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-2">
+              <Label>Severity</Label>
+              <Select value={form.severity} onValueChange={set('severity')}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="P1">P1 — Critical</SelectItem><SelectItem value="P2">P2 — High</SelectItem><SelectItem value="P3">P3 — Medium</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dsl-breaches">Consecutive breaches</Label>
+              <Input id="dsl-breaches" type="number" min="1" max="20" value={form.consecutiveBreaches} onChange={set('consecutiveBreaches')} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dsl-recovery">Recovery passes</Label>
+              <Input id="dsl-recovery" type="number" min="1" max="20" value={form.recoveryPasses} onChange={set('recoveryPasses')} />
+            </div>
+          </div>
+
+          {error && <Alert variant="destructive"><XCircle className="size-4" /><AlertDescription>{String(error)}</AlertDescription></Alert>}
+          {preview && (
+            <div className="grid gap-3 rounded-md border bg-muted/20 p-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {capabilityPlan?.activationSupported ? <CheckCircle2 className="size-4 text-emerald-600" /> : <XCircle className="size-4 text-amber-600" />}
+                {capabilityPlan?.activationSupported ? 'Preview compiled and ready to activate' : 'Preview valid, but activation is gated'}
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span>{preview.stats?.measurements || 0} measurement(s)</span>
+                <span>·</span>
+                <span>{preview.definitionHash?.slice(0, 12)}…</span>
+                {capabilityPlan?.sourceType && <><span>·</span><span>{capabilityPlan.sourceType}</span></>}
+              </div>
+              {!capabilityPlan?.activationSupported && capabilityPlan?.activationBlockers?.length > 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">Activation blockers: {capabilityPlan.activationBlockers.join(', ')}</p>
+              )}
+              <Textarea readOnly value={JSON.stringify(definition, null, 2)} className="min-h-36 font-mono text-xs" aria-label="DSL definition preview" />
+            </div>
+          )}
+        </div>
+        <DialogFooter className="border-t px-6 py-4">
+          <Button type="button" variant="outline" onClick={() => close(false)}>Cancel</Button>
+          {!preview ? (
+            <Button type="button" onClick={previewDefinition} disabled={busy !== ''}>{busy === 'preview' && <Loader2 className="size-3.5 animate-spin" />}Validate & preview</Button>
+          ) : (
+            <Button type="button" onClick={createAndActivate} disabled={busy !== ''}>{busy === 'create' && <Loader2 className="size-3.5 animate-spin" />}{capabilityPlan?.activationSupported ? 'Create & activate' : 'Create draft'}</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 function SummaryItem({ icon: Icon, label, value, detail }) {
@@ -130,6 +461,7 @@ function MonitorCard({ monitor, onOpenTable, onRun, running }) {
 
 export default function Monitors() {
   const nav = useNavigate()
+  const [searchParams] = useSearchParams()
   const [tables, setTables] = useState([])
   const [monitors, setMonitors] = useState([])
   const [filter, setFilter] = useState('all')
@@ -137,6 +469,7 @@ export default function Monitors() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [running, setRunning] = useState({})
+  const [builderOpen, setBuilderOpen] = useState(false)
 
   const load = async ({ quiet = false } = {}) => {
     if (quiet) setRefreshing(true)
@@ -196,6 +529,10 @@ export default function Monitors() {
     load()
   }, [])
 
+  useEffect(() => {
+    if (searchParams.get('table') && tables.length > 0) setBuilderOpen(true)
+  }, [searchParams, tables.length])
+
   const visibleMonitors = useMemo(
     () => monitors.filter((monitor) => filter === 'all' || monitor.kind === filter),
     [filter, monitors],
@@ -227,10 +564,16 @@ export default function Monitors() {
         title="Monitors"
         description="Typed DSL monitors and legacy SQL checks across every monitored table."
         actions={(
-          <Button variant="outline" size="sm" onClick={() => load({ quiet: true })} disabled={refreshing}>
-            {refreshing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-            Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setBuilderOpen(true)} disabled={tables.length === 0}>
+              <ShieldCheck className="size-3.5" />
+              New DSL monitor
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => load({ quiet: true })} disabled={refreshing}>
+              {refreshing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+              Refresh
+            </Button>
+          </div>
         )}
       />
 
@@ -250,7 +593,7 @@ export default function Monitors() {
             <div>
               <p className="text-sm font-medium">Typed DSL runtime</p>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                DSL monitors are schema-bound, revisioned, and run safely on supported connectors. Create or preview their definitions through the v1alpha1 monitor API; this page is the workspace inventory and run control surface.
+                DSL monitors are schema-bound, revisioned, and run safely on supported connectors. Build and preview definitions here; this page is the workspace inventory, activation, and run control surface.
               </p>
             </div>
           </div>
@@ -272,7 +615,7 @@ export default function Monitors() {
           icon={filter === 'dsl' ? ShieldCheck : Code2}
           title={filter === 'dsl' ? 'No typed DSL monitors yet' : filter === 'legacy' ? 'No legacy SQL monitors' : 'No monitors yet'}
           description={filter === 'dsl'
-            ? 'Use the v1alpha1 monitor API to validate and create a schema-bound definition. Once active, it will appear here and on its table detail page.'
+            ? 'Use New DSL monitor to validate and create a schema-bound definition. Once active, it will appear here and on its table detail page.'
             : 'Create a monitor from a table detail page to start checking data quality.'}
           action={filter === 'dsl' ? <Button variant="outline" onClick={() => nav('/help')}>Open DSL guide</Button> : <Button onClick={() => nav('/tables')}>Open tables</Button>}
         />
@@ -289,6 +632,13 @@ export default function Monitors() {
           ))}
         </div>
       )}
+      <DslBuilderDialog
+        open={builderOpen}
+        onOpenChange={setBuilderOpen}
+        tables={tables}
+        initialTableId={searchParams.get('table') || ''}
+        onCreated={() => load({ quiet: true })}
+      />
     </div>
   )
 }
