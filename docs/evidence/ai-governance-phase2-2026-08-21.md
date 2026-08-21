@@ -44,6 +44,10 @@ compliance, model fairness, or a production SLA. `unknown`, stale, unavailable, 
 
 ## Verification snapshot
 
+- Hosted CI for commit `86f88a2` passed all required lanes:
+  [`DataWatch CI #32503556957`](https://github.com/ryvga/DataWatch/actions/runs/32503556957)
+  (backend 3m57s, browser 3m19s, warehouse 1m39s, frontend 24s; managed
+  warehouse credentials and the large Oracle lane remained explicitly gated).
 - Full backend regression: 368 passed, 4 optional service skips in 24.67 seconds.
 - Focused governance and Oracle regression: 20 passed, 1 credential-gated Oracle skip.
 - CI-equivalent Ruff and the scoped governance/monitor mypy boundary passed.
