@@ -44,15 +44,15 @@ connector is not described as fully supported merely because it can connect.
 | SQLite | Beta | Connect, discover, native schema binding, typed freshness validation, core profile, restricted legacy SQL, verified typed-plan execution, safe DSL activation/scheduling/manual runs/incident bridge | Hosted SaaS file-path boundary, native stddev/percentiles pending |
 | MySQL | Experimental | Connect, discover, native schema binding, typed freshness validation, core scheduled profile, and parameter-bound typed monitors in a database read-only transaction; verified TLS by default; MySQL 8.4 is a required CI service | Percentiles and an API-to-worker persisted live vertical remain pending |
 | MariaDB | Experimental | First-class catalogue entry using the MySQL-family adapter; the same core profile and read-only typed-monitor contract is required against MariaDB 11.4 LTS in CI | Percentiles and an API-to-worker persisted live vertical remain pending |
-| Redshift | Experimental | Connect, discover, schema | Scheduled profile conformance pending |
-| BigQuery | Experimental | Connect, discover, schema | Async/cost-bounded profile planner pending |
-| ClickHouse | Experimental | Connect, discover, schema | Scheduled profile dialect pending |
-| Databricks | Experimental | Connect, discover, schema | Scheduled profile dialect pending |
-| Trino / Presto | Experimental | Connect, discover, schema | Auth and profile conformance pending |
+| Redshift | Experimental | Connect, optionally scoped discovery, safely quoted schema, native core profile, driver-keyword connection fields | Managed-service smoke is credential-gated; production read-only/query-cost evidence remains a promotion gate |
+| BigQuery | Experimental | Async connection/discovery/schema/core profile; dry-run estimate before execution, `maximum_bytes_billed`, timeout cancellation, optional dataset scope | Managed-service smoke is credential-gated; nested RECORD profiling and measured billed-byte evidence remain pending |
+| ClickHouse | Experimental | Configured-database discovery, safely quoted schema, native core profile under read-only/max-execution settings; real ClickHouse container vertical | Verified TLS and controlled scale/cost evidence remain promotion gates |
+| Databricks | Experimental | Async-offloaded connection/discovery/schema/core profile with bound catalog/schema/table filters | Managed-service smoke is credential-gated; explicit query cancellation and cost evidence remain pending |
+| Trino / Presto | Experimental | Async-offloaded scoped discovery/schema, bound filters, native core profile; real Trino memory-catalog container vertical | Production TLS/auth/catalog combinations and controlled federated-query cost remain pending |
 | SQL Server / Azure SQL | Experimental | Connect, discover, native schema binding, typed freshness validation, core scheduled profile, and parameter-bound typed monitors restricted to a read-only principal; CI packages ODBC Driver 18 and requires a SQL Server 2022 container lane | A trusted-certificate live TLS lane, API-to-worker persisted vertical, and percentile metrics remain pending |
 | MongoDB | Experimental | Connect, discover, inferred schema, byte/document/field-bounded native profile, indexed scalar-date freshness, and immutable typed aggregation monitors with mandatory document ceilings; verified TLS and explicit provenance | Trusted-certificate live TLS, repeated-sample drift confirmation, controlled scale, and the remaining unsupported document metrics/predicates are promotion gates |
 | Cassandra | Experimental | Connect, scoped discovery, deterministic partition metadata, and immutable manual typed monitors using exact partition bindings, prepared statements, mandatory row ceilings, and the shared incident/recovery path; Cassandra 5 is a required CI service; verified TLS is the default | Scheduled profiling, live trusted-certificate TLS, Cassandra 4 compatibility, controlled scale, and secure Astra bundle support remain pending |
-| Snowflake | Planned | Registry metadata only | Connector is a 501 stub |
+| Snowflake | Experimental | Official thin client path, scoped discovery, deterministic schema, native core profile, async SDK boundary, login/network/socket/statement timeouts, query tag and cleanup | Managed-service smoke is credential-gated; key-pair/SSO auth and measured credit consumption remain pending |
 | Redis | Experimental | Connect, bounded keyspace discovery/profile, and immutable typed monitors over key type, TTL, memory, Hash, and Streams metadata; configured pattern is fingerprint-bound, incomplete scans fail closed, stored values/key names are not returned, and Redis 7 plus incident recovery are required CI proofs | Live trusted-certificate TLS, Redis 8 compatibility, concurrent-mutation characterization, and controlled scale remain pending |
 | Oracle | Planned | Not yet registered as a source | Thin-driver connection/discovery/schema/profile vertical pending |
 
@@ -66,6 +66,9 @@ PFE-ready limitation boundary are in
 The consolidated MongoDB/Cassandra/Redis security, lifecycle, hosted-run chronology, and
 report-chapter mapping are in
 [`docs/evidence/nosql-monitor-conformance-2026-08-21.md`](docs/evidence/nosql-monitor-conformance-2026-08-21.md).
+The generated capability contract and warehouse provider limitations are in
+[`docs/evidence/connector-capabilities.generated.json`](docs/evidence/connector-capabilities.generated.json)
+and [`docs/evidence/warehouse-conformance-2026-08-21.md`](docs/evidence/warehouse-conformance-2026-08-21.md).
 
 `GET /api/v1/sources/connector-types` returns this readiness plus machine-readable
 capabilities. Legacy custom SQL is a restricted, transitional escape hatch: definitions

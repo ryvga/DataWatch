@@ -240,7 +240,8 @@ Run live connection test.
 { "connected": true, "latency_ms": 42, "error": null }
 ```
 
-Errors: `501` for Snowflake stub.
+Managed warehouse connection failures return a secret-safe unsuccessful test result;
+only an adapter that still raises `NotImplementedError` maps to `501`.
 
 ---
 
@@ -676,5 +677,5 @@ All errors follow this structure:
 | 402 | Payment required (plan limit exceeded) |
 | 404 | Not found (also used for access-denied — no info leak) |
 | 409 | Conflict (duplicate slug, already acknowledged, etc.) |
-| 501 | Not implemented (Snowflake stub) |
+| 501 | Connector path explicitly not implemented |
 | 502 | Bad gateway (alert delivery failed) |

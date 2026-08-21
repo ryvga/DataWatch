@@ -17,12 +17,17 @@ describe only paths backed by executable evidence.
 | Document | MongoDB | Tier-1 document source | Experimental bounded sampled profile plus immutable typed aggregation monitors; required real Mongo lane and incident recovery vertical | Add trusted-certificate live TLS, repeated-sample drift confirmation, scale evidence, filter/distinct/string-pattern semantics |
 | Wide-column | Cassandra | Partition-scoped source | Experimental scoped discovery/schema plus manual immutable monitors with complete partition bindings, prepared statements, a hard row ceiling, required Cassandra 5 lane, and incident recovery proof | Add scheduled native profiling, trusted-certificate TLS, Cassandra 4 compatibility, controlled scale, and Astra bundles |
 | Key/value and streams | Redis | TTL/stream health source | Experimental bounded native profile plus immutable metadata-only monitor plans; configured pattern fingerprint, key ceiling, Redis 7 real lane, mutation/ACL failures, and incident recovery are proven | Add trusted-certificate TLS, Redis 8 compatibility, concurrent-mutation characterization, and controlled scale |
-| Cloud warehouse | Snowflake | Proprietary warehouse | Planned 501 stub | Official driver with bounded login/network/statement timeouts, discovery/schema, native core dialect, secret-backed nightly conformance |
-| Open-source warehouse | ClickHouse | Networked open-source warehouse | Experimental discovery/schema shell | Verified TLS, query budgets, ClickHouse core profiler, container-backed persisted profile test |
+| Cloud warehouse | BigQuery | Serverless warehouse | Experimental async/scoped/core profile with dry-run estimate, maximum billed bytes, timeout cancellation, and mocked driver conformance | Run secret-backed smoke with billed-byte evidence; add nested RECORD metrics and persisted API/worker proof |
+| Cloud warehouse | Snowflake | Proprietary warehouse | Experimental official-driver connection, scoped discovery/schema, core profile, thread boundary, login/network/socket/statement timeouts, query tag, and mocked cleanup/error conformance | Run secret-backed smoke with measured credits; add key-pair/SSO auth and persisted API/worker proof |
+| Cloud warehouse | Redshift | Managed PostgreSQL-compatible warehouse | Experimental optionally scoped discovery/schema and native core profile; DSN fields are driver kwargs | Run secret-backed profile smoke and prove read-only/statement-cost envelope against RA3/serverless |
+| Open-source warehouse | ClickHouse | Networked open-source warehouse | Experimental configured-database discovery, safe schema, read-only/time-bounded native core profile, and required real-container vertical | Add verified TLS, controlled scale/cost evidence, and persisted API/worker proof |
+| Lakehouse warehouse | Databricks SQL | Managed lakehouse | Experimental async-offloaded discovery/schema/core profile with bound catalogue filters | Run secret-backed SQL Warehouse smoke; add cancellation/cost controls and persisted API/worker proof |
+| Federated query engine | Trino / Presto | Multi-catalog query engine | Experimental scoped/bound discovery/schema, native core profile, and required real Trino memory-catalog vertical | Add TLS/auth/catalog matrix, federated cost policy, and persisted API/worker proof |
 | Embedded analytics | DuckDB | Managed local analytical file | Beta/full | Move blocking calls off the event loop and enforce the same hosted file boundary as SQLite |
 
-ClickHouse is the primary open-source server warehouse paired with Snowflake. DuckDB is
-kept as an embedded analytical engine, and Trino remains a federated query-engine category.
+ClickHouse and Trino have reproducible real-engine lanes. BigQuery, Snowflake, Redshift,
+and Databricks use deterministic fake-driver tests plus explicit secret-backed smoke steps;
+those managed smokes do not claim execution when repository credentials are absent.
 
 ## Readiness gates
 
@@ -50,10 +55,11 @@ A connector cannot move beyond experimental until all applicable gates pass:
 1. Add API/worker persistence and trusted-certificate lanes to the completed
    connector-level MySQL/MariaDB/SQLite/SQL Server conformance slice.
 2. Repair the PostgreSQL reference safety envelope found by the catalogue audit.
-3. Complete ClickHouse as the open-source warehouse vertical.
+3. Add persisted API/worker and production-grade TLS/cost proofs to the completed
+   connector-level warehouse planners and real ClickHouse/Trino lanes.
 4. Extend the completed Redis metadata-monitor slice with trusted TLS, Redis 8 and
    controlled mutation/scale evidence.
-5. Implement Snowflake, then Oracle, as full driver-to-persisted-profile verticals.
+5. Implement Oracle as the next driver-to-persisted-profile vertical.
 6. Extend Cassandra from the completed manual partition-monitor slice to scheduled native
    profiling, then harden hosted DuckDB/SQLite file access.
 

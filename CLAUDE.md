@@ -8,7 +8,7 @@
 
 ## What This Project Is
 
-DataWatch is a **multi-tenant data quality monitoring SaaS**. Its registry covers PostgreSQL, MySQL, MongoDB, Cassandra, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Databricks, Trino, DuckDB, and SQLite, but support is capability-based: PostgreSQL is stable, DuckDB and SQLite have tested profiling paths, and the remaining adapters are experimental or planned until their profile contracts pass. Redis source monitoring is planned. The app detects anomalies, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
+DataWatch is a **multi-tenant data quality monitoring SaaS**. Its registry covers PostgreSQL, MySQL/MariaDB, MongoDB, Cassandra, Redis, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Databricks, Trino, DuckDB, and SQLite. Support is capability-based and generated from executable connector contracts: PostgreSQL is stable; DuckDB/SQLite are beta; the remaining implemented adapters are experimental; Oracle is planned. The app detects anomalies, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
 
 The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions.
 
