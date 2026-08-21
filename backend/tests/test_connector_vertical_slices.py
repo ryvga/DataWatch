@@ -2,6 +2,7 @@ import os
 import sqlite3
 import ssl
 import sys
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +15,45 @@ from app.connectors.mysql import MySQLConnector
 from app.connectors.sqlite import SQLiteConnector
 from app.connectors.sqlserver import SQLServerConnector
 from app.services.profiler import ProfilerService
+from app.services.monitor_compiler import compile_relational_plan
+from app.services.monitor_dsl import MonitorDefinition
+from app.services.monitor_runtime import execute_compiled_plan
+from app.services.schema_binding import build_relation_binding
+
+
+def _row_count_plan(source_type: str, schema: str, table: str, ddl: str):
+    asset_id = uuid.uuid4()
+    definition = MonitorDefinition.model_validate(
+        {
+            "apiVersion": "datawatch.io/v1alpha1",
+            "kind": "Monitor",
+            "metadata": {"name": "row-count-positive"},
+            "spec": {
+                "target": {"assetId": str(asset_id)},
+                "measurements": [
+                    {"id": "rows", "type": "metric", "metric": "row_count"}
+                ],
+                "breachWhen": {
+                    "op": "lte",
+                    "left": {"ref": "rows"},
+                    "right": {"literal": 0},
+                },
+                "execution": {
+                    "timeoutSeconds": 10,
+                    "maxBytesScanned": 1_000_000_000,
+                },
+            },
+        }
+    )
+    relation = build_relation_binding(
+        asset_id=asset_id,
+        source_type=source_type,
+        schema_name=schema,
+        table_name=table,
+        ddl=ddl,
+        latest_schema_fingerprint=None,
+    )
+    return compile_relational_plan(definition, relation=relation)
 
 
 @pytest.mark.asyncio
@@ -57,7 +97,6 @@ async def test_duckdb_discover_and_profile_vertical_slice(tmp_path):
         assert result.column_metrics["order total"]["mean"] == pytest.approx(15)
         assert result.column_metrics["status"]["empty_rate"] == pytest.approx(1 / 2)
         assert result.freshness_seconds is not None
-
         monitor_result = await connector.execute_monitor_query(
             "SELECT COUNT(*) AS violations FROM main.orders WHERE amount IS NULL",
             timeout_seconds=2,
@@ -111,7 +150,6 @@ async def test_sqlite_discover_and_profile_vertical_slice(tmp_path):
         assert "stddev" not in result.column_metrics["amount"]
         assert result.column_metrics["status"]["empty_rate"] == pytest.approx(1 / 2)
         assert result.freshness_seconds is not None
-
         snapshot, column_names = await connector.get_table_schema("main", "events")
         assert snapshot.startswith('CREATE TABLE "events"')
         assert column_names == {"id", "amount", "status", "order total", "created_at"}
@@ -404,6 +442,16 @@ async def test_mysql_family_container_connection_discovery_schema_and_profile(
         assert result.column_metrics["amount"]["mean"] == pytest.approx(6.25)
         assert result.column_metrics["status"]["empty_rate"] == pytest.approx(1 / 2)
         assert result.freshness_seconds is not None
+        mysql_measurements = await execute_compiled_plan(
+            connector,
+            _row_count_plan(
+                source_type,
+                "datawatch_connector_test",
+                "orders",
+                ddl,
+            ),
+        )
+        assert mysql_measurements == {"rows": 3}
     finally:
         await connector.close()
 
@@ -425,6 +473,123 @@ def test_sqlserver_dsn_escapes_values_and_enforces_verified_tls():
     assert "DATABASE={analytics}};PWD=hijack}" in dsn
     assert "PWD={secret}};TrustServerCertificate=yes}" in dsn
     assert dsn.endswith(";Encrypt=yes;TrustServerCertificate=no")
+    assert "Encrypt=no" in SQLServerConnector(
+        {
+            "host": "isolated-test-db",
+            "database": "analytics",
+            "username": "monitor",
+            "password": "test",
+            "tls_mode": "disabled",
+        }
+    )._connection_string()
+
+
+@pytest.mark.asyncio
+async def test_sqlserver_container_connection_discovery_schema_profile_and_monitor():
+    if os.environ.get("RUN_SQLSERVER_CONTAINER_TESTS", "").lower() not in {
+        "1",
+        "true",
+        "yes",
+    }:
+        pytest.skip("set RUN_SQLSERVER_CONTAINER_TESTS=1 for the SQL Server lane")
+
+    import aioodbc
+
+    host = os.environ.get("SQLSERVER_TEST_HOST", "127.0.0.1")
+    port = int(os.environ.get("SQLSERVER_TEST_PORT", "1434"))
+    password = "DataWatch-Test-2026!"
+    bootstrap = SQLServerConnector(
+        {
+            "host": host,
+            "port": port,
+            "database": "master",
+            "username": "sa",
+            "password": password,
+            "tls_mode": "disabled",
+        }
+    )
+    conn = await aioodbc.connect(
+        dsn=bootstrap._connection_string(), autocommit=True, timeout=20
+    )
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "IF DB_ID('datawatch_connector_test') IS NULL "
+                "CREATE DATABASE datawatch_connector_test"
+            )
+            await cur.execute(
+                "IF SUSER_ID('datawatch_monitor') IS NULL "
+                "CREATE LOGIN datawatch_monitor WITH PASSWORD = 'DataWatch-Monitor-2026!'"
+            )
+    finally:
+        await conn.close()
+
+    target_bootstrap = SQLServerConnector(
+        {
+            "host": host,
+            "port": port,
+            "database": "datawatch_connector_test",
+            "username": "sa",
+            "password": password,
+            "tls_mode": "disabled",
+        }
+    )
+    conn = await aioodbc.connect(
+        dsn=target_bootstrap._connection_string(), autocommit=True, timeout=20
+    )
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "IF USER_ID('datawatch_monitor') IS NULL "
+                "CREATE USER datawatch_monitor FOR LOGIN datawatch_monitor"
+            )
+            await cur.execute(
+                "IF IS_ROLEMEMBER('db_datareader', 'datawatch_monitor') <> 1 "
+                "ALTER ROLE db_datareader ADD MEMBER datawatch_monitor"
+            )
+            await cur.execute(
+                "IF OBJECT_ID('dbo.orders', 'U') IS NULL "
+                "CREATE TABLE dbo.orders (id INT NOT NULL, amount DECIMAL(12,2) NULL, "
+                "status NVARCHAR(32) NULL, created_at DATETIME2 NULL)"
+            )
+            await cur.execute("DELETE FROM dbo.orders")
+            await cur.execute(
+                "INSERT INTO dbo.orders VALUES "
+                "(1, 12.50, 'paid', '2026-07-19T10:00:00'), "
+                "(2, 0.00, '', '2026-07-19T11:00:00'), "
+                "(3, NULL, NULL, '2026-07-19T12:00:00')"
+            )
+    finally:
+        await conn.close()
+
+    connector = SQLServerConnector(
+        {
+            "host": host,
+            "port": port,
+            "database": "datawatch_connector_test",
+            "username": "datawatch_monitor",
+            "password": "DataWatch-Monitor-2026!",
+            "tls_mode": "disabled",
+        }
+    )
+    try:
+        assert await connector.test_connection()
+        schemas = await connector.discover_schemas()
+        dbo = next(schema for schema in schemas if schema.name == "dbo")
+        assert any(table.name == "orders" for table in dbo.tables)
+        ddl = await connector.get_table_ddl("dbo", "orders")
+        result = await ProfilerService().profile(
+            connector, "dbo", "orders", freshness_column="created_at"
+        )
+        assert result.error is None
+        assert result.row_count == 3
+        measurements = await execute_compiled_plan(
+            connector,
+            _row_count_plan("sqlserver", "dbo", "orders", ddl),
+        )
+        assert measurements == {"rows": 3}
+    finally:
+        await connector.close()
 
 
 def test_sqlserver_declares_tested_core_profile_dialect():

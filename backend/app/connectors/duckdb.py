@@ -21,6 +21,7 @@ class DuckDBConnector(BaseConnector):
     """
 
     profile_dialect = "duckdb"
+    monitor_dialect = "duckdb"
 
     def __init__(self, config: dict):
         self._config = config

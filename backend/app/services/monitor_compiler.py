@@ -23,6 +23,9 @@ SOURCE_DIALECTS = {
     "postgres": "postgres",
     "duckdb": "duckdb",
     "sqlite": "sqlite",
+    "mysql": "mysql",
+    "mariadb": "mysql",
+    "sqlserver": "tsql",
 }
 
 _NUMERIC_TYPES = {LogicalType.INTEGER, LogicalType.NUMBER}

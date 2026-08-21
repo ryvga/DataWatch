@@ -121,7 +121,9 @@ CONNECTOR_REGISTRY = {
         "label": "MySQL",
         "description": "MySQL 5.7+",
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core"),
+        "capabilities": _capabilities(
+            profiling="core", compiled_monitors="internal_read_only"
+        ),
     },
     "mariadb": {
         "module": "app.connectors.mysql",
@@ -136,7 +138,9 @@ CONNECTOR_REGISTRY = {
         "label": "MariaDB",
         "description": "MariaDB 10.11+ / 11.4 LTS",
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core"),
+        "capabilities": _capabilities(
+            profiling="core", compiled_monitors="internal_read_only"
+        ),
     },
     "redshift": {
         "module": "app.connectors.redshift",
@@ -265,12 +269,18 @@ CONNECTOR_REGISTRY = {
         "module": "app.connectors.sqlserver",
         "class": "SQLServerConnector",
         "required": ["host", "database", "username", "password"],
-        "optional": {"port": 1433, "driver": "ODBC Driver 18 for SQL Server"},
+        "optional": {
+            "port": 1433,
+            "driver": "ODBC Driver 18 for SQL Server",
+            "tls_mode": "verify_identity",
+        },
         "label": "SQL Server",
         "description": "Microsoft SQL Server / Azure SQL",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core"),
+        "capabilities": _capabilities(
+            profiling="core", compiled_monitors="internal_read_only"
+        ),
     },
 }
 

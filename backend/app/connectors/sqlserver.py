@@ -1,9 +1,14 @@
+import asyncio
+import inspect
 import logging
+import re
+from contextlib import suppress
 from typing import Any
 
 from app.connectors.base import (
     BaseConnector,
     ConnectorConfigurationError,
+    ScanBudgetExceeded,
     SchemaInfo,
     TableInfo,
 )
@@ -31,6 +36,7 @@ class SQLServerConnector(BaseConnector):
     """Async Microsoft SQL Server connector via aioodbc."""
 
     profile_dialect = "sqlserver"
+    monitor_dialect = "tsql"
 
     def __init__(self, config: dict):
         self._config = config
@@ -53,6 +59,9 @@ class SQLServerConnector(BaseConnector):
         database = c["database"]
         username = c.get("username") or c.get("user", "")
         password = c.get("password", "")
+        tls_mode = str(c.get("tls_mode", "verify_identity")).lower()
+        if tls_mode not in {"verify_identity", "disabled"}:
+            raise ValueError("tls_mode must be 'verify_identity' or 'disabled'")
         server = f"{host},{port}"
         return ";".join(
             (
@@ -61,7 +70,7 @@ class SQLServerConnector(BaseConnector):
                 f"DATABASE={self._odbc_value(database)}",
                 f"UID={self._odbc_value(username)}",
                 f"PWD={self._odbc_value(password)}",
-                "Encrypt=yes",
+                "Encrypt=yes" if tls_mode == "verify_identity" else "Encrypt=no",
                 "TrustServerCertificate=no",
             )
         )
@@ -143,6 +152,105 @@ class SQLServerConnector(BaseConnector):
             await cur.execute(query)
             row = await cur.fetchone()
             return self._row_to_dict(cur, row)
+
+    @staticmethod
+    def _bind_compiled_parameters(statement: str, parameters: dict) -> tuple[str, tuple]:
+        values = []
+
+        def replace(match):
+            values.append(parameters[match.group(1)])
+            return "?"
+
+        bound = re.sub(r":(p\d+)\b", replace, statement)
+        return bound, tuple(values)
+
+    async def _cancel_cursor(self, cursor) -> None:
+        cancelled = cursor.cancel()
+        if inspect.isawaitable(cancelled):
+            await cancelled
+
+    async def execute_compiled_monitor(
+        self,
+        statement: str,
+        parameters: dict,
+        *,
+        timeout_seconds: int = 30,
+    ) -> dict:
+        """Execute only when the current principal has no target write permission."""
+        from sqlglot import exp, parse_one
+
+        parsed = parse_one(statement, dialect="tsql")
+        relation = parsed.find(exp.Table)
+        if relation is None:
+            raise ValueError("Compiled monitor relation is missing")
+        qualified = f"{relation.db}.{relation.name}"
+        bound, values = self._bind_compiled_parameters(statement, parameters)
+        conn = await self._get_conn()
+        cursor = conn.cursor()
+        cur = await cursor.__aenter__()
+
+        async def run_query() -> dict:
+            try:
+                await cur.execute(
+                    "SELECT permission_name FROM fn_my_permissions(?, 'OBJECT') "
+                    "WHERE permission_name IN "
+                    "('ALTER','CONTROL','DELETE','INSERT','TAKE OWNERSHIP','UPDATE')",
+                    (qualified,),
+                )
+                if await cur.fetchone() is not None:
+                    raise PermissionError(
+                        "Compiled monitors require a read-only SQL Server principal"
+                    )
+                await cur.execute("BEGIN TRANSACTION")
+                await cur.execute(f"SET LOCK_TIMEOUT {timeout_seconds * 1000}")
+                await cur.execute(bound, values)
+                rows = await cur.fetchmany(2)
+                if len(rows) != 1:
+                    raise ValueError("Compiled monitor must return exactly one row")
+                return self._row_to_dict(cur, rows[0])
+            finally:
+                try:
+                    await cur.execute("IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION")
+                finally:
+                    await cursor.__aexit__(None, None, None)
+
+        task = asyncio.create_task(run_query())
+        done, _ = await asyncio.wait({task}, timeout=timeout_seconds)
+        if not done:
+            await self._cancel_cursor(cur)
+            task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await task
+            # A cancelled ODBC statement can leave session state ambiguous.
+            # Discard the connection instead of returning it to later work.
+            await self.close()
+            raise TimeoutError
+        return task.result()
+
+    async def enforce_monitor_scan_budget(
+        self,
+        schema: str,
+        table: str,
+        max_bytes_scanned: int,
+    ) -> None:
+        """Bound scans by allocated table and index pages."""
+        conn = await self._get_conn()
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT COALESCE(SUM(a.total_pages), 0) * 8192 "
+                "FROM sys.tables AS t "
+                "JOIN sys.schemas AS s ON s.schema_id = t.schema_id "
+                "JOIN sys.indexes AS i ON i.object_id = t.object_id "
+                "JOIN sys.partitions AS p ON p.object_id = i.object_id "
+                "AND p.index_id = i.index_id "
+                "JOIN sys.allocation_units AS a ON a.container_id = CASE "
+                "WHEN a.type IN (1, 3) THEN p.hobt_id ELSE p.partition_id END "
+                "WHERE s.name = ? AND t.name = ?",
+                (schema, table),
+            )
+            row = await cur.fetchone()
+        if not row or int(row[0]) > max_bytes_scanned:
+            raise ScanBudgetExceeded
 
     @staticmethod
     def _format_data_type(row) -> str:

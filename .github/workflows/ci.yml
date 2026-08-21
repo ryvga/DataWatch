@@ -45,7 +45,13 @@ jobs:
             backend/requirements.txt
             backend/requirements-dev.txt
       - name: Install backend dependencies
-        run: python -m pip install -r backend/requirements-dev.txt
+        run: |
+          python -m pip install -r backend/requirements-dev.txt
+          curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+          source /etc/os-release
+          curl -fsSL "https://packages.microsoft.com/config/ubuntu/${VERSION_ID}/prod.list" | sudo tee /etc/apt/sources.list.d/mssql-release.list >/dev/null
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev
       - name: Lint backend
         working-directory: backend
         run: ruff check app tests
@@ -57,7 +63,7 @@ jobs:
           PGPASSWORD: datawatch
         run: psql -h 127.0.0.1 -p 5433 -U datawatch -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE datawatch_test;'
       - name: Start connector matrix services
-        run: docker compose -f docker-compose.test-dbs.yml up -d --wait test-mysql test-mariadb test-mongo
+        run: docker compose -f docker-compose.test-dbs.yml up -d --wait test-mysql test-mariadb test-mongo test-sqlserver
       - name: Run backend suite without silent integration skips
         env:
           DATABASE_URL: postgresql+asyncpg://datawatch:datawatch@127.0.0.1:5433/datawatch_test
@@ -67,6 +73,7 @@ jobs:
           SECRET_KEY: ci-secret-key-xxxxxxxxxxxxxxxxxxxxxxxx
           FERNET_MASTER_KEY: dGVzdC1mZXJuZXQta2V5LXBhZGRlZC10by0zMmJ5dGVzISE=
           ENVIRONMENT: test
+          RUN_SQLSERVER_CONTAINER_TESTS: '1'
         run: python -m pytest -q backend/tests
 
   frontend:

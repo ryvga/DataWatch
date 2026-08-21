@@ -33,6 +33,7 @@ class BaseConnector(ABC):
     # connect, discover assets, and execute a scalar query without supporting
     # the aggregate SQL emitted by ProfilerService.
     profile_dialect: str | None = None
+    monitor_dialect: str | None = None
     native_profile_kind: str | None = None
 
     @abstractmethod

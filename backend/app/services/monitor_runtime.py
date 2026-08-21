@@ -51,7 +51,10 @@ def _validate_execution_plan(
     plan: RelationalMonitorPlan,
 ) -> None:
     """Re-check the execution envelope independently from compilation."""
-    if connector.profile_dialect != plan.dialect:
+    connector_dialect = getattr(connector, "monitor_dialect", None) or getattr(
+        connector, "profile_dialect", None
+    )
+    if connector_dialect != plan.dialect:
         raise MonitorExecutionError(
             "connector_plan_mismatch",
             "Compiled monitor dialect does not match the connector",

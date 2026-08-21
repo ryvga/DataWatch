@@ -23,6 +23,7 @@ class SQLiteConnector(BaseConnector):
     """
 
     profile_dialect = "sqlite"
+    monitor_dialect = "sqlite"
 
     def __init__(self, config: dict):
         self._path = config.get("path", ":memory:")

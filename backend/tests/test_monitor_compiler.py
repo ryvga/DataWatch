@@ -105,6 +105,8 @@ def test_postgres_plan_quotes_identifiers_and_parameterizes_hostile_literals():
         ("postgres", "%(p0)s", '"analytics"."orders"'),
         ("duckdb", "$p0", '"analytics"."orders"'),
         ("sqlite", ":p0", '"analytics"."orders"'),
+        ("mysql", ":p0", "`analytics`.`orders`"),
+        ("sqlserver", ":p0", "[analytics].[orders]"),
     ],
 )
 def test_relational_compiler_has_deterministic_dialect_snapshots(

@@ -1,9 +1,12 @@
+import asyncio
 import logging
+import re
 import ssl
 
 from app.connectors.base import (
     BaseConnector,
     ConnectorConfigurationError,
+    ScanBudgetExceeded,
     SchemaInfo,
     TableInfo,
 )
@@ -17,6 +20,7 @@ class MySQLConnector(BaseConnector):
     """Async MySQL/MariaDB connector via aiomysql."""
 
     profile_dialect = "mysql"
+    monitor_dialect = "mysql"
 
     def __init__(self, config: dict):
         self._config = config
@@ -103,6 +107,68 @@ class MySQLConnector(BaseConnector):
                 await cur.execute(query)
                 row = await cur.fetchone()
                 return dict(row) if row else {}
+
+    @staticmethod
+    def _bind_compiled_parameters(statement: str, parameters: dict) -> tuple[str, tuple]:
+        values = []
+
+        def replace(match):
+            values.append(parameters[match.group(1)])
+            return "%s"
+
+        bound = re.sub(r":(p\d+)\b", replace, statement)
+        return bound, tuple(values)
+
+    async def execute_compiled_monitor(
+        self,
+        statement: str,
+        parameters: dict,
+        *,
+        timeout_seconds: int = 30,
+    ) -> dict:
+        """Execute one compiled aggregate in a database read-only transaction."""
+        import aiomysql
+
+        pool = await self._get_pool()
+        bound, values = self._bind_compiled_parameters(statement, parameters)
+        async with pool.acquire() as conn:
+            async def run_query() -> dict:
+                try:
+                    async with conn.cursor(aiomysql.DictCursor) as cur:
+                        await cur.execute("START TRANSACTION READ ONLY")
+                        await cur.execute(bound, values)
+                        rows = await cur.fetchmany(2)
+                        if len(rows) != 1:
+                            raise ValueError("Compiled monitor must return exactly one row")
+                        return dict(rows[0])
+                finally:
+                    await conn.rollback()
+
+            try:
+                return await asyncio.wait_for(run_query(), timeout=timeout_seconds)
+            except TimeoutError:
+                conn.close()
+                raise
+
+    async def enforce_monitor_scan_budget(
+        self,
+        schema: str,
+        table: str,
+        max_bytes_scanned: int,
+    ) -> None:
+        """Bound scans by MySQL/MariaDB table plus index storage."""
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT COALESCE(data_length, 0) + COALESCE(index_length, 0) "
+                    "FROM information_schema.tables "
+                    "WHERE table_schema = %s AND table_name = %s",
+                    (schema, table),
+                )
+                row = await cur.fetchone()
+        if not row or int(row[0]) > max_bytes_scanned:
+            raise ScanBudgetExceeded
 
     async def _get_columns(self, schema: str, table: str) -> list[tuple]:
         cache_key = (schema, table)

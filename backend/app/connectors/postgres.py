@@ -17,6 +17,7 @@ class PostgresConnector(BaseConnector):
     """
 
     profile_dialect = "postgres"
+    monitor_dialect = "postgres"
 
     def __init__(self, config: dict):
         self._config = config
