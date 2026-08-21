@@ -77,14 +77,16 @@ import HealthBadge from '../components/HealthBadge'
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const TEAM_COLORS = [
-  { value: '#3b82f6', label: 'Blue' },
+  { value: '#737373', label: 'Graphite' },
   { value: '#10b981', label: 'Green' },
   { value: '#f59e0b', label: 'Amber' },
   { value: '#ef4444', label: 'Red' },
   { value: '#8b5cf6', label: 'Purple' },
-  { value: '#06b6d4', label: 'Cyan' },
+  { value: '#78716c', label: 'Stone' },
   { value: '#f43f5e', label: 'Rose' },
 ]
+
+const LEGACY_COOL_TEAM_COLORS = new Set(['#3b82f6', '#06b6d4'])
 
 // ── Helper components ──────────────────────────────────────────────────────
 
@@ -93,7 +95,7 @@ function TeamColorDot({ color, size = 'size-3' }) {
   return (
     <span
       className={cn('inline-block rounded-full shrink-0', size)}
-      style={{ background: color }}
+      style={{ background: LEGACY_COOL_TEAM_COLORS.has(color.toLowerCase()) ? 'hsl(var(--muted-foreground))' : color }}
     />
   )
 }
