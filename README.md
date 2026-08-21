@@ -60,6 +60,9 @@ The provider-by-provider completion gates and delivery order are maintained in
 [`docs/connector-catalogue.md`](docs/connector-catalogue.md).
 The reproducible MySQL/MariaDB/SQLite/SQL Server conformance and tiny-table timing record
 is in [`docs/evidence/sql-connector-conformance-2026-08-21.md`](docs/evidence/sql-connector-conformance-2026-08-21.md).
+The Cassandra prepared-partition contract, hosted proof, incident recovery result, and
+PFE-ready limitation boundary are in
+[`docs/evidence/cassandra-partition-monitor-conformance-2026-08-21.md`](docs/evidence/cassandra-partition-monitor-conformance-2026-08-21.md).
 
 `GET /api/v1/sources/connector-types` returns this readiness plus machine-readable
 capabilities. Legacy custom SQL is a restricted, transitional escape hatch: definitions
