@@ -50,7 +50,8 @@ side effects. It advances explicit healthy/breached policy state using consecuti
 recovery-pass, and cooldown rules and returns a stable decision payload. Missing outputs,
 wrong types, non-finite values, unsupported output operators, corrupt prior state, and
 naive timestamps fail closed. Successful and error decisions can now be finalized
-atomically with persisted policy state, but incidents remain disconnected.
+atomically with persisted policy state, and breach/recovery actions bridge into the
+existing typed `monitor_dsl` incident service.
 
 The schema-bound subset includes row/null/distinct metrics; numeric min/max/mean/sum;
 PostgreSQL/DuckDB stddev; timestamp/date freshness; typed equality and ordered

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, AlertTriangle, Bell, CheckCircle2, Code2, Edit3, Info, Loader2, Play, PlusCircle, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, Wand2 } from 'lucide-react'
-import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, updateTable, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck, retryAutopilot, getAlerts, getAlertChannels, createAlert, deleteAlert, testAlert } from '../api/endpoints'
+import { getIncidents, getSources, getTable, getTableCheckResults, getTableProfiles, nlRule, recommendMonitors, runTable, getCustomMonitors, createCustomMonitor, updateCustomMonitor, updateTable, deleteCustomMonitor, runCustomMonitorNow, runCustomCheck, retryAutopilot, getAlerts, getAlertChannels, createAlert, deleteAlert, testAlert, getSafeMonitors, getSafeMonitorRuns, runSafeMonitorNow } from '../api/endpoints'
 import { toast } from 'sonner'
 import HealthBadge from '../components/HealthBadge'
 import MetricChart from '../components/MetricChart'
@@ -1656,6 +1656,113 @@ function StatCard({ label, value, detail, trend }) {
   )
 }
 
+const SAFE_RUN_STYLES = {
+  passed: 'border-emerald-600/25 bg-emerald-600/10 text-emerald-700 dark:text-emerald-300',
+  failed: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
+  error: 'border-red-600/25 bg-red-600/10 text-red-700 dark:text-red-300',
+  queued: 'border-blue-600/25 bg-blue-600/10 text-blue-700 dark:text-blue-300',
+  running: 'border-blue-600/25 bg-blue-600/10 text-blue-700 dark:text-blue-300',
+  cancelled: 'border-stone-500/25 bg-stone-500/10 text-stone-700 dark:text-stone-300',
+}
+
+function SafeMonitorRunsPanel({ tableId }) {
+  const [monitors, setMonitors] = useState([])
+  const [runsByMonitor, setRunsByMonitor] = useState({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [running, setRunning] = useState({})
+
+  const load = async (quiet = false) => {
+    if (!quiet) setLoading(true)
+    try {
+      const monitorResponse = await getSafeMonitors(tableId)
+      const nextMonitors = monitorResponse.data || []
+      const runEntries = await Promise.all(nextMonitors.map(async (monitor) => {
+        const response = await getSafeMonitorRuns(monitor.id)
+        return [monitor.id, response.data || []]
+      }))
+      setMonitors(nextMonitors)
+      setRunsByMonitor(Object.fromEntries(runEntries))
+      setError('')
+    } catch (err) {
+      setError(err?.response?.data?.detail || 'Safe monitor runtime is temporarily unavailable.')
+    } finally {
+      if (!quiet) setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    const firstLoad = async () => {
+      if (cancelled) return
+      await load()
+    }
+    firstLoad()
+    const timer = setInterval(() => {
+      if (!cancelled) load(true)
+    }, 15000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [tableId])
+
+  const runNow = async (monitor) => {
+    setRunning((current) => ({ ...current, [monitor.id]: true }))
+    try {
+      await runSafeMonitorNow(monitor.id, `table-detail-${monitor.id}-${Date.now()}`)
+      notify.ok('Safe monitor queued', monitor.name)
+      await load(true)
+    } catch (err) {
+      notify.err(err?.response?.data?.detail?.message || err?.response?.data?.detail || 'Unable to queue safe monitor')
+    } finally {
+      setRunning((current) => ({ ...current, [monitor.id]: false }))
+    }
+  }
+
+  if (loading && monitors.length === 0) return null
+  if (error && monitors.length === 0) return null
+  if (monitors.length === 0) return null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ShieldCheck className="size-4 text-primary" />
+          Safe monitor runtime
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {error && <p className="rounded-md border border-amber-600/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">{error}</p>}
+        {monitors.map((monitor) => {
+          const latest = (runsByMonitor[monitor.id] || [])[0]
+          const status = latest?.status || (monitor.status === 'active' ? 'not_run' : monitor.status)
+          return (
+            <div key={monitor.id} className="rounded-md border bg-muted/10 px-3 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium">{monitor.name}</span>
+                <Badge variant="outline">{monitor.activeRevisionId ? 'active revision' : 'draft'}</Badge>
+                <Badge variant="outline" className={SAFE_RUN_STYLES[status] || ''}>{status.replaceAll('_', ' ')}</Badge>
+                {monitor.status === 'active' && (
+                  <Button size="sm" variant="outline" className="ml-auto" onClick={() => runNow(monitor)} disabled={running[monitor.id]}>
+                    {running[monitor.id] ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5 mr-1" />}
+                    Run now
+                  </Button>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {latest
+                  ? `${latest.result?.transition || latest.errorCode || 'completed'} · ${formatDateTime(latest.completedAt || latest.queuedAt)}`
+                  : monitor.status === 'active' ? 'Waiting for the first profile or manual run.' : 'Preview and activate this revision to execute it.'}
+              </p>
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function TableDetail() {
   const { id } = useParams()
   const nav = useNavigate()
@@ -1913,6 +2020,8 @@ export default function TableDetail() {
         onMonitorSaved={() => setCustomMonitorsRefreshKey((key) => key + 1)}
         onRefreshTable={loadData}
       />
+
+      <SafeMonitorRunsPanel tableId={id} />
 
       <BuiltinMonitorsPanel table={table} onSave={loadData} />
 

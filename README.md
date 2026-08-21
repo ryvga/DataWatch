@@ -39,9 +39,9 @@ connector is not described as fully supported merely because it can connect.
 
 | Source | Readiness | Current application path | Current limit |
 |---|---|---|---|
-| PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, restricted legacy SQL, internal typed-plan execution | DSL scheduling/incident bridge pending |
-| DuckDB | Beta | Connect, discover, schema, full profile, restricted legacy SQL, verified internal typed-plan execution | Local/in-process deployment model; DSL activation pending |
-| SQLite | Beta | Connect, discover, native schema binding, typed freshness validation, core profile, restricted legacy SQL, verified internal typed-plan execution | Hosted SaaS file-path boundary, native stddev/percentiles, and DSL activation pending |
+| PostgreSQL / Aurora | Stable | Connect, discover, schema, full profile, restricted legacy SQL, typed-plan execution, safe DSL activation/scheduling/manual runs/incident bridge | Additional warehouse conformance and richer DSL templates pending |
+| DuckDB | Beta | Connect, discover, schema, full profile, restricted legacy SQL, verified typed-plan execution, safe DSL activation/scheduling/manual runs/incident bridge | Local/in-process deployment model; hosted file-path boundary pending |
+| SQLite | Beta | Connect, discover, native schema binding, typed freshness validation, core profile, restricted legacy SQL, verified typed-plan execution, safe DSL activation/scheduling/manual runs/incident bridge | Hosted SaaS file-path boundary, native stddev/percentiles pending |
 | MySQL | Experimental | Connect, discover, native schema binding, typed freshness validation, core scheduled profile; verified TLS by default | Required live CI conformance, percentiles, and restricted monitor execution pending |
 | MariaDB | Experimental | First-class catalogue entry using the MySQL-family adapter; native schema binding, typed freshness validation, core scheduled profile; verified TLS by default | MariaDB 11.4 LTS lane is optional until Docker-backed CI is required; percentiles and restricted monitor execution pending |
 | Redshift | Experimental | Connect, discover, schema | Scheduled profile conformance pending |
@@ -77,15 +77,18 @@ deterministic parameterized PostgreSQL/DuckDB/SQLite aggregate plans only when e
 referenced field and operation is compatible. Internal PostgreSQL, DuckDB, and SQLite
 adapters now bind those parameters, enforce read-only/timeout controls, and validate the
 exact typed result contract; real DuckDB/SQLite file executions are covered by tests.
-Public execution and activation remain explicitly disabled until scheduling and the
-monitor-specific incident bridge are wired. Migration 012 and the internal run service
-now provide idempotent reservations, ordered claims, expiring leases, immutable terminal
-audits, and atomic policy-state finalization; no public lifecycle invokes them yet.
+Public execution and activation are enabled for PostgreSQL, DuckDB, and SQLite compiled
+runtimes. Activation binds an immutable revision to the existing profile cadence, while
+manual runs use the same idempotent reservation and lease state machine. Migration 012
+and the internal run service provide ordered claims, expiring leases, immutable terminal
+audits, atomic policy-state finalization, and a typed incident bridge; unsupported
+connector plans remain fail-closed.
 
-The internal evaluator already implements deterministic `breachWhen`, consecutive breach,
-recovery pass, and cooldown decisions; it remains side-effect-free until the idempotent
-run orchestrator persists every attempted transition. Definition edit head and active
-runtime revision are separate pointers, preventing unactivated edits from changing runs.
+The internal evaluator implements deterministic `breachWhen`, consecutive breach,
+recovery pass, and cooldown decisions. The idempotent run orchestrator persists every
+attempted transition, and the incident bridge opens/resolves typed `monitor_dsl` checks.
+Definition edit head and active runtime revision are separate pointers, preventing
+unactivated edits from changing runs.
 
 Public competitor capabilities and the independent feature-parity backlog are tracked in
 [`docs/competitive-roadmap.md`](docs/competitive-roadmap.md).

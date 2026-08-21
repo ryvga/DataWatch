@@ -359,8 +359,11 @@ and measurement references, and never compile or execute user input. The router 
 the target through the tenant's data source and returns an explicit capability plan.
 Draft definitions are stored as immutable revisions. Preview attestations use HMAC-SHA256
 with a five-minute TTL and bind organization, asset, definition hash, latest successful
-schema fingerprint, and planner version. Activation verifies that context but remains
-hard-disabled until scheduling and the monitor-specific incident bridge land.
+schema fingerprint, and planner version. Activation verifies that context and binds the
+immutable revision to the table's existing profile cadence for PostgreSQL, DuckDB, and
+SQLite compiled runtimes. Profile-triggered and manual runs share the idempotent
+reservation/lease state machine, and breach/recovery policy actions bridge into typed
+`monitor_dsl` incidents. Unsupported connector plans remain fail-closed.
 
 `services/schema_binding.py` parses generated connector DDL into an asset-scoped relation
 of exact field names, normalized physical types, logical types, nullability, and a schema

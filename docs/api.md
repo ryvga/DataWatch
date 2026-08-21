@@ -370,8 +370,7 @@ Validation does not persist or execute the definition. It returns separate
 grammar can therefore report structured schema/compiler issues such as
 `field_not_found`, `field_type_not_supported`, or `schema_snapshot_missing` without
 being treated as malformed. Unknown grammar fields return 422, while an asset outside
-the tenant returns 404. Activation remains false until scheduling and monitor-specific
-incident integration land.
+the tenant returns 404.
 
 ### `POST /api/v2/monitors/preview`
 
@@ -413,16 +412,23 @@ definitions return 409.
 
 Revision history is newest first. Runs are capped at the latest 250 and include trigger,
 ordering, plan/revision/schema audit context, attempt count, sanitized error code,
-measurements, and versioned policy result. They remain empty until a future scheduler or
-manual-run API invokes the internal state machine.
+measurements, and versioned policy result. Profile-triggered runs and operator-triggered
+manual runs use the same idempotent state machine and active-revision pinning.
+
+### `POST /api/v2/monitors/{monitor_id}/run`
+
+Queues one manual run for the active revision. The request body is
+`{"clientIdempotencyKey": "..."}`; reusing the key returns the original run rather
+than creating a duplicate. The endpoint returns `202` with the persisted run ID and
+current state. Draft or unsupported monitors are rejected without creating a run.
 
 ### `POST /api/v2/monitors/{monitor_id}/activate`
 
 Requires `expectedRevision` and the matching `previewAttestation`. It verifies the
-current tenant, asset, definition, schema, and planner context, then currently returns
-409 `activation_not_supported` with reason `dsl_scheduler_not_implemented`.
-This is an intentional hard gate: persistence is ready, but no monitor-specific incident
-bridge consumes policy actions and no scheduler dispatches the active revision.
+current tenant, asset, definition, schema, and planner context, then binds the immutable
+revision to the table's existing profile cadence for PostgreSQL, DuckDB, and SQLite
+compiled runtimes. A supported activation returns the active revision pointer and
+schedule metadata; incompatible or unsupported connector plans remain fail-closed.
 
 ---
 

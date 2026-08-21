@@ -46,7 +46,7 @@ Primary references:
 | Compound conditions | Bounded `all`/`any`/`not` predicate tree | UI builder and YAML import/export |
 | Consecutive breach/recovery/cooldown | Deterministic evaluator and persisted state | Public lifecycle and incident transitions |
 | Custom SQL escape hatch | AST-restricted single scalar for selected local/PostgreSQL paths | Explicit advanced-mode UX, query budgets, audit labels |
-| Trigger on profile/manual | Persisted trigger contract | Scheduler and manual-run API |
+| Trigger on profile/manual | Active-revision profile scheduler, idempotent manual-run API, persisted run audit | Additional connector conformance and richer trigger types |
 | Job completion trigger | Not implemented | Connector/query-history event adapter |
 | Audience/ownership/tags/severity | Partial teams, owners, labels, severity | DSL audiences and routing policy |
 | Run-failure notification | Policy flag persisted in execution errors | Notification dispatcher integration |
@@ -55,7 +55,7 @@ Primary references:
 
 ## Prioritized delivery
 
-1. Finish the safe scheduler/manual-run/incident bridge and activate the persisted DSL.
+1. Expand the activated safe scheduler/manual-run/incident bridge with first-class monitor templates and connector conformance.
 2. Add first-class freshness, volume, schema, uniqueness, validation, and comparison
    templates on top of the existing typed measurement/predicate model.
 3. Add owners, audiences, data-quality dimensions, notes, and notification/run-failure
@@ -74,5 +74,5 @@ Primary references:
 - NoSQL monitors use document, partition, or keyspace-native plans rather than SQL-shaped
   strings.
 - Evidence collection is opt-in, bounded, redacted, and retention-controlled.
-- Activation stays fail-closed until scheduling, audit, policy, and incident transitions
-  are connected end to end.
+- Activation stays fail-closed for unsupported connector plans; supported relational plans
+  require scheduling, audit, policy, and incident transitions connected end to end.
