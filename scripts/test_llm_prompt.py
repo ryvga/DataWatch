@@ -19,8 +19,11 @@ import json
 import os
 import sys
 
-# Allow running from repo root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+# Allow both host execution from the repository and the Compose seed image,
+# where the backend source is mounted directly at /app.
+host_backend = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
+container_backend = "/app" if os.path.isdir("/app/app") else None
+sys.path.insert(0, os.environ.get("DATAWATCH_BACKEND_DIR") or container_backend or host_backend)
 
 import argparse
 from datetime import UTC, datetime, timedelta
