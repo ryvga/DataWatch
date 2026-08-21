@@ -1,0 +1,37 @@
+{
+  "captured_at": "2026-08-21T13:41:51+01:00",
+  "implementation_commit": "c8eb0ec18fba79cfdbed84ca72fd3c365f6cad2a",
+  "environment": {
+    "host": "Apple M5, 16 GiB RAM, arm64, macOS 26.5",
+    "docker": "Docker Desktop engine 29.1.3",
+    "benchmark_runtime": "API container, Python 3.12.14",
+    "database_images": {
+      "mysql": "mysql:8.4",
+      "mariadb": "mariadb:11.4",
+      "sqlserver": "mcr.microsoft.com/mssql/server:2022-latest under linux/amd64 emulation",
+      "sqlite": "Python 3.12 stdlib SQLite through aiosqlite"
+    }
+  },
+  "method": {
+    "dataset_rows": 3,
+    "columns": 4,
+    "warmup_runs": 1,
+    "measured_runs_per_connector": 20,
+    "connection_model": "one persistent connector per provider",
+    "operation": "ProfilerService.profile with row count, freshness, and native core column metrics",
+    "percentile": "nearest-rank p95 over wall-clock time.perf_counter samples"
+  },
+  "measurements": {
+    "mysql": {"runs": 20, "p50_ms": 0.32, "p95_ms": 0.53, "min_ms": 0.28, "max_ms": 0.96},
+    "mariadb": {"runs": 20, "p50_ms": 0.40, "p95_ms": 0.64, "min_ms": 0.30, "max_ms": 1.09},
+    "sqlite": {"runs": 20, "p50_ms": 0.19, "p95_ms": 0.25, "min_ms": 0.17, "max_ms": 0.28},
+    "sqlserver": {"runs": 20, "p50_ms": 0.74, "p95_ms": 1.35, "min_ms": 0.55, "max_ms": 1.49}
+  },
+  "verification": {
+    "focused_contracts": "99 passed, 1 live SQL Server test deselected",
+    "mysql_mariadb_live": "2 passed",
+    "sqlserver_live": "1 passed",
+    "ruff": "passed"
+  },
+  "claim_boundary": "Tiny warm regression baseline only; not throughput, scale, cold-start, WAN, production TLS, or SLA evidence."
+}

@@ -255,11 +255,14 @@ the UI and API documentation from presenting experimental adapters as complete.
 | `core` | A connector-native bounded metric set with explicit provenance; relational cores include row count, freshness, null/distinct/uniqueness, min/max/mean and text/range metrics |
 | `none` | Connection/discovery may work, but scheduled profiling fails explicitly before SQL execution |
 
-The currently exercised local vertical slices are PostgreSQL, DuckDB, and SQLite core.
-MySQL and the first-class MariaDB source type share a parsed-query and mocked-driver core
-contract. Optional MySQL 8.4 and MariaDB 11.4 LTS lanes cover the same
-connection/discovery/schema/profile path when Docker is available; both remain
-experimental until those lanes become required CI gates.
+The exercised connector vertical slices are PostgreSQL, DuckDB, SQLite core, MySQL 8.4,
+MariaDB 11.4 LTS, and SQL Server 2022. The three server containers are required CI gates
+covering connection, discovery, deterministic schema, core profile, freshness, and a
+compiled typed monitor. MySQL and MariaDB share the same adapter but retain separate
+services so family/version drift is visible. SQL Server's isolated self-signed lane uses
+an explicit insecure test mode; verified identity remains the runtime default.
+The environment, commands, claim boundary, and 20-run measurements are preserved in
+`docs/evidence/sql-connector-conformance-2026-08-21.md` and its JSON companion.
 MongoDB uses a native sampled document profiler. Cassandra remains discovery/schema-only
 until a typed partition planner exists; arbitrary CQL is rejected before a driver call,
 and Cassandra transport defaults to certificate and hostname verification.
@@ -273,10 +276,11 @@ run for a declared dialect. Identifiers are quoted as identifiers, never inserte
 SQL fragments. PostgreSQL/DuckDB use the full metric set; SQLite uses a core dialect
 that omits unavailable native stddev/percentile functions. MySQL has a separate core
 dialect using backtick escaping, portable floating-point ratios, `TIMESTAMPDIFF`, and
-`STDDEV_POP`; percentile metrics remain absent until container/version conformance.
+`STDDEV_POP`; percentile metrics remain absent because the core capability contract does
+not advertise them.
 SQL Server has a separate T-SQL core dialect using bracket escaping, `DATEDIFF_BIG`,
-`STDEVP`, and explicit floating-point casts; it also omits percentiles until live
-container/version conformance.
+`STDEVP`, and explicit floating-point casts; it also omits percentiles because the core
+capability contract does not advertise them.
 MySQL creates a hostname-verifying, certificate-required TLS context by default. An
 explicit `tls_mode=disabled` exists for isolated development services and must not be
 used for remote databases.
@@ -379,13 +383,18 @@ rendered placeholder syntax is never sent through a generic query API.
 
 `services/monitor_runtime.py` is the internal execution boundary. It independently
 re-parses a plan as one read-only `SELECT`, verifies unique parameters and output aliases,
-then dispatches named bindings to dedicated PostgreSQL, DuckDB, or SQLite methods.
+then dispatches named bindings to dedicated PostgreSQL, DuckDB, SQLite, MySQL/MariaDB,
+or SQL Server methods.
 PostgreSQL starts from a clean transaction, sets transaction read-only and a server-side
 statement timeout, and always rolls back. File-backed DuckDB connections are read-only
 and use interrupt-on-timeout; SQLite opens files with `mode=ro` and interrupts timed-out
-queries. `maxBytesScanned` is preserved in the signed plan: PostgreSQL, SQLite, and
-file-backed DuckDB compare it against a conservative complete-relation/database storage
-bound before execution; adapters that cannot enforce it fail closed. A Redis token lease
+queries. MySQL/MariaDB use `START TRANSACTION READ ONLY`, driver-bound values, application
+timeout cancellation, and rollback. SQL Server refuses a principal with target-object
+write permission, uses driver-bound values, a transaction, lock timeout, application
+cancellation, and rollback. `maxBytesScanned` is preserved in the signed plan: PostgreSQL,
+SQLite, file-backed DuckDB, MySQL/MariaDB, and SQL Server compare it against a conservative
+complete-relation/database allocation bound before execution; adapters that cannot
+enforce it fail closed. A Redis token lease
 serializes compiled queries per `(org, source)` across worker processes and expires after
 the query timeout plus a bounded cleanup margin. The result must have the exact ordered
 aliases and finite numeric values, with

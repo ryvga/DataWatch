@@ -9,9 +9,9 @@ describe only paths backed by executable evidence.
 | Category | Provider | Target role | Current state | Next completion gate |
 |---|---|---|---|---|
 | Relational | PostgreSQL / Aurora | Reference operational database | Stable/full, but safety re-audit found unbounded discovery counts and incomplete profile execution budgets | Replace discovery scans with catalogue estimates; verified-identity TLS and read-only statement-timeout profile envelope; persisted live profile test |
-| Relational | MySQL | Tier-1 operational database | Experimental/core | Make MySQL 8.4 Docker lane required; add read-only timeout envelope and API-persisted profile test |
-| Relational | MariaDB | Tier-1 operational database | First-class experimental/core entry sharing the MySQL-family adapter | Make MariaDB 11.4 LTS lane required and record server-family/version provenance |
-| Relational | SQL Server / Azure SQL | Enterprise operational database | Experimental/core | Live SQL Server 2022/Azure-compatible TLS lane; read-only timeout envelope |
+| Relational | MySQL | Tier-1 operational database | Experimental/core; required MySQL 8.4 lane and database-read-only typed monitor execution | Add API/worker-persisted live profile proof and percentile capability |
+| Relational | MariaDB | Tier-1 operational database | Experimental/core; required MariaDB 11.4 LTS lane sharing the MySQL-family read-only monitor adapter | Add API/worker-persisted live profile proof and percentile capability |
+| Relational | SQL Server / Azure SQL | Enterprise operational database | Experimental/core; required SQL Server 2022 lane, packaged ODBC Driver 18, read-only-principal typed monitor execution | Add trusted-certificate live TLS and API/worker-persisted profile proofs; add percentile capability |
 | Relational | Oracle | Enterprise operational database | Planned, not implemented | `python-oracledb` thin-mode connection, discovery, deterministic schema, Oracle core dialect, live Oracle Free lane |
 | Embedded SQL | SQLite | Application/local source | Beta/core | Restrict hosted paths to a managed allowlist/upload boundary and add persisted API profile test |
 | Document | MongoDB | Tier-1 document source | Experimental bounded sampled core | Live verified-TLS lane, repeated-sample drift confirmation, typed document monitor DSL |
@@ -47,7 +47,8 @@ A connector cannot move beyond experimental until all applicable gates pass:
 
 ## Delivery sequence
 
-1. Close the active MySQL/MariaDB/SQLite/SQL Server schema-and-freshness conformance slice.
+1. Add API/worker persistence and trusted-certificate lanes to the completed
+   connector-level MySQL/MariaDB/SQLite/SQL Server conformance slice.
 2. Repair the PostgreSQL reference safety envelope found by the catalogue audit.
 3. Complete ClickHouse as the open-source warehouse vertical.
 4. Implement Redis native TTL/Streams monitoring without relational emulation.
