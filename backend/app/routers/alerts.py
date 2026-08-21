@@ -121,6 +121,8 @@ async def create_alert_config(
 
     await db.commit()
     await db.refresh(cfg)
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "alert.route.updated", {"alertId": str(cfg.id), "action": "created", "channel": cfg.channel})
 
     return _resp(cfg)
 
@@ -155,6 +157,8 @@ async def delete_alert_config(
     cfg = await _get_config_or_404(config_id, org, db)
     cfg.is_active = False  # soft delete
     await db.commit()
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "alert.route.updated", {"alertId": config_id, "action": "deleted"})
 
 
 @router.post("/{config_id}/test", status_code=200)
@@ -190,4 +194,6 @@ async def test_alert_config(
     if not ok:
         label = CHANNELS.get(cfg.channel, {}).get("label", cfg.channel)
         raise HTTPException(status_code=502, detail=f"Test {label} alert failed. Check the route credentials, destination permissions, and minimum severity.")
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "alert.tested", {"alertId": config_id, "channel": cfg.channel, "sent": True})
     return {"sent": True, "channel": cfg.channel, "message": f"Test {CHANNELS[cfg.channel]['label']} alert sent."}

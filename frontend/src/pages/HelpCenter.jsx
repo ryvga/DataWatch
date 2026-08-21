@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Search, ChevronDown, ChevronRight, BarChart2, TrendingUp, Activity, AlertCircle, Layers, Target, GitBranch, ArrowUpDown, Percent, Clock, Hash, BookOpen } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -356,8 +357,43 @@ const HELP_FAQS = [
   { q: 'Why did my incident auto-resolve?', a: 'Panopta auto-resolves open incidents when the subsequent profile run passes all the checks that originally triggered the incident. This means the anomalous condition is no longer detected. If the incident was spurious, consider raising the sensitivity threshold.' },
 ]
 
+const DSL_RULES = [
+  ['Volume', 'row_count', 'Whole-table row count. Use it for drops, empty loads, and unexpected spikes.'],
+  ['Freshness', 'freshness_seconds', 'Seconds since the newest timestamp in a typed date/timestamp column.'],
+  ['Completeness', 'null_rate / empty_string_rate', 'Missing or blank values, optionally scoped with a safe filter.'],
+  ['Uniqueness', 'distinct_count / duplicate_count', 'Repeated identifiers and cardinality changes.'],
+  ['Validity', 'negative_rate / zero_rate / boolean metrics', 'Type-aware value expectations for numeric and boolean columns.'],
+  ['Validation', 'violationWhen', 'Count or rate of rows that violate a typed predicate.'],
+]
+
+const DSL_EXAMPLE = `apiVersion: datawatch.io/v1alpha1
+kind: Monitor
+metadata:
+  name: paid-orders-freshness
+  qualityDimension: timeliness
+spec:
+  target: { assetId: <table-uuid> }
+  trigger: { type: on_profile }
+  measurements:
+    - id: value
+      type: metric
+      metric: freshness_seconds
+      field: created_at
+      filterWhen:
+        op: eq
+        left: { field: status }
+        right: { literal: paid }
+  breachWhen:
+    op: gt
+    left: { ref: value }
+    right: { literal: 3600 }
+  policy:
+    mode: alert
+    severity: P1`
+
 const TOC_SECTIONS = [
   { id: 'getting-started', label: 'Getting Started' },
+  { id: 'dsl-guide', label: 'Typed DSL Guide' },
   { id: 'detection-methods', label: 'Detection Methods', isHeader: true },
   { id: 'statistical-methods', label: 'Statistical (7)', indent: true },
   { id: 'ml-methods', label: 'Machine Learning (1)', indent: true },
@@ -478,8 +514,17 @@ function CategoryGroup({ categoryId, methods, query }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function HelpCenter() {
+  const location = useLocation()
   const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState(null)
+
+  useEffect(() => {
+    if (!location.hash) return
+    const timer = window.setTimeout(() => {
+      document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
+    return () => window.clearTimeout(timer)
+  }, [location.hash])
 
   const isFiltering = !!(query || activeCategory)
 
@@ -504,9 +549,69 @@ export default function HelpCenter() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Help Center</h1>
         <p className="mt-2 text-muted-foreground max-w-xl">
-          How Panopta monitors your data — every detection method explained in mathematical terms, without the engineering jargon.
+          Practical guidance for building monitors, interpreting incidents, and operating Panopta safely.
         </p>
       </div>
+
+      <section id="dsl-guide" className="scroll-mt-6 mb-10 rounded-xl border bg-card p-5 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Monitor authoring</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight">Typed DSL guide</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+              The typed DSL is a constrained YAML/JSON document. It generates a read-only, schema-bound plan;
+              it does not execute Python, JavaScript, arbitrary SQL, <code>eval</code>, or <code>exec</code>.
+            </p>
+          </div>
+          <Link to="/monitors" className="inline-flex h-9 shrink-0 items-center justify-center rounded-md border px-3 text-sm font-medium hover:bg-muted">
+            Open monitor builder
+          </Link>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-4">
+          {[
+            ['1', 'Profile', 'Run a table profile so fields, types, and a schema snapshot are known.'],
+            ['2', 'Define', 'Choose a typed metric or row validation rule in the monitor builder.'],
+            ['3', 'Preview', 'Review the compiled plan, blockers, and exact definition before saving.'],
+            ['4', 'Operate', 'Activate when eligible, then watch runs, incidents, and recovery state.'],
+          ].map(([number, title, text]) => (
+            <div key={number} className="rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-center gap-2 text-sm font-semibold"><span className="flex size-6 items-center justify-center rounded-md bg-muted text-xs">{number}</span>{title}</div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{text}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 overflow-hidden rounded-lg border">
+          <div className="border-b bg-muted/30 px-4 py-3 text-sm font-semibold">Supported rule families</div>
+          <div className="divide-y">
+            {DSL_RULES.map(([name, syntax, description]) => (
+              <div key={name} className="grid gap-1 px-4 py-3 sm:grid-cols-[130px_220px_1fr] sm:items-start">
+                <span className="text-sm font-medium">{name}</span>
+                <code className="text-xs text-muted-foreground">{syntax}</code>
+                <span className="text-xs leading-relaxed text-muted-foreground">{description}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Canonical example</p>
+            <pre className="max-h-[420px] overflow-auto rounded-lg border bg-muted/30 p-4 text-xs leading-relaxed text-foreground"><code>{DSL_EXAMPLE}</code></pre>
+          </div>
+          <div className="rounded-lg border bg-muted/20 p-4">
+            <p className="text-sm font-semibold">Common preview blockers</p>
+            <ul className="mt-3 space-y-3 text-xs leading-relaxed text-muted-foreground">
+              <li><strong className="text-foreground">schema_snapshot_missing</strong> — profile the table first; activation needs a server-owned schema snapshot.</li>
+              <li><strong className="text-foreground">field_not_found</strong> — use the exact column name from the current schema.</li>
+              <li><strong className="text-foreground">field_type_not_supported</strong> — choose an operator compatible with the field’s logical type.</li>
+              <li><strong className="text-foreground">track mode</strong> — records breaches and recovery without opening incidents or sending alerts.</li>
+              <li><strong className="text-foreground">manual trigger</strong> — never runs automatically after a profile; use Run now when needed.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
 
       {/* Search + filters */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">

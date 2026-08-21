@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { notify } from '@/lib/notify'
 import { cn } from '@/lib/utils'
-import { acknowledgeIncident, assignIncident, investigateIncident, getIncident, getTable, resolveIncident, muteIncident, markFalsePositive, retryNarration } from '../api/endpoints'
+import { acknowledgeIncident, assignIncident, investigateIncident, getIncident, getOrgMembers, getTable, getTeams, resolveIncident, muteIncident, markFalsePositive, retryNarration } from '../api/endpoints'
 import HealthBadge from '../components/HealthBadge'
 import SeverityBadge from '../components/SeverityBadge'
 import UserPicker from '../components/UserPicker'
@@ -705,13 +705,11 @@ export default function IncidentDetail() {
         if (!cancelled) setLoading(false)
       })
     // Load teams and members for assignment card
-    import('../api/endpoints').then(({ getTeams, getOrgMembers }) => {
-      getTeams().then(r => setTeams(r.data || [])).catch(() => {})
-      getOrgMembers().then(r => {
-        const raw = r.data
-        setOrgMembers(Array.isArray(raw) ? raw : raw?.items || raw?.members || [])
-      }).catch(() => {})
-    })
+    getTeams().then(r => setTeams(r.data || [])).catch(() => {})
+    getOrgMembers().then(r => {
+      const raw = r.data
+      setOrgMembers(Array.isArray(raw) ? raw : raw?.items || raw?.members || [])
+    }).catch(() => {})
     return () => {
       cancelled = true
     }

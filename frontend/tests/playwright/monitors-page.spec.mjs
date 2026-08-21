@@ -38,7 +38,7 @@ async function run() {
   const tableId = await discoverTableId()
   const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
-  const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [], failedResponses: [] }
+  const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [], failedResponses: [], realtime: false }
   page.on('console', (message) => {
     if (['error', 'warning'].includes(message.type())) diagnostics.consoleErrors.push(`${message.type()}: ${message.text()}`)
   })
@@ -51,6 +51,9 @@ async function run() {
     if (response.status() >= 400 && !response.url().includes('/favicon')) {
       diagnostics.failedResponses.push(`${response.status()} ${response.url()} ${await response.text().catch(() => '')}`)
     }
+  })
+  page.on('websocket', (websocket) => {
+    if (websocket.url().includes('/api/v1/realtime/ws')) diagnostics.realtime = true
   })
 
   try {
@@ -75,8 +78,19 @@ async function run() {
     await dialog.getByText(/Preview valid|Preview compiled/).waitFor({ state: 'visible', timeout: 30000 })
     assert(await dialog.getByRole('textbox', { name: 'DSL definition preview' }).isVisible(), 'DSL definition preview should be visible')
     assert((await dialog.getByRole('button', { name: /Create/ }).count()) === 1, 'DSL create action should be visible after preview')
+    assert(await dialog.getByRole('button', { name: /Copy DSL definition/i }).isVisible(), 'Preview should offer a copyable canonical definition')
+    await page.waitForTimeout(600)
+    assert(diagnostics.realtime, 'authenticated realtime WebSocket should be opened on the workspace page')
 
-    console.log(JSON.stringify({ status: 'passed', checked: ['table-to-dsl-builder', 'dsl-preview'], diagnostics }, null, 2))
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await page.getByRole('button', { name: /Open DSL guide/i }).click()
+    await page.waitForURL(/\/help#dsl-guide$/, { timeout: 30000 })
+    await page.getByText('Typed DSL guide', { exact: true }).waitFor({ state: 'visible', timeout: 30000 })
+    await page.getByText('schema_snapshot_missing', { exact: false }).waitFor({ state: 'visible', timeout: 30000 })
+    assert(/Typed DSL guide/i.test(await page.locator('body').innerText()), 'DSL guide anchor should land on actionable guidance')
+    assert(/schema_snapshot_missing/i.test(await page.locator('body').innerText()), 'DSL guide should explain activation blockers')
+
+    console.log(JSON.stringify({ status: 'passed', checked: ['table-to-dsl-builder', 'dsl-preview', 'realtime-websocket', 'dsl-guide-anchor'], diagnostics }, null, 2))
   } catch (error) {
     await page.screenshot({ path: '/tmp/monitors-page-failure.png', fullPage: false }).catch(() => {})
     console.error(JSON.stringify({

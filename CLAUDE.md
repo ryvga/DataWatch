@@ -89,6 +89,7 @@ DataWatch/
     ├── architecture.md        ← system design, data model, task chain, detection methods
     ├── development.md         ← setup, conventions, commit rules, testing
     ├── api.md                 ← full endpoint reference
+    ├── realtime-alerts-spec.md← realtime transport and webhook contract
     ├── tracking.md            ← Linear + Notion rules (read this before every session)
     └── deployment.md          ← Railway deploy guide
 ```

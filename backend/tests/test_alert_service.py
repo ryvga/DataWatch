@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -116,3 +119,38 @@ def test_dispatch_alert_routes_discord_and_opsgenie(monkeypatch):
     )
 
     assert dispatched == [("discord", "discord-url"), ("opsgenie", "opsgenie-key")]
+
+
+def test_send_webhook_alert_signs_exact_wire_bytes(monkeypatch):
+    calls = _patch_client(monkeypatch)
+    secret = " webhook-secret "
+
+    assert alert.send_webhook_alert("https://webhook.test/inbox", _incident("P1"), {"summary": "freshness failed"}, secret)
+
+    request = calls[0]
+    assert request["url"] == "https://webhook.test/inbox"
+    assert request["headers"]["Content-Type"] == "application/json"
+    assert request["headers"]["X-Panopta-Event"] == "incident.created"
+    assert "json" not in request
+    expected = hmac.new(secret.strip().encode(), request["content"], hashlib.sha256).hexdigest()
+    assert request["headers"]["X-Panopta-Signature"] == f"sha256={expected}"
+    payload = json.loads(request["content"])
+    assert payload["incident"]["severity"] == "P1"
+    assert payload["ai_summary"] == "freshness failed"
+
+
+def test_send_webhook_alert_returns_false_on_destination_failure(monkeypatch):
+    class FailingResponse:
+        def raise_for_status(self):
+            raise RuntimeError("destination returned 503")
+
+    class FailingClient(_Client):
+        def post(self, url, **kwargs):
+            self.calls.append({"url": url, "timeout": self.timeout, **kwargs})
+            return FailingResponse()
+
+    calls = []
+    monkeypatch.setattr(alert.httpx, "Client", lambda *, timeout: FailingClient(calls, timeout))
+
+    assert alert.send_webhook_alert("https://webhook.test/failing", _incident(), None) is False
+    assert calls[0]["url"].endswith("failing")

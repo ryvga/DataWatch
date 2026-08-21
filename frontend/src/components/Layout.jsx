@@ -13,6 +13,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Radio,
   Settings,
   Sun,
   Table2,
@@ -35,6 +36,7 @@ import { BrandMark } from './app-ui'
 import NotificationPanel from './NotificationPanel'
 import { cn } from '@/lib/utils'
 import { clearSession, storage } from '@/lib/storage'
+import { useRealtime } from '@/hooks/useRealtime'
 
 const links = [
   { to: '/', label: 'Overview', icon: LayoutDashboard, end: true },
@@ -83,6 +85,7 @@ function NavItems({ onNavigate, collapsed = false }) {
 export default function Layout() {
   const nav = useNavigate()
   const { resolvedTheme, setTheme } = useTheme()
+  const { status: realtimeStatus } = useRealtime()
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('dw_sidebar_collapsed') === '1' } catch { return false }
   })
@@ -91,6 +94,15 @@ export default function Layout() {
   const userEmail = storage.getItem('dw_user_email') || ''
   const userName = storage.getItem('dw_user_name') || userEmail.split('@')[0] || 'You'
   const userRole = storage.getItem('dw_user_role') || 'member'
+
+  const realtimeCopy = {
+    connected: { label: 'Live updates', tone: 'text-emerald-700 dark:text-emerald-400', dot: 'bg-emerald-500' },
+    connecting: { label: 'Connecting updates', tone: 'text-muted-foreground', dot: 'bg-amber-500' },
+    reconnecting: { label: 'Reconnecting updates', tone: 'text-amber-700 dark:text-amber-400', dot: 'bg-amber-500' },
+    offline: { label: 'Polling fallback', tone: 'text-muted-foreground', dot: 'bg-stone-500' },
+    unsupported: { label: 'Polling fallback', tone: 'text-muted-foreground', dot: 'bg-stone-500' },
+    idle: { label: 'Updates idle', tone: 'text-muted-foreground', dot: 'bg-stone-500' },
+  }[realtimeStatus] || { label: 'Updates idle', tone: 'text-muted-foreground', dot: 'bg-stone-500' }
 
   const logout = () => {
     clearSession()
@@ -222,12 +234,12 @@ export default function Layout() {
         {/* Nav */}
         <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">
           {!collapsed && (
-            <div className="mx-2 mb-2 flex items-center gap-2 rounded-md bg-emerald-500/10 px-2.5 py-1.5">
-              <span className="relative flex size-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+            <div className="mx-2 mb-2 flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5" data-testid="realtime-status">
+              <span className={`relative flex size-1.5 ${realtimeStatus === 'connected' ? 'animate-pulse' : ''}`}>
+                <span className={`relative inline-flex size-1.5 rounded-full ${realtimeCopy.dot}`} />
               </span>
-              <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">All systems live</span>
+              <Radio className="size-3 text-muted-foreground" />
+              <span className={`text-[11px] font-medium ${realtimeCopy.tone}`}>{realtimeCopy.label}</span>
             </div>
           )}
           {collapsed && (

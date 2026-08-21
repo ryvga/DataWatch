@@ -207,6 +207,8 @@ async def acknowledge_incident(
     if hasattr(incident, "acknowledged_by_id"):
         incident.acknowledged_by_id = user.id
     await db.commit()
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "incident.updated", {"incidentId": incident_id, "status": incident.status, "previousStatus": old_status})
     try:
         from app.tasks import notify_incident_status_change
         notify_incident_status_change.delay(incident_id, "open", "acknowledged")
@@ -230,6 +232,8 @@ async def investigate_incident(
     if not incident.acknowledged_at:
         incident.acknowledged_at = datetime.now(timezone.utc)
     await db.commit()
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "incident.updated", {"incidentId": incident_id, "status": incident.status})
     return await _incident_response(incident, db)
 
 
@@ -249,6 +253,8 @@ async def resolve_incident(
     if hasattr(incident, "resolved_by_id"):
         incident.resolved_by_id = user.id
     await db.commit()
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "incident.updated", {"incidentId": incident_id, "status": incident.status, "previousStatus": old_status})
     try:
         from app.tasks import notify_incident_status_change
         notify_incident_status_change.delay(incident_id, "open", "resolved")
@@ -279,6 +285,8 @@ async def mute_incident(
     narration["muted_hours"] = body.hours
     incident.llm_narration = narration
     await db.commit()
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "incident.updated", {"incidentId": incident_id, "status": incident.status, "mutedHours": body.hours})
     return await _incident_response(incident, db)
 
 
@@ -301,6 +309,8 @@ async def mark_false_positive(
     if not incident.title.startswith("[FP]"):
         incident.title = f"[FP] {incident.title}"
     await db.commit()
+    from app.services.realtime import publish_event
+    await publish_event(str(org.id), "incident.updated", {"incidentId": incident_id, "status": incident.status, "falsePositive": True})
     return await _incident_response(incident, db)
 
 

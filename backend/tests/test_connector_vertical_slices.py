@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import ssl
 import sys
@@ -370,6 +371,8 @@ async def test_mysql_family_container_connection_discovery_schema_and_profile(
     )
     if not await connector.test_connection():
         await connector.close()
+        if os.environ.get("REQUIRE_TEST_SERVICES", "").lower() in {"1", "true", "yes"}:
+            pytest.fail(f"{provider} test service unavailable while REQUIRE_TEST_SERVICES=1")
         pytest.skip(
             f"{provider} test service unavailable; run docker compose -f "
             "docker-compose.test-dbs.yml up -d test-mysql test-mariadb"

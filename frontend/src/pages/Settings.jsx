@@ -757,6 +757,15 @@ function AlertForm({ open, onOpenChange, onCreated, channels = FALLBACK_ALERT_CH
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">{selectedChannel.description}</p>
+            {selectedChannel.id === 'webhook' && (
+              <p className="text-xs text-muted-foreground">
+                Need a disposable receiver?{' '}
+                <a href="https://webhook.site" target="_blank" rel="noreferrer" className="font-medium text-foreground underline underline-offset-2 hover:no-underline">
+                  Open webhook.site
+                </a>{' '}
+                and paste its unique URL below. Use Send test, then remove the route when finished.
+              </p>
+            )}
           </div>
 
           {!selectedChannel.available && (

@@ -8,6 +8,7 @@ import MetricChart from '../components/MetricChart'
 import RefreshBar from '../components/RefreshBar'
 import SeverityBadge from '../components/SeverityBadge'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { useRealtime } from '../hooks/useRealtime'
 import { EmptyState, LoadingState, PageHeader, formatDateTime, formatNumber } from '../components/app-ui'
 import { notify } from '@/lib/notify'
 import { Badge } from '@/components/ui/badge'
@@ -1864,6 +1865,13 @@ export default function TableDetail() {
   }
 
   const { isRefreshing, lastRefreshed, refresh } = useAutoRefresh(loadData, interval, { enabled: interval > 0 })
+
+  useRealtime((event) => {
+    const eventTableId = event?.payload?.tableId
+    if (eventTableId === id && ['profile.completed', 'incident.updated', 'monitor.run.completed'].includes(event?.type)) {
+      loadData()
+    }
+  })
 
   const handleRun = async () => {
     const clickedAt = new Date()

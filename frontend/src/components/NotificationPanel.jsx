@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import { useRealtime } from '@/hooks/useRealtime'
 
 const STORAGE_KEY = 'dw_dismissed_notifs'
 
@@ -37,6 +38,10 @@ export default function NotificationPanel({ collapsed = false }) {
       setIncidents(Array.isArray(res.data) ? res.data : [])
     } catch { /* silent - don't break sidebar on network error */ }
   }, [])
+
+  useRealtime(useCallback((event) => {
+    if (['incident.updated', 'profile.completed', 'alert.dispatched'].includes(event?.type)) load()
+  }, [load]))
 
   useEffect(() => { load() }, [load])
   useEffect(() => { if (open) load() }, [open, load])

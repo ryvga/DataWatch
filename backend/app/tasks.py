@@ -344,6 +344,8 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
     )
     from app.services.incident import IncidentService
     from app.config import settings
+    from app.models.data_source import DataSource
+    from app.services.realtime import publish_event
 
     async with AsyncSessionLocal() as db:
         # Load current profile
@@ -354,6 +356,9 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         table = await db.get(MonitoredTable, table_id)
         if not table:
             return {"status": "error", "error": "table not found"}
+        source = await db.get(DataSource, table.source_id)
+        if not source:
+            return {"status": "error", "error": "source not found"}
 
         # Load 30-day history (excluding current)
         cutoff = profile.collected_at - timedelta(days=30)
@@ -441,11 +446,10 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
         failed = [c for c in all_checks if c.status == "failed"]
         svc = IncidentService()
 
+        incident = None
+        auto_resolved = False
         if failed:
-            await svc.auto_resolve(db, table, all_checks)
-            # Load org_id via data source
-            from app.models.data_source import DataSource
-            source = await db.get(DataSource, table.source_id)
+            auto_resolved = await svc.auto_resolve(db, table, all_checks)
             incident = await svc.create_or_update(
                 db, source.org_id, table, failed, profile_id
             )
@@ -453,9 +457,27 @@ async def _run_anomaly_checks_async(table_id: str, profile_id: str) -> dict:
                 from app.tasks import generate_llm_narration
                 generate_llm_narration.delay(str(incident.id))
         else:
-            await svc.auto_resolve(db, table, all_checks)
+            auto_resolved = await svc.auto_resolve(db, table, all_checks)
 
         await db.commit()
+
+        await publish_event(
+            str(source.org_id),
+            "profile.completed",
+            {"tableId": str(table.id), "profileId": str(profile.id), "failed": len(failed), "checks": len(all_checks)},
+        )
+        if incident is not None:
+            await publish_event(
+                str(source.org_id),
+                "incident.updated",
+                {"incidentId": str(incident.id), "tableId": str(table.id), "status": incident.status, "severity": incident.severity},
+            )
+        elif auto_resolved:
+            await publish_event(
+                str(source.org_id),
+                "incident.updated",
+                {"tableId": str(table.id), "status": "resolved", "source": "auto_resolve"},
+            )
 
         return {
             "table_id": table_id,
@@ -728,6 +750,7 @@ async def _run_one_dsl_monitor(
         reserve_run,
     )
     from app.services.monitor_runtime import execute_compiled_plan
+    from app.services.realtime import publish_event
     from app.services.schema_binding import build_relation_binding
 
     async with AsyncSessionLocal() as db:
@@ -820,6 +843,11 @@ async def _run_one_dsl_monitor(
             profile_id=profile_id,
         )
         await db.commit()
+        await publish_event(
+            str(source.org_id),
+            "monitor.run.completed",
+            {"monitorId": str(monitor.id), "tableId": str(table.id), "runId": str(run.id), "status": run.status, "profileId": profile_id},
+        )
         return {"status": run.status, "run_id": str(run.id), "result": run.result}
 
 
@@ -968,6 +996,7 @@ async def _send_alerts_async(incident_id: str) -> dict:
     from app.models.incident import Incident
     from app.services.alert import dispatch_alert
     from app.services.llm import get_cached_narration
+    from app.services.realtime import publish_event
 
     async with AsyncSessionLocal() as db:
         incident = await db.get(Incident, incident_id)
@@ -992,6 +1021,12 @@ async def _send_alerts_async(incident_id: str) -> dict:
         for cfg in configs:
             ok = dispatch_alert(cfg, incident, narration)
             results.append({"config_id": str(cfg.id), "channel": cfg.channel, "sent": ok})
+
+        await publish_event(
+            str(incident.org_id),
+            "alert.dispatched",
+            {"incidentId": str(incident.id), "results": results},
+        )
 
         return {"incident_id": incident_id, "alerts_dispatched": len(results), "results": results}
 

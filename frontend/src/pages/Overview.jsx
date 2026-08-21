@@ -6,6 +6,7 @@ import { getIncidents, getOrgHealth, getSources, getTables } from '../api/endpoi
 import { EmptyState, ErrorNotice, LoadingState, PageHeader, formatNumber } from '../components/app-ui'
 import RefreshBar from '../components/RefreshBar'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { useRealtime } from '../hooks/useRealtime'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 const HEALTH_RING_COLOR = { green: '#10b981', yellow: '#f59e0b', red: '#ef4444' }
@@ -97,6 +98,10 @@ export default function Overview() {
   }
 
   const { isRefreshing, lastRefreshed, refresh } = useAutoRefresh(load, interval, { enabled: interval > 0 })
+
+  useRealtime((event) => {
+    if (['incident.updated', 'profile.completed', 'alert.dispatched', 'monitor.run.completed'].includes(event?.type)) load()
+  })
 
   if (loading) return <LoadingState label="Loading overview" />
 

@@ -5,6 +5,7 @@ import IncidentCard from '../components/IncidentCard'
 import { EmptyState, LoadingState, PageHeader } from '../components/app-ui'
 import RefreshBar from '../components/RefreshBar'
 import { useAutoRefresh } from '../hooks/useAutoRefresh'
+import { useRealtime } from '../hooks/useRealtime'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -49,6 +50,13 @@ export default function Incidents() {
   }
 
   const { isRefreshing, lastRefreshed, refresh } = useAutoRefresh(load, interval, { enabled: interval > 0 })
+
+  useRealtime((event) => {
+    if (['incident.updated', 'profile.completed', 'alert.dispatched'].includes(event?.type)) {
+      load()
+      getIncidentStats().then(r => setStats(r.data)).catch(() => {})
+    }
+  })
 
   useEffect(() => {
     getIncidentStats().then(r => setStats(r.data)).catch(() => {})

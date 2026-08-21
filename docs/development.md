@@ -136,6 +136,9 @@ messages may contain hosts, query text, or credentials.
 Run the optional connector services with `docker compose -f docker-compose.test-dbs.yml
 up -d`. MySQL listens on test-only port 3307, MariaDB 11.4 LTS on 3308, and MongoDB on
 27018; connector integration tests skip explicitly when those services are unavailable.
+For release/CI validation, set `REQUIRE_TEST_SERVICES=1`; an unavailable
+PostgreSQL, MySQL-family, or MongoDB service then fails the test run instead of
+being reported as a green skip.
 The MySQL-family tests pass
 `tls_mode=disabled` because that isolated container has no certificate; application
 connections default to certificate and hostname verification and accept an optional
@@ -233,6 +236,13 @@ cd frontend
 npm run build
 npm run test:e2e
 ```
+
+### CI release gate
+
+`.github/workflows/ci.yml` runs the backend suite on Python 3.12 with PostgreSQL,
+Redis, MySQL 8.4, MariaDB 11.4, and MongoDB services, plus the frontend build
+and a high-severity dependency audit. It sets `REQUIRE_TEST_SERVICES=1`, so a
+missing integration service fails the job instead of silently producing skips.
 
 ### LLM prompt testing
 

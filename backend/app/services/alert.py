@@ -4,7 +4,11 @@ AlertService — Slack, Email (SendGrid), PagerDuty.
 Routing: query alert_configs for org + table_id (and org-wide configs),
 filter by min_severity, enqueue send_alert task per matching config.
 """
+import hashlib
+import hmac
+import json
 import logging
+import time
 
 import httpx
 
@@ -177,8 +181,12 @@ def send_pagerduty_alert(routing_key: str, incident, event_action: str = "trigge
 # ── Webhook ───────────────────────────────────────────────────────────────────
 
 def send_webhook_alert(url: str, incident, narration: dict | None, secret: str | None = None) -> bool:
-    """Generic JSON webhook — sends full incident payload with optional HMAC signature."""
-    import hashlib, hmac, time
+    """Send a deterministic signed JSON event to a generic webhook.
+
+    The HMAC is calculated over the exact bytes sent on the wire. Consumers can
+    verify ``X-Panopta-Signature`` without having to guess JSON separators or
+    key ordering.
+    """
     payload = {
         "event": "incident.created",
         "timestamp": int(time.time()),
@@ -190,17 +198,24 @@ def send_webhook_alert(url: str, incident, narration: dict | None, secret: str |
             "detected_at": incident.created_at.isoformat(),
             "table_id": str(incident.table_id),
         },
-        "ai_summary": narration.get("summary") if narration else None,
+        "ai_summary": narration.get("summary") if isinstance(narration, dict) else None,
     }
-    headers = {"Content-Type": "application/json"}
-    if secret:
-        body = __import__("json").dumps(payload).encode()
-        sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "Panopta-Webhook/1.0",
+        "X-Panopta-Event": payload["event"],
+        "X-Panopta-Event-Id": str(incident.id),
+    }
+    normalized_secret = str(secret or "").strip()
+    if normalized_secret:
+        sig = hmac.new(normalized_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
         headers["X-Panopta-Signature"] = f"sha256={sig}"
     try:
         with httpx.Client(timeout=10) as client:
-            r = client.post(url, json=payload, headers=headers)
+            r = client.post(url, content=body, headers=headers)
             r.raise_for_status()
+            logger.info("Webhook alert sent for incident %s", incident.id)
             return True
     except Exception as e:
         logger.error("Webhook alert failed: %s", e)

@@ -2,7 +2,9 @@
 Test infrastructure.
 
 Uses a real Postgres test DB (datawatch_test) — isolated from dev.
-Set TEST_DATABASE_URL to override. Tests skip if DB is unreachable.
+Set TEST_DATABASE_URL to override. Tests skip if DB is unreachable during local
+development; set REQUIRE_TEST_SERVICES=1 in CI/release validation to turn
+unavailable integration dependencies into failures.
 
 Fixtures:
   db_session   — AsyncSession, rolls back after each test
@@ -27,6 +29,7 @@ TEST_DB_URL = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://datawatch:datawatch@localhost:5433/datawatch_test",
 )
+REQUIRE_TEST_SERVICES = os.environ.get("REQUIRE_TEST_SERVICES", "").lower() in {"1", "true", "yes"}
 
 if make_url(TEST_DB_URL).database != "datawatch_test":
     raise RuntimeError(
@@ -67,6 +70,10 @@ async def test_engine():
             await conn.run_sync(Base.metadata.create_all)
         yield engine
     except Exception as e:
+        if REQUIRE_TEST_SERVICES:
+            raise RuntimeError(
+                "Required PostgreSQL test service is unavailable; refusing to hide integration failures"
+            ) from e
         pytest.skip(f"Test DB unavailable: {e}")
     finally:
         await engine.dispose()

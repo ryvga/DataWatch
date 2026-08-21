@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Activity, CheckCircle2, Code2, Database, FileCode2, Loader2, Play, RefreshCw, ShieldCheck, Table2, XCircle } from 'lucide-react'
+import { Activity, CheckCircle2, Code2, Copy, Database, FileCode2, Loader2, Play, RefreshCw, ShieldCheck, Table2, XCircle } from 'lucide-react'
 import {
   activateSafeMonitor,
   createSafeMonitorDraft,
@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { useRealtime } from '@/hooks/useRealtime'
 
 const FILTERS = [
   { value: 'all', label: 'All monitors' },
@@ -263,6 +264,15 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
   const capabilityPlan = preview?.capabilityPlan
   const predicateValueOperators = !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative', 'is_empty', 'is_whitespace', 'is_true', 'is_false', 'is_future', 'is_past'].includes(form.predicateOperator)
 
+  const copyDefinition = async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(definition, null, 2))
+      notify.ok('Definition copied', 'Paste it into a review or version-control change')
+    } catch {
+      notify.err('Copy failed', 'Your browser did not grant clipboard access')
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={close}>
       <DialogContent className="max-h-[92vh] overflow-y-auto p-0 sm:max-w-3xl">
@@ -489,9 +499,14 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
           {error && <Alert variant="destructive"><XCircle className="size-4" /><AlertDescription>{String(error)}</AlertDescription></Alert>}
           {preview && (
             <div className="grid gap-3 rounded-md border bg-muted/20 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                {capabilityPlan?.activationSupported ? <CheckCircle2 className="size-4 text-emerald-600" /> : <XCircle className="size-4 text-amber-600" />}
-                {capabilityPlan?.activationSupported ? 'Preview compiled and ready to activate' : 'Preview valid, but activation is gated'}
+              <div className="flex items-center justify-between gap-2 text-sm font-medium">
+                <div className="flex items-center gap-2">
+                  {capabilityPlan?.activationSupported ? <CheckCircle2 className="size-4 text-emerald-600" /> : <XCircle className="size-4 text-amber-600" />}
+                  {capabilityPlan?.activationSupported ? 'Preview compiled and ready to activate' : 'Preview valid, but activation is gated'}
+                </div>
+                <Button type="button" size="sm" variant="ghost" onClick={copyDefinition} aria-label="Copy DSL definition">
+                  <Copy className="size-3.5" /> Copy JSON
+                </Button>
               </div>
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span>{preview.stats?.measurements || 0} measurement(s)</span>
@@ -676,6 +691,12 @@ export default function Monitors() {
     load()
   }, [])
 
+  useRealtime((event) => {
+    if (['monitor.run.completed', 'profile.completed', 'incident.updated', 'alert.route.updated'].includes(event?.type)) {
+      load({ quiet: true })
+    }
+  })
+
   useEffect(() => {
     if (searchParams.get('table') && tables.length > 0) setBuilderOpen(true)
   }, [searchParams, tables.length])
@@ -744,7 +765,7 @@ export default function Monitors() {
               </p>
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => nav('/help')}>Read DSL guide</Button>
+          <Button size="sm" variant="outline" onClick={() => nav('/help#dsl-guide')}>Open DSL guide</Button>
         </CardContent>
       </Card>
 
@@ -764,7 +785,7 @@ export default function Monitors() {
           description={filter === 'dsl'
             ? 'Use New DSL monitor to validate and create a schema-bound definition. Once active, it will appear here and on its table detail page.'
             : 'Create a monitor from a table detail page to start checking data quality.'}
-          action={filter === 'dsl' ? <Button variant="outline" onClick={() => nav('/help')}>Open DSL guide</Button> : <Button onClick={() => nav('/tables')}>Open tables</Button>}
+          action={filter === 'dsl' ? <Button variant="outline" onClick={() => nav('/help#dsl-guide')}>Open DSL guide</Button> : <Button onClick={() => nav('/tables')}>Open tables</Button>}
         />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">

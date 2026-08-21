@@ -11,6 +11,8 @@ from app.config import settings
 from app.database import AsyncSessionLocal
 from app.routers import alerts, auth, billing, incidents, orgs, sources, tables
 from app.routers import admin, reports, custom_monitors, monitor_dsl, notifications, teams
+from app.routers import realtime
+from app.services.realtime import realtime_manager
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -42,6 +44,7 @@ async def lifespan(app: FastAPI):
     await _seed_staff()
     await start_scheduler()
     yield
+    await realtime_manager.shutdown()
     from app.scheduler import stop_scheduler
     await stop_scheduler()
 
@@ -90,6 +93,7 @@ app.include_router(monitor_dsl.router)
 app.include_router(monitor_dsl.asset_router)
 app.include_router(teams.router)
 app.include_router(notifications.router)
+app.include_router(realtime.router)
 
 
 @app.get("/health", tags=["infra"])

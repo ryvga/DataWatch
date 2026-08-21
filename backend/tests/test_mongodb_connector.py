@@ -1,4 +1,5 @@
 import json
+import os
 import socket
 import sys
 from datetime import datetime, timedelta, timezone
@@ -414,6 +415,8 @@ async def test_mongodb_container_connection_discovery_schema_and_native_profile(
         probe = socket.create_connection(("127.0.0.1", 27018), timeout=0.2)
         probe.close()
     except OSError:
+        if os.environ.get("REQUIRE_TEST_SERVICES", "").lower() in {"1", "true", "yes"}:
+            pytest.fail("MongoDB test service unavailable while REQUIRE_TEST_SERVICES=1")
         pytest.skip(
             "MongoDB test service unavailable; run docker compose -f "
             "docker-compose.test-dbs.yml up -d test-mongo"
@@ -432,6 +435,8 @@ async def test_mongodb_container_connection_discovery_schema_and_native_profile(
     )
     if not await connector.test_connection():
         await connector.close()
+        if os.environ.get("REQUIRE_TEST_SERVICES", "").lower() in {"1", "true", "yes"}:
+            pytest.fail("MongoDB test service unavailable while REQUIRE_TEST_SERVICES=1")
         pytest.skip(
             "MongoDB test service unavailable; run docker compose -f "
             "docker-compose.test-dbs.yml up -d test-mongo"

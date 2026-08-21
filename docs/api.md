@@ -62,6 +62,54 @@ Exchange email + password for JWT.
 
 Errors: `401` invalid credentials.
 
+### `GET /api/v1/realtime/ws`
+
+Authenticated WebSocket transport for browser live updates. The browser passes
+the same short-lived JWT used by the SPA as a query parameter because browser
+WebSocket handshakes cannot set an `Authorization` header portably:
+
+```
+wss://<host>/api/v1/realtime/ws?token=<jwt>
+```
+
+The server verifies the token, active user, and workspace membership before
+accepting the connection. Missing, expired, non-user, or cross-workspace tokens
+close with WebSocket code `1008`. Clients may send `ping` or `heartbeat`; the
+server replies with `realtime.pong`.
+
+Every accepted connection starts with a versioned envelope:
+
+```json
+{
+  "version": 1,
+  "id": "org:event:timestamp",
+  "type": "realtime.connected",
+  "orgId": "uuid",
+  "timestamp": "2026-08-21T02:00:00Z",
+  "payload": {"transport": "websocket"}
+}
+```
+
+Workers publish events through Redis (`datawatch:realtime:v1`); the API fans
+them out only to sockets for the same `orgId`. Current event types include
+`profile.completed`, `monitor.run.completed`, `incident.updated`,
+`alert.dispatched`, `alert.route.updated`, `alert.tested`, and
+`realtime.connected`. Events are hints to refetch authoritative API records,
+not a replacement for persistence. The frontend automatically reconnects with
+bounded exponential backoff and falls back to its existing polling refreshes
+when WebSockets or Redis are unavailable.
+
+### Webhook delivery contract
+
+Generic webhook routes receive compact, deterministic JSON with
+`Content-Type: application/json`, `User-Agent: Panopta-Webhook/1.0`,
+`X-Panopta-Event`, and `X-Panopta-Event-Id`. When a signing secret is configured,
+`X-Panopta-Signature` is `sha256=<hex HMAC-SHA256>` over the exact UTF-8 request
+body bytes. Consumers should verify the body before parsing JSON and reject
+replayed event IDs according to their own retention policy. The Settings →
+Alerts form links to webhook.site for disposable receiver testing; remove the
+route after verification.
+
 ---
 
 ## Infrastructure

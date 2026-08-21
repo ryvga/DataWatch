@@ -214,3 +214,14 @@ def test_alert_policy_validates_channel_specific_config():
 
     with pytest.raises(ValueError, match="Minimum severity must be P1, P2, or P3"):
         validate_alert_config("slack", {"webhook_url": "https://hooks.slack.com/test", "min_severity": "P4"})
+
+    with pytest.raises(ValueError, match="Generic webhook needs a valid http or https URL"):
+        validate_alert_config("webhook", {"url": "ftp://hooks.example.test/alerts"})
+
+    validated = validate_alert_config(
+        "webhook",
+        {"url": " https://hooks.example.test/alerts ", "secret": "  shared-secret  ", "min_severity": "p2"},
+    )
+    assert validated["url"] == " https://hooks.example.test/alerts "
+    assert validated["secret"] == "  shared-secret  "
+    assert validated["min_severity"] == "P2"

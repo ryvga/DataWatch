@@ -20,6 +20,9 @@ export default defineConfig({
           if (id.includes('recharts') || id.includes('date-fns') || id.includes('d3-')) {
             return 'charts'
           }
+          if (id.includes('node_modules/@paypal')) return 'payments'
+          if (id.includes('node_modules/radix-ui') || id.includes('node_modules/@radix-ui')) return 'ui'
+          if (id.includes('node_modules/lucide-react')) return 'icons'
           return 'vendor'
         },
       },
@@ -31,7 +34,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      '/api':    { target: apiTarget, changeOrigin: true },
+      '/api':    { target: apiTarget, changeOrigin: true, ws: true },
       '/auth':   { target: apiTarget, changeOrigin: true },
       '/orgs':   { target: apiTarget, changeOrigin: true },
       '/health': { target: apiTarget, changeOrigin: true },
