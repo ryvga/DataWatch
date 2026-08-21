@@ -8,6 +8,7 @@ import aiosqlite
 from app.connectors.base import (
     BaseConnector,
     ConnectorConfigurationError,
+    ScanBudgetExceeded,
     SchemaInfo,
     TableInfo,
 )
@@ -133,6 +134,23 @@ class SQLiteConnector(BaseConnector):
                 pass
             raise TimeoutError
         return task.result()
+
+    async def enforce_monitor_scan_budget(
+        self,
+        schema: str,
+        table: str,
+        max_bytes_scanned: int,
+    ) -> None:
+        """Bound a scan by the complete read-only database file size."""
+        self._validate_schema(schema)
+        await self._get_columns(schema, table)
+        conn = await self._get_conn()
+        async with conn.execute("PRAGMA page_count") as cursor:
+            page_count = int((await cursor.fetchone())[0])
+        async with conn.execute("PRAGMA page_size") as cursor:
+            page_size = int((await cursor.fetchone())[0])
+        if page_count * page_size > max_bytes_scanned:
+            raise ScanBudgetExceeded
 
     async def _get_columns(self, schema: str, table: str) -> list[aiosqlite.Row]:
         self._validate_schema(schema)

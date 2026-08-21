@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import pytest
 
+from app.connectors.base import ScanBudgetExceeded, ScanBudgetUnsupported
 from app.connectors.duckdb import DuckDBConnector
 from app.connectors.postgres import PostgresConnector
 from app.connectors.sqlite import SQLiteConnector
@@ -92,6 +93,30 @@ async def test_sqlite_compiled_monitor_executes_with_driver_bound_values(tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_sqlite_scan_budget_blocks_execution_before_query(tmp_path):
+    database_path = tmp_path / "budget.sqlite"
+    setup = sqlite3.connect(database_path)
+    setup.execute("CREATE TABLE orders (status TEXT, payment_reference TEXT)")
+    setup.commit()
+    setup.close()
+
+    connector = SQLiteConnector({"path": str(database_path)})
+    try:
+        with pytest.raises(MonitorExecutionError) as exc:
+            await execute_compiled_plan(
+                connector,
+                replace(
+                    _plan("sqlite", "main", "orders"),
+                    max_bytes_scanned=1,
+                ),
+            )
+    finally:
+        await connector.close()
+
+    assert exc.value.code == "scan_budget_exceeded"
+
+
+@pytest.mark.asyncio
 async def test_sqlite_vertical_slice_executes_and_advances_policy(tmp_path):
     database_path = tmp_path / "policy.sqlite"
     setup = sqlite3.connect(database_path)
@@ -175,6 +200,9 @@ async def test_postgres_compiled_adapter_sets_read_only_timeout_and_bindings():
     calls = []
 
     class Cursor:
+        async def fetchone(self):
+            return {"bytes": 8192}
+
         async def fetchmany(self, size):
             assert size == 2
             return [{"dw_m0_count": 1, "dw_m0_rate": Decimal("0.5")}]
@@ -202,6 +230,13 @@ async def test_postgres_compiled_adapter_sets_read_only_timeout_and_bindings():
     assert calls == [
         ("ROLLBACK", None),
         ("SET TRANSACTION READ ONLY", None),
+        (
+            "SELECT pg_total_relation_size(format('%I.%I', %s, %s)::regclass) AS bytes",
+            ("analytics", "orders"),
+        ),
+        ("ROLLBACK", None),
+        ("ROLLBACK", None),
+        ("SET TRANSACTION READ ONLY", None),
         ("SELECT set_config('statement_timeout', %s, true)", ("30000",)),
         (plan.statement, {"p0": "paid"}),
         ("ROLLBACK", None),
@@ -211,10 +246,16 @@ async def test_postgres_compiled_adapter_sets_read_only_timeout_and_bindings():
 class FakeConnector:
     profile_dialect = "sqlite"
 
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, budget_error=None):
         self.result = result
         self.error = error
+        self.budget_error = budget_error
         self.calls = []
+
+    async def enforce_monitor_scan_budget(self, schema, table, max_bytes_scanned):
+        self.calls.append(("budget", schema, table, max_bytes_scanned))
+        if self.budget_error:
+            raise self.budget_error
 
     async def execute_compiled_monitor(
         self,
@@ -227,6 +268,28 @@ class FakeConnector:
         if self.error:
             raise self.error
         return self.result
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (ScanBudgetExceeded(), "scan_budget_exceeded"),
+        (ScanBudgetUnsupported(), "scan_budget_not_supported"),
+    ],
+)
+async def test_runtime_fails_closed_when_scan_budget_cannot_be_honored(error, code):
+    connector = FakeConnector(
+        result={"dw_m0_count": 1, "dw_m0_rate": 0.5},
+        budget_error=error,
+    )
+    with pytest.raises(MonitorExecutionError) as exc:
+        await execute_compiled_plan(
+            connector,
+            _plan("sqlite", "main", "orders"),
+        )
+    assert exc.value.code == code
+    assert connector.calls == [("budget", "main", "orders", 1_000_000_000)]
 
 
 @pytest.mark.asyncio

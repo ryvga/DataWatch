@@ -1,8 +1,15 @@
 import asyncio
 import logging
+import os
 import time
 
-from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
+from app.connectors.base import (
+    BaseConnector,
+    ScanBudgetExceeded,
+    ScanBudgetUnsupported,
+    SchemaInfo,
+    TableInfo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +113,26 @@ class DuckDBConnector(BaseConnector):
         except TimeoutError:
             conn.interrupt()
             raise
+
+    async def enforce_monitor_scan_budget(
+        self,
+        schema: str,
+        table: str,
+        max_bytes_scanned: int,
+    ) -> None:
+        """Bound persistent DuckDB scans by the complete database file size."""
+        path = self._config.get("path", ":memory:")
+        if path == ":memory:":
+            raise ScanBudgetUnsupported("In-memory DuckDB has no stable byte bound")
+        row = self._get_conn().execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = ? AND table_name = ?",
+            [schema, table],
+        ).fetchone()
+        if not row:
+            raise ScanBudgetUnsupported("DuckDB relation could not be bounded")
+        if os.path.getsize(path) > max_bytes_scanned:
+            raise ScanBudgetExceeded
 
     async def get_table_ddl(self, schema: str, table: str) -> str:
         conn = self._get_conn()

@@ -7,7 +7,11 @@ from typing import Any
 
 from sqlglot import exp, parse
 
-from app.connectors.base import BaseConnector
+from app.connectors.base import (
+    BaseConnector,
+    ScanBudgetExceeded,
+    ScanBudgetUnsupported,
+)
 from app.services.monitor_compiler import RelationalMonitorPlan
 from app.services.monitor_dsl import Policy, Predicate
 from app.services.monitor_evaluator import (
@@ -129,11 +133,27 @@ async def execute_compiled_plan(
     _validate_execution_plan(connector, plan)
     parameters = {parameter.name: parameter.value for parameter in plan.parameters}
     try:
+        if plan.max_bytes_scanned is not None:
+            await connector.enforce_monitor_scan_budget(
+                plan.relation.schema_name,
+                plan.relation.table_name,
+                plan.max_bytes_scanned,
+            )
         row = await connector.execute_compiled_monitor(
             plan.statement,
             parameters,
             timeout_seconds=plan.timeout_seconds,
         )
+    except ScanBudgetExceeded as exc:
+        raise MonitorExecutionError(
+            "scan_budget_exceeded",
+            "Compiled monitor exceeds maxBytesScanned",
+        ) from exc
+    except ScanBudgetUnsupported as exc:
+        raise MonitorExecutionError(
+            "scan_budget_not_supported",
+            "Connector cannot enforce maxBytesScanned",
+        ) from exc
     except TimeoutError as exc:
         raise MonitorExecutionError(
             "execution_timeout",

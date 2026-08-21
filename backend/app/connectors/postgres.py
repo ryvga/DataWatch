@@ -4,7 +4,7 @@ import time
 import psycopg
 from psycopg.rows import dict_row
 
-from app.connectors.base import BaseConnector, SchemaInfo, TableInfo
+from app.connectors.base import BaseConnector, ScanBudgetExceeded, SchemaInfo, TableInfo
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +124,28 @@ class PostgresConnector(BaseConnector):
             if len(rows) != 1:
                 raise ValueError("Compiled monitor must return exactly one row")
             return dict(rows[0])
+        finally:
+            await conn.rollback()
+
+    async def enforce_monitor_scan_budget(
+        self,
+        schema: str,
+        table: str,
+        max_bytes_scanned: int,
+    ) -> None:
+        """Use total relation storage as a conservative upper scan bound."""
+        conn = await self._get_conn()
+        try:
+            await conn.rollback()
+            await conn.execute("SET TRANSACTION READ ONLY")
+            cursor = await conn.execute(
+                "SELECT pg_total_relation_size(format('%I.%I', %s, %s)::regclass) AS bytes",
+                (schema, table),
+            )
+            row = await cursor.fetchone()
+            relation_bytes = int(row["bytes"]) if row else max_bytes_scanned + 1
+            if relation_bytes > max_bytes_scanned:
+                raise ScanBudgetExceeded
         finally:
             await conn.rollback()
 

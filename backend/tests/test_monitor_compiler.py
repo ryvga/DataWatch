@@ -126,6 +126,10 @@ def test_relational_compiler_has_deterministic_dialect_snapshots(
     assert first["readOnly"] is True
     assert first["statementMode"] == "preview_only"
     assert first["driverBindingRequired"] is True
+    assert first["execution"] == {
+        "timeoutSeconds": 30,
+        "maxBytesScanned": 1_000_000_000,
+    }
 
 
 def test_nested_violation_sql_snapshots_are_pinned_per_dialect():

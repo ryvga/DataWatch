@@ -76,6 +76,7 @@ class RelationalMonitorPlan:
     breach_when: dict[str, Any]
     policy: dict[str, Any]
     timeout_seconds: int
+    max_bytes_scanned: int | None
 
     def payload(self) -> dict[str, Any]:
         body = {
@@ -104,7 +105,10 @@ class RelationalMonitorPlan:
                 "policy": self.policy,
             },
             "readOnly": True,
-            "execution": {"timeoutSeconds": self.timeout_seconds},
+            "execution": {
+                "timeoutSeconds": self.timeout_seconds,
+                "maxBytesScanned": self.max_bytes_scanned,
+            },
         }
         canonical = json.dumps(
             body,
@@ -567,6 +571,7 @@ def compile_relational_plan(
         ),
         policy=definition.spec.policy.model_dump(mode="json", by_alias=True),
         timeout_seconds=definition.spec.execution.timeout_seconds,
+        max_bytes_scanned=definition.spec.execution.max_bytes_scanned,
     )
 
 

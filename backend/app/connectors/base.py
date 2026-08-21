@@ -6,6 +6,14 @@ class ConnectorConfigurationError(ValueError):
     """A stable, secret-free connector configuration error safe for API responses."""
 
 
+class ScanBudgetExceeded(ValueError):
+    """The connector can prove the configured scan bound is too small."""
+
+
+class ScanBudgetUnsupported(NotImplementedError):
+    """The connector cannot enforce a requested scan bound."""
+
+
 @dataclass
 class TableInfo:
     name: str
@@ -62,6 +70,17 @@ class BaseConnector(ABC):
         """Execute an internally compiled aggregate plan with driver-bound values."""
         raise NotImplementedError(
             f"{type(self).__name__} has no compiled monitor execution path"
+        )
+
+    async def enforce_monitor_scan_budget(
+        self,
+        schema: str,
+        table: str,
+        max_bytes_scanned: int,
+    ) -> None:
+        """Fail unless the adapter can enforce a conservative scan upper bound."""
+        raise ScanBudgetUnsupported(
+            f"{type(self).__name__} cannot enforce maxBytesScanned"
         )
 
     @abstractmethod
