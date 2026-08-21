@@ -296,10 +296,14 @@ CONNECTOR_REGISTRY = {
             "scan_count": 100,
         },
         "label": "Redis",
-        "description": "Redis bounded keyspace, TTL, memory, Hash, and Streams metrics",
+        "description": "Redis bounded profile and metadata-only typed keyspace monitors",
         "tier": 2,
         "readiness": "experimental",
-        "capabilities": _capabilities(profiling="core", sampling=True),
+        "capabilities": _capabilities(
+            profiling="core",
+            compiled_monitors="internal_keyspace_read_only",
+            sampling=True,
+        ),
     },
     "sqlserver": {
         "module": "app.connectors.sqlserver",

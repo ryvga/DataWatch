@@ -126,6 +126,7 @@ def _planning_result(
         "internal_read_only",
         "internal_document_read_only",
         "internal_partition_read_only",
+        "internal_keyspace_read_only",
     }
     activation_issues = list(issues)
     if definition.spec.trigger.type == "interval":

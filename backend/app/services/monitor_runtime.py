@@ -11,6 +11,7 @@ from sqlglot import exp, parse
 from app.connectors.base import (
     BaseConnector,
     DocumentScanBudgetExceeded,
+    KeyScanBudgetExceeded,
     RowScanBudgetExceeded,
     ScanBudgetExceeded,
     ScanBudgetUnsupported,
@@ -20,6 +21,7 @@ from app.services.document_monitor import DocumentMonitorPlan
 from app.services.monitor_compiler import RelationalMonitorPlan
 from app.services.monitor_planning import MonitorPlan
 from app.services.monitor_dsl import Policy, Predicate
+from app.services.redis_monitor import RedisMonitorPlan
 from app.services.monitor_evaluator import (
     PolicyState,
     evaluate_breach,
@@ -253,6 +255,8 @@ async def execute_monitor_plan(connector: BaseConnector, plan: MonitorPlan) -> d
         return await execute_document_plan(connector, plan)
     if isinstance(plan, CassandraMonitorPlan):
         return await execute_partition_plan(connector, plan)
+    if isinstance(plan, RedisMonitorPlan):
+        return await execute_keyspace_plan(connector, plan)
     return await execute_compiled_plan(connector, plan)
 
 
@@ -306,6 +310,61 @@ async def execute_partition_plan(
             raise MonitorExecutionError(
                 "result_null_invalid",
                 f"Partition monitor output cannot be null: {output.reference}",
+            )
+        result[output.reference] = None if value is None else _finite_number(value)
+    return result
+
+
+async def execute_keyspace_plan(
+    connector: BaseConnector,
+    plan: RedisMonitorPlan,
+) -> dict:
+    """Execute one metadata-only Redis keyspace plan and validate its outputs."""
+    if plan.relation.source_type != "redis" or getattr(connector, "native_profile_kind", None) != "keyspace":
+        raise MonitorExecutionError(
+            "connector_plan_mismatch",
+            "Keyspace monitor plan does not match the connector",
+        )
+    if not 1 <= plan.timeout_seconds <= 120 or plan.max_keys_scanned < 1:
+        raise MonitorExecutionError(
+            "execution_contract_invalid",
+            "Keyspace monitor execution bounds are invalid",
+        )
+    try:
+        measurements = await connector.execute_keyspace_monitor(plan)
+    except KeyScanBudgetExceeded as exc:
+        raise MonitorExecutionError(
+            "key_scan_budget_exceeded",
+            "Keyspace monitor reached maxKeysScanned",
+        ) from exc
+    except TimeoutError as exc:
+        raise MonitorExecutionError(
+            "execution_timeout",
+            "Keyspace monitor exceeded its timeout",
+        ) from exc
+    except NotImplementedError as exc:
+        raise MonitorExecutionError(
+            "connector_execution_not_supported",
+            "Connector has no keyspace monitor execution adapter",
+        ) from exc
+    except Exception as exc:
+        raise MonitorExecutionError(
+            "execution_failed",
+            f"Keyspace monitor execution failed: {type(exc).__name__}",
+        ) from exc
+    expected = {output.reference for output in plan.outputs}
+    if set(measurements) != expected:
+        raise MonitorExecutionError(
+            "result_shape_invalid",
+            "Keyspace monitor returned unexpected measurements",
+        )
+    result = {}
+    for output in plan.outputs:
+        value = measurements[output.reference]
+        if value is None and not output.nullable:
+            raise MonitorExecutionError(
+                "result_null_invalid",
+                f"Keyspace monitor output cannot be null: {output.reference}",
             )
         result[output.reference] = None if value is None else _finite_number(value)
     return result

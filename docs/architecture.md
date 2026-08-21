@@ -385,9 +385,26 @@ metrics are listed in `unavailable_metrics` and use `null`, never a misleading z
 Arbitrary caller commands are rejected. Verified TLS and hostname validation are the
 default; plaintext transport requires an explicit isolated-development setting.
 
-This slice provides discovery, deterministic schema, and bounded native profiling. Typed
-immutable Redis monitor plans and the anomaly-to-incident bridge remain required before
-the connector can advertise compiled monitoring capability.
+Redis typed monitors use planner identity `datawatch-v1alpha1-redis-1`. The deterministic
+schema exposes only per-key metadata fields (`key_type`, `ttl_ms`, `memory_bytes`, Hash
+size, and Stream entry/group/pending/lag counts). Its fingerprint also includes a SHA-256
+digest of the configured key pattern, so changing scope invalidates an existing plan.
+Every definition requires `maxKeysScanned` between 1 and 10,000 and sampling off.
+
+Execution performs a cursor traversal capped at `maxKeysScanned + 1`, then uses only the
+allowlisted `TYPE`, `PTTL`, `MEMORY USAGE`, `HLEN`, `XLEN`, and `XINFO GROUPS` metadata
+commands. It never returns key names or invokes value-reading commands. An extra key,
+unfinished cursor traversal, disappearing key, scope-fingerprint change, or ACL denial
+for a required field fails the run before evaluation. The bounded metadata rows feed the
+same typed metric/predicate evaluator, persisted run audit, policy, incident, narration
+trigger, and recovery bridge as other planners. The required Redis 7 lane proves TTL,
+memory, Hash and Stream measurements plus an empty-keyspace incident followed by
+data recovery.
+
+Redis `SCAN` is not a transactional snapshot: a completed traversal has documented
+observational semantics while keys mutate concurrently. The connector therefore remains
+Experimental until controlled concurrent-mutation and scale tests quantify that boundary,
+along with live trusted-certificate TLS and Redis 8 compatibility.
 
 ```sql
 SELECT

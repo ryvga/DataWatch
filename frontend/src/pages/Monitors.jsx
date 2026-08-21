@@ -105,6 +105,7 @@ const INITIAL_DSL_FORM = {
   recoveryPasses: '1',
   maxDocumentsScanned: '10000',
   maxRowsScanned: '1000',
+  maxKeysScanned: '1000',
   partitionBindings: '{"tenant_id":"tenant-a"}',
 }
 
@@ -181,6 +182,12 @@ function BuildDslDefinition({ form, sourceType }) {
             partitionBindings: JSON.parse(form.partitionBindings),
             sampling: { mode: 'off' },
           }
+          : sourceType === 'redis'
+            ? {
+              timeoutSeconds: 30,
+              maxKeysScanned: Number(form.maxKeysScanned),
+              sampling: { mode: 'off' },
+            }
         : { timeoutSeconds: 30, sampling: { mode: 'auto' } },
     },
   }
@@ -196,6 +203,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
   const sourceType = selectedTable?.source_type
   const isMongo = sourceType === 'mongodb'
   const isCassandra = sourceType === 'cassandra'
+  const isRedis = sourceType === 'redis'
 
   useEffect(() => {
     if (!open) return
@@ -237,6 +245,10 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
         return 'Cassandra partition bindings must be valid JSON.'
       }
     }
+    if (isRedis && (!Number.isInteger(Number(form.maxKeysScanned)) || Number(form.maxKeysScanned) < 1 || Number(form.maxKeysScanned) > 10000)) {
+      return 'Redis max keys scanned must be an integer between 1 and 10,000.'
+    }
+    if (isRedis && form.kind === 'freshness') return 'Redis metadata monitors use TTL fields instead of relational freshness.'
     if (form.kind === 'violations' && !['is_null', 'is_not_null', 'is_missing', 'is_nan', 'is_zero', 'is_negative', 'is_empty', 'is_whitespace', 'is_true', 'is_false', 'is_future', 'is_past'].includes(form.predicateOperator) && !form.predicateValue.trim()) {
       return 'Enter the value the column should be compared with.'
     }
@@ -346,7 +358,7 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="row_count">Volume · row count</SelectItem>
-                  <SelectItem value="freshness">Freshness · seconds since update</SelectItem>
+                  {!isRedis && <SelectItem value="freshness">Freshness · seconds since update</SelectItem>}
                   <SelectItem value="null_rate">Completeness · null rate</SelectItem>
                   {!isMongo && <SelectItem value="duplicate_rate">Uniqueness · duplicate count</SelectItem>}
                   <SelectItem value="negative_rate">Validity · negative values</SelectItem>
@@ -556,6 +568,29 @@ function DslBuilderDialog({ open, onOpenChange, tables, initialTableId, onCreate
                   Every partition-key field must be bound. Values are sent through a prepared statement, never interpolated into CQL.
                 </p>
               </div>
+            </div>
+          )}
+
+          {isRedis && (
+            <div className="grid gap-3 rounded-md border bg-muted/20 p-4">
+              <div className="grid gap-2 sm:max-w-md">
+                <Label htmlFor="dsl-max-keys">Maximum keys scanned</Label>
+                <Input
+                  id="dsl-max-keys"
+                  type="number"
+                  min="1"
+                  max="10000"
+                  step="1"
+                  value={form.maxKeysScanned}
+                  onChange={set('maxKeysScanned')}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required hard ceiling. Incomplete cursor traversal fails closed and never evaluates a partial keyspace.
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Redis fields are metadata only: key_type, ttl_ms, memory_bytes, hash_fields, stream_entries, stream_groups, stream_pending, and stream_lag. Stored values and key names are never returned.
+              </p>
             </div>
           )}
 

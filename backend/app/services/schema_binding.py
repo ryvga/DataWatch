@@ -238,6 +238,22 @@ def document_schema_fingerprint(columns: tuple[SchemaColumn, ...]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
+def redis_schema_fingerprint(columns: tuple[SchemaColumn, ...], ddl: str | None) -> str:
+    """Bind Redis metadata columns to the configured key-pattern digest."""
+    match = re.search(r"\bkey_pattern_sha256\s*=\s*'([0-9a-f]{64})'", ddl or "", flags=re.IGNORECASE)
+    if not match:
+        raise SchemaBindingError(
+            "redis_scope_metadata_missing",
+            "Redis schema snapshot does not bind the configured key pattern",
+        )
+    payload = {
+        "kind": "redis_keyspace_v2",
+        "fields": sorted(column.name for column in columns),
+        "key_pattern_sha256": match.group(1).lower(),
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+
 def build_relation_binding(
     *,
     asset_id: UUID,
@@ -254,9 +270,12 @@ def build_relation_binding(
             "A structured schema snapshot is required before this monitor can compile",
         )
     normalized_source = source_type.lower()
-    computed_fingerprint = (
-        document_schema_fingerprint(columns) if normalized_source == "mongodb" else schema_fingerprint(columns)
-    )
+    if normalized_source == "mongodb":
+        computed_fingerprint = document_schema_fingerprint(columns)
+    elif normalized_source == "redis":
+        computed_fingerprint = redis_schema_fingerprint(columns, ddl)
+    else:
+        computed_fingerprint = schema_fingerprint(columns)
     if latest_schema_fingerprint and latest_schema_fingerprint != computed_fingerprint:
         raise SchemaBindingError(
             "schema_snapshot_stale",

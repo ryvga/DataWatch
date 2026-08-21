@@ -36,6 +36,7 @@ SAFE_ERROR_MESSAGES = {
     "scan_budget_not_supported": "Connector cannot enforce maxBytesScanned",
     "document_scan_budget_exceeded": "Document monitor reached maxDocumentsScanned",
     "row_scan_budget_exceeded": "Partition monitor reached maxRowsScanned",
+    "key_scan_budget_exceeded": "Keyspace monitor reached maxKeysScanned",
     "execution_failed": "Compiled monitor execution failed",
     "evaluation_failed": "Compiled monitor evaluation failed",
     "plan_context_mismatch": "Compiled plan no longer matches the reserved run",

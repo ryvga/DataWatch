@@ -85,6 +85,16 @@ truncated partition can never produce a misleading pass. The current slice delib
 does not claim source-wide scheduled profiling, live trusted-certificate TLS, Cassandra
 4 compatibility, Astra bundles, or controlled-scale evidence.
 
+Redis uses `datawatch-v1alpha1-redis-1`. Definitions must set `maxKeysScanned` between 1
+and 10,000 and `sampling.mode: off`. The plan is bound to the configured key-pattern
+digest and exposes only metadata fields: `key_type`, `ttl_ms`, `memory_bytes`,
+`hash_fields`, `stream_entries`, `stream_groups`, `stream_pending`, and `stream_lag`.
+Execution caps cursor traversal at `maxKeysScanned + 1`; overflow, an unfinished cursor,
+a disappearing key, changed pattern, or a required ACL-denied metric fails before policy
+evaluation. Key names and stored values never enter the plan result. A completed `SCAN`
+is still observational rather than a transactional snapshot during concurrent mutation;
+that limitation is explicit until controlled mutation tests are available.
+
 ## Authoring model (2026-08-21)
 
 The authoring language is intentionally declarative YAML/JSON. DataWatch does **not**

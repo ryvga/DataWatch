@@ -410,6 +410,60 @@ async def test_cassandra_preview_uses_partition_bound_planner_and_attestation():
 
 
 @pytest.mark.asyncio
+async def test_redis_preview_uses_metadata_only_bounded_planner_and_attestation():
+    from app.routers.monitor_dsl import preview_monitor_definition
+
+    table = SimpleNamespace(
+        id=UUID(ASSET_ID),
+        schema_name="db4",
+        table_name="keyspace",
+        dbt_model_yaml=(
+            'CREATE KEYSPACE VIEW "db4"."keyspace" (\n'
+            '  "key_type" STRING NOT NULL,\n'
+            '  "memory_bytes" NUMBER NULL,\n'
+            '  "ttl_ms" NUMBER NULL\n'
+            ") WITH key_pattern_sha256='" + "a" * 64 + "';"
+        ),
+    )
+    source = SimpleNamespace(type="redis")
+
+    class Database:
+        async def execute(self, statement):
+            class Result:
+                def one_or_none(self):
+                    return (table, source)
+
+            return Result()
+
+        async def scalar(self, statement):
+            return None
+
+    body = valid_definition()
+    body["spec"]["trigger"] = {"type": "manual"}
+    body["spec"]["measurements"] = [{"id": "keys", "type": "metric", "metric": "row_count"}]
+    body["spec"]["breachWhen"] = {
+        "op": "lte",
+        "left": {"ref": "keys"},
+        "right": {"literal": 0},
+    }
+    body["spec"]["execution"].pop("maxBytesScanned")
+    body["spec"]["execution"].pop("maxDocumentsScanned")
+    body["spec"]["execution"]["maxKeysScanned"] = 100
+    body["spec"]["execution"]["sampling"] = {"mode": "off"}
+    response = await preview_monitor_definition(
+        MonitorDefinition.model_validate(body),
+        org=SimpleNamespace(id="org-1"),
+        db=Database(),
+    )
+
+    assert response["preview"]["status"] == "compiled_validation_only"
+    assert response["preview"]["plannerVersion"] == "datawatch-v1alpha1-redis-1"
+    assert response["compiledPlan"]["kind"] == "redis_bounded_metadata_scan"
+    assert response["compiledPlan"]["resultContract"]["storedValuesRead"] is False
+    assert response["capabilityPlan"]["activationSupported"] is True
+
+
+@pytest.mark.asyncio
 async def test_incompatible_preview_does_not_issue_activation_attestation():
     from app.routers.monitor_dsl import preview_monitor_definition
 

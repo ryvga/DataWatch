@@ -20,9 +20,10 @@ from app.services.monitor_compiler import (
     compile_relational_plan,
 )
 from app.services.monitor_dsl import MonitorDefinition
+from app.services.redis_monitor import RedisMonitorPlan, analyze_redis_support, compile_redis_plan
 from app.services.schema_binding import RelationBinding
 
-MonitorPlan: TypeAlias = RelationalMonitorPlan | DocumentMonitorPlan | CassandraMonitorPlan
+MonitorPlan: TypeAlias = RelationalMonitorPlan | DocumentMonitorPlan | CassandraMonitorPlan | RedisMonitorPlan
 
 
 def compile_monitor_plan(
@@ -35,6 +36,8 @@ def compile_monitor_plan(
         return compile_document_plan(definition, relation=relation)
     if relation.source_type == "cassandra":
         return compile_cassandra_plan(definition, relation=relation, ddl=ddl or "")
+    if relation.source_type == "redis":
+        return compile_redis_plan(definition, relation=relation)
     return compile_relational_plan(definition, relation=relation)
 
 
@@ -48,4 +51,6 @@ def analyze_monitor_support(
         return analyze_document_support(definition, relation=relation)
     if relation.source_type == "cassandra":
         return analyze_cassandra_support(definition, relation=relation, ddl=ddl or "")
+    if relation.source_type == "redis":
+        return analyze_redis_support(definition, relation=relation)
     return analyze_relational_support(definition, relation=relation)

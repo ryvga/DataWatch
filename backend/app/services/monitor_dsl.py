@@ -244,6 +244,7 @@ class Execution(StrictModel):
     max_bytes_scanned: int | None = Field(default=None, alias="maxBytesScanned", ge=1)
     max_documents_scanned: int | None = Field(default=None, alias="maxDocumentsScanned", ge=1)
     max_rows_scanned: int | None = Field(default=None, alias="maxRowsScanned", ge=1)
+    max_keys_scanned: int | None = Field(default=None, alias="maxKeysScanned", ge=1)
     partition_bindings: dict[str, Any] = Field(
         default_factory=dict,
         alias="partitionBindings",

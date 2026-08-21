@@ -33,6 +33,7 @@ async def test_connector_types_include_registry_fields_and_versions():
             "internal_read_only",
             "internal_document_read_only",
             "internal_partition_read_only",
+            "internal_keyspace_read_only",
         }
         field_names = {field["name"] for field in item["fields"]}
         assert set(item["required"]).issubset(field_names)
@@ -59,6 +60,7 @@ async def test_connector_types_include_registry_fields_and_versions():
     assert by_type["mongodb"]["capabilities"]["sampling"] is True
     assert "database" in by_type["mongodb"]["required"]
     assert by_type["redis"]["capabilities"]["profiling"] == "core"
+    assert by_type["redis"]["capabilities"]["compiled_monitors"] == "internal_keyspace_read_only"
     assert by_type["redis"]["capabilities"]["sampling"] is True
     assert by_type["redis"]["readiness"] == "experimental"
     assert by_type["redis"]["versions"] == ["Auto-detect", "Redis 7", "Redis 8"]

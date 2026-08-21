@@ -700,6 +700,7 @@ def _monitor_execution_error_code(error) -> str:
         "scan_budget_not_supported",
         "document_scan_budget_exceeded",
         "row_scan_budget_exceeded",
+        "key_scan_budget_exceeded",
     }:
         return code
     return "execution_failed"

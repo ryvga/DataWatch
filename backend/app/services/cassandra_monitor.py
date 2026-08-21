@@ -412,7 +412,7 @@ def _metric(measurement: Measurement, rows: list[dict[str, Any]], now: datetime)
         "true_count": lambda value: value is True,
         "false_count": lambda value: value is False,
     }
-    rate_metric = metric[:-5] + "count" if metric and metric.endswith("_rate") else None
+    rate_metric = metric.removesuffix("_rate") + "_count" if metric and metric.endswith("_rate") else None
     if metric in count_conditions or rate_metric in count_conditions:
         count = sum(count_conditions[metric if metric in count_conditions else rate_metric](value) for value in values)
         return count / len(scoped) if rate_metric and scoped else None if rate_metric else count
@@ -447,8 +447,11 @@ def _metric(measurement: Measurement, rows: list[dict[str, Any]], now: datetime)
     raise ValueError(f"Unsupported Cassandra metric: {metric}")
 
 
-def evaluate_cassandra_rows(plan: CassandraMonitorPlan, rows: list[dict[str, Any]]) -> dict[str, Any]:
-    definition = plan.definition()
+def evaluate_bounded_rows(
+    definition: MonitorDefinition,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Evaluate a typed definition over a connector-bounded metadata row set."""
     now = datetime.now(timezone.utc)
     measurements: dict[str, Any] = {}
     for measurement in definition.spec.measurements:
@@ -461,3 +464,7 @@ def evaluate_cassandra_rows(plan: CassandraMonitorPlan, rows: list[dict[str, Any
                 count if output == "count" else count / len(rows) if rows else None
             )
     return measurements
+
+
+def evaluate_cassandra_rows(plan: CassandraMonitorPlan, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    return evaluate_bounded_rows(plan.definition(), rows)
