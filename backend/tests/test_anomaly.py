@@ -364,3 +364,15 @@ def test_dsl_monitor_failure_uses_policy_severity_and_title():
     ]
     assert classify_severity(checks) == "P1"
     assert generate_title("orders", checks) == "[P1] orders — custom monitor failed: orders-valid"
+
+
+def test_title_prefers_actionable_null_spike_over_accompanying_freshness_breach():
+    from app.services.anomaly import AnomalyResult
+    from app.services.incident import generate_title
+
+    checks = [
+        AnomalyResult("rule", "freshness_sla_breach", None, "failed", 90000, None, None),
+        AnomalyResult("rule", "null_rate_spike", "payment_status", "failed", 0.25, None, 0.24),
+    ]
+
+    assert generate_title("orders", checks) == "[P1] orders — payment_status null rate spiked and freshness breach"

@@ -866,24 +866,29 @@ def backdate_workspace(conn, slug: str):
     conn.commit()
 
 
-def trigger_autopilot():
-    """Queue autopilot (AI monitor recommendations) for every seeded table via the API."""
-    print("\n  Triggering AI autopilot for all seeded tables...")
-    queued = 0
-    for ws in WORKSPACES:
-        if ws["slug"] not in _tokens and not login(ws["slug"]):
-            continue
-        r = api("GET", "/api/v1/tables", slug=ws["slug"])
-        if r.status_code != 200:
-            continue
-        for tbl in r.json():
-            resp = api("POST", f"/api/v1/tables/{tbl['id']}/retry-autopilot", slug=ws["slug"])
-            if resp.status_code in (200, 202):
-                queued += 1
-                print(f"    ↑ autopilot queued: {ws['slug']}: {tbl['schema_name']}.{tbl['table_name']}")
-            else:
-                print(f"    x autopilot failed: {ws['slug']}: {tbl['table_name']} → {resp.status_code}")
-    print(f"  + Autopilot queued for {queued} table(s)")
+def configure_demo_alert_route():
+    """Ensure the primary workspace visibly delivers P1/P2 demo incidents to MailHog."""
+    slug = "acme-corp"
+    recipient = "pfe-demo@acme.test"
+    if slug not in _tokens and not login(slug):
+        print("  WARNING: could not log in to configure the demo alert route")
+        return
+
+    existing = api("GET", "/api/v1/alerts", slug=slug, silent=True)
+    if existing.status_code == 200:
+        for route in existing.json():
+            if route.get("channel") == "email" and recipient in (route.get("config", {}).get("to") or []):
+                print(f"  i Alert route already configured: {recipient}")
+                return
+
+    response = api(
+        "POST",
+        "/api/v1/alerts",
+        slug=slug,
+        json={"channel": "email", "config": {"to": [recipient], "min_severity": "P2"}},
+    )
+    if response.status_code == 201:
+        print(f"  + MailHog alert route: P1/P2 → {recipient}")
 
 
 # ── Anomaly injection ────────────────────────────────────────────────────────────
@@ -1031,6 +1036,25 @@ def wait_for_incidents(max_wait: int = 120) -> list:
     return all_found
 
 
+def wait_for_demo_narration(max_wait: int = 150) -> bool:
+    """Wait for the Acme orders incident narration so recording never starts on a loading state."""
+    print(f"\n  Waiting up to {max_wait}s for the Acme incident narration...")
+    deadline = time.time() + max_wait
+    while time.time() < deadline:
+        if "acme-corp" not in _tokens:
+            login("acme-corp")
+        response = api("GET", "/api/v1/incidents?status=open", slug="acme-corp", silent=True)
+        if response.status_code == 200:
+            for incident in response.json():
+                if "orders" in str(incident.get("title", "")).lower() and incident.get("llm_narration"):
+                    print("  + Acme orders narration is ready for recording")
+                    return True
+        time.sleep(3)
+        print("    ...", end="\r", flush=True)
+    print("  WARNING: narration is still generating; use the prepared incident after it completes.")
+    return False
+
+
 # ── Bootstrap ─────────────────────────────────────────────────────────────────────
 
 def _bootstrap_env():
@@ -1128,30 +1152,34 @@ def run_full(use_local: bool = False):
     except Exception as e:
         print(f"  WARNING AI governance seed failed: {e}")
 
+    print("\n11. Configuring primary demo alert route...")
+    configure_demo_alert_route()
+
     conn.close()
 
-    print("\n11. Injecting initial anomalies into live databases...")
+    print("\n12. Injecting initial anomalies into live databases...")
     inject_anomalies(use_local=use_local)
 
-    print("\n12. Triggering DataWatch profile runs...")
+    print("\n13. Triggering DataWatch profile runs...")
     try:
         trigger_profiles()
     except Exception as e:
         print(f"  WARNING: profile trigger failed: {e}")
         print("  (The APScheduler will run profiles automatically on the configured interval)")
 
-    print("\n13. Waiting for incidents from detection pipeline...")
+    print("\n14. Waiting for incidents from detection pipeline...")
     try:
         wait_for_incidents(max_wait=90)
     except Exception as e:
         print(f"  WARNING: wait failed: {e}")
 
-    print("\n14. Triggering AI autopilot (monitor recommendations for each table)...")
+    print("\n15. Preparing the AI incident explanation for recording...")
     try:
-        trigger_autopilot()
+        wait_for_demo_narration()
     except Exception as e:
-        print(f"  WARNING: autopilot trigger failed: {e}")
-        print("  (Use the Retry button in the table detail view, or wait for APScheduler)")
+        print(f"  WARNING: narration wait failed: {e}")
+
+    print("\n16. AI monitor recommendations are available on demand from each table detail view.")
 
     _print_credentials()
 

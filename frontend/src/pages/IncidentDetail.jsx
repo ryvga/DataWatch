@@ -465,10 +465,21 @@ function ClientSummaryCard({ summary, onCopy }) {
 }
 
 function FiredChecksCard({ checks }) {
+  const [showAll, setShowAll] = useState(false)
+  const visibleChecks = showAll ? checks : checks.slice(0, 5)
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Fired checks</CardTitle>
+      <CardHeader className="flex-row items-center justify-between gap-3">
+        <div>
+          <CardTitle className="text-base">Key signals</CardTitle>
+          {checks.length > 5 && <p className="mt-1 text-xs text-muted-foreground">Showing the five strongest signals first.</p>}
+        </div>
+        {checks.length > 5 && (
+          <Button type="button" size="sm" variant="ghost" onClick={() => setShowAll((value) => !value)}>
+            {showAll ? 'Show key signals' : `View all ${checks.length}`}
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {checks.length ? (
@@ -483,7 +494,7 @@ function FiredChecksCard({ checks }) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {checks.map((check, index) => (
+                {visibleChecks.map((check, index) => (
                   <TableRow key={`${check.id}-${index}`}>
                     <TableCell className="font-mono text-xs text-foreground">{check.check_name}</TableCell>
                     <TableCell>
@@ -521,11 +532,6 @@ function AffectedTableCard({ incident, table, tableLoading, tableError, onOpenTa
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs text-muted-foreground">Table ID</span>
-          <code className="break-all rounded-md border bg-muted/30 px-2 py-1 text-xs text-foreground">{incident.table_id}</code>
-        </div>
-
         {tableLoading && <p className="text-sm text-muted-foreground">Loading table details...</p>}
         {tableError && <p className="text-sm text-destructive">{tableError}</p>}
 
@@ -537,16 +543,25 @@ function AffectedTableCard({ incident, table, tableLoading, tableError, onOpenTa
                 <p className="mt-1 font-mono text-xs text-foreground">{tableName}</p>
               </div>
               <div>
-                <span className="text-xs text-muted-foreground">Status</span>
+                <span className="text-xs text-muted-foreground">Monitoring</span>
                 <div className="mt-1">
-                  <HealthBadge status={table.is_active ? 'healthy' : 'paused'} />
+                  <Badge variant="outline" className="border-border bg-muted/40 text-foreground">
+                    {table.is_active ? 'Monitoring active' : 'Monitoring paused'}
+                  </Badge>
                 </div>
               </div>
             </div>
             <div>
               <span className="text-xs text-muted-foreground">Source</span>
-              <p className="mt-1 font-mono text-xs text-foreground">{sourceName || table.source_id || '-'}</p>
+              <p className="mt-1 text-sm text-foreground">{sourceName || 'Source name unavailable'}</p>
             </div>
+            <details className="border-t pt-3 text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none">Technical identifiers</summary>
+              <div className="mt-2 space-y-1 font-mono break-all">
+                <p>Table: {incident.table_id}</p>
+                {table.source_id && <p>Source: {table.source_id}</p>}
+              </div>
+            </details>
           </>
         )}
 

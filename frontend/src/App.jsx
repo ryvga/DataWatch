@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { isSessionValid, storage } from './lib/storage'
-import { getHostContext, DEV_MODE } from './lib/subdomain'
+import { getHostContext } from './lib/subdomain'
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import AcceptInvite from './pages/AcceptInvite'
@@ -39,9 +39,10 @@ function AdminRoute({ children }) {
   return children
 }
 
-// Dev-only context label (bottom-right, tiny, no navigation links that expose admin path)
+// Keep deployment context opt-in: it is useful while debugging hosts, but it is
+// visual noise in a customer or PFE recording.
 function DevBadge({ ctx }) {
-  if (!DEV_MODE) return null
+  if (import.meta.env.VITE_SHOW_DEV_CONTEXT !== 'true') return null
   return (
     <div style={{
       position: 'fixed', bottom: 8, right: 8, zIndex: 9999,

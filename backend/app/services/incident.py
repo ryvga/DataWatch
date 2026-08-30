@@ -57,10 +57,20 @@ def generate_title(table_name: str, failed_checks: list[AnomalyResult]) -> str:
 
     if "row_count_zero" in names:
         return f"[{severity}] {table_name} — row count dropped to 0"
-    if "freshness_sla_breach" in names:
-        return f"[{severity}] {table_name} — freshness SLA breached"
+
+    # A freshness breach often accompanies a more diagnostic column-level signal.
+    # Lead with that signal so an incident list tells an operator what to investigate
+    # without hiding the freshness failure in the detail view.
+    null_spikes = [c for c in failed_checks if c.check_name == "null_rate_spike"]
+    if null_spikes:
+        column = null_spikes[0].column_name
+        target = f"{column} null rate" if column else "null rate"
+        suffix = " and freshness breach" if "freshness_sla_breach" in names else ""
+        return f"[{severity}] {table_name} — {target} spiked{suffix}"
     if "schema_drift" in names:
         return f"[{severity}] {table_name} — schema drift detected"
+    if "freshness_sla_breach" in names:
+        return f"[{severity}] {table_name} — freshness SLA breached"
 
     z_failures = [c for c in failed_checks if c.check_type == "z_score"]
     if z_failures:

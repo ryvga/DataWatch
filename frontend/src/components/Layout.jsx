@@ -134,7 +134,7 @@ export default function Layout() {
         >
           <div className={cn(
             'flex shrink-0 items-center justify-center rounded-lg text-xs font-bold text-white',
-            'bg-gradient-to-br from-primary to-primary/70',
+            'bg-primary',
             compact ? 'size-8' : 'size-7'
           )}>
             {orgName.charAt(0).toUpperCase()}
