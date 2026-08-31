@@ -44,3 +44,7 @@ postgres_data/
 
 # Ephemeral Claude/Codex worktrees must never be committed as gitlinks
 .claude/worktrees/
+
+# Local artifact rendering and build scratch space
+tmp/
+*.inspect.ndjson

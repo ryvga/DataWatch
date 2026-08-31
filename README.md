@@ -136,50 +136,32 @@ exact reasons. Stale, unknown, unavailable, and unsupported evidence never passe
 **Prerequisites:** Docker, Docker Compose
 
 ```bash
-# 1. Clone
-git clone <repo-url> && cd DataWatch
-
-# 2. Configure
+# 1. Configure local secrets
 cp .env.example .env
-# Edit .env — set SECRET_KEY, FERNET_MASTER_KEY, OPENROUTER_API_KEY
+# Edit .env — set SECRET_KEY and FERNET_MASTER_KEY.
 
-# 3. Start stack (the migrate service applies Alembic before API/worker start)
-docker compose up -d
+# 2. Start the full local stack (migrations run automatically)
+docker compose up -d --build --wait
 
-# 4. Seed all demo workspaces (optional)
-backend/venv/bin/python scripts/quickstart.py --reset --local
-
-# 5. Register org + get API key
-curl -X POST http://localhost:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"org_name":"Demo","org_slug":"demo","email":"admin@demo.com","password":"secret"}'
+# 3. Seed the deterministic local demo
+docker compose --profile seed run --rm --entrypoint python seed /scripts/quickstart.py --reset
+curl -fsS http://localhost:8000/ready
 ```
 
-Frontend: http://localhost:5173 (run `cd frontend && npm ci && npm run dev`)
+For the seeded credentials, local URLs, verification commands, and recovery
+steps, use [QUICKSTART.md](QUICKSTART.md). For a full handoff to another
+computer, read [docs/CONTINUATION.md](docs/CONTINUATION.md).
+
+Frontend: http://localhost:5173
 API docs: http://localhost:8000/docs
 
 ## Demo Walkthrough
 
-```bash
-# Reset and seed all workspaces, users, tables, history, and incidents
-backend/venv/bin/python scripts/quickstart.py --reset --local
-
-# In the UI:
-# 1. Settings → Data Sources → Add (type: postgres, host: postgres, db: datawatch)
-# 2. Settings → Tables → Add demo.orders (freshness_column: created_at)
-# 3. Overview → should show healthy
-
-# Inject anomaly
-backend/venv/bin/python scripts/quickstart.py --inject --local
-
-# Trigger profile run
-curl -X POST http://localhost:8000/api/v1/tables/<orders-id>/run \
-  -H "x-api-key: $DATAWATCH_API_KEY"
-
-# Watch the incident appear with LLM narration in the UI
-```
-
-Available scenarios: `pipeline_failure` · `null_spike` · `schema_drift` · `row_explosion`
+The recording-ready PFE sequence is maintained in [DEMO.md](DEMO.md). It uses
+the seeded Acme workspace, the prepared `orders` P1 incident, a local MailHog
+alert, and the observe-only AI Governance view. Historical commands below this
+repository or in external notes should not replace that runbook without a new
+verification.
 
 ## Environment Variables
 
