@@ -1,0 +1,24 @@
+digraph Classes {
+  graph [rankdir=LR, bgcolor="white", pad="0.2", nodesep="0.34", ranksep="0.55", fontname="Arial", labelloc="t", label="Diagramme de classes métier simplifié", fontsize=20, fontcolor="#172033"];
+  node [shape=record, style="filled", fillcolor="#F8FAFC", color="#94A3B8", penwidth=1.1, fontname="Arial", fontsize=9.5, fontcolor="#172033", margin="0.08,0.06"];
+  edge [color="#64748B", penwidth=1.0, arrowsize=0.65, fontname="Arial", fontsize=8.5, fontcolor="#475569"];
+  Organization [fillcolor="#E6F6FA", color="#5BB8CE", label="{Organisation|id : UUID\lname : string\lslug : string\lplan : string\l}"];
+  User [label="{Utilisateur|id : UUID\lorg_id : UUID\lemail : string\lrole : string\l}"];
+  DataSource [label="{SourceDeDonnees|id : UUID\lorg_id : UUID\ltype : string\lstatus : string\l}"];
+  MonitoredTable [fillcolor="#EAF4FF", color="#73A7D7", label="{TableSurveillee|id : UUID\lsource_id : UUID\ltable_name : string\lsensitivity : float\lcheck_interval : int\l}"];
+  TableProfile [label="{ProfilTable|id : UUID\ltable_id : UUID\lrow_count : int\lfreshness_seconds : float\lcolumn_metrics : JSON\l}"];
+  CheckResult [label="{ResultatControle|id : UUID\lprofile_id : UUID\lcheck_type : string\lstatus : string\ldeviation_score : float\l}"];
+  Incident [fillcolor="#FFF3F1", color="#E58B7B", label="{Incident|id : UUID\lseverity : P1/P2/P3\lstatus : open/ack/resolved\lfired_checks : JSON\lllm_narration : JSON\l}"];
+  AlertConfig [label="{ConfigurationAlerte|id : UUID\lchannel : string\lconfig : JSON\lis_active : bool\l}"];
+  Monitor [label="{Moniteur|id : UUID\lname : string\lmode : dsl/legacy_sql\lstatus : string\l}"];
+  MonitorRevision [label="{RevisionMoniteur|id : UUID\lrevision : int\ldefinition : JSON\ldefinition_hash : string\l}"];
+  Organization -> User [arrowhead=none, label="1      0..*"];
+  Organization -> DataSource [arrowhead=none, label="1      0..*"];
+  DataSource -> MonitoredTable [arrowhead=none, label="1      0..*"];
+  MonitoredTable -> TableProfile [arrowhead=none, label="1      0..*"];
+  TableProfile -> CheckResult [arrowhead=none, label="1      0..*"];
+  MonitoredTable -> Incident [arrowhead=none, label="1      0..*"];
+  MonitoredTable -> AlertConfig [arrowhead=none, label="1      0..*"];
+  MonitoredTable -> Monitor [arrowhead=none, label="1      0..*"];
+  Monitor -> MonitorRevision [arrowhead=none, label="1      1..*"];
+}

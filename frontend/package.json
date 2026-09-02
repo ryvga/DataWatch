@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:e2e": "node tests/playwright/monitor-builder.spec.mjs && node tests/playwright/alerts.spec.mjs && node tests/playwright/monitors-page.spec.mjs && node tests/playwright/ai-governance.spec.mjs && node tests/playwright/pfe-demo-flow.spec.mjs"
+    "test:e2e": "node tests/playwright/monitor-builder.spec.mjs && node tests/playwright/alerts.spec.mjs && node tests/playwright/monitors-page.spec.mjs && node tests/playwright/ai-governance.spec.mjs && node tests/playwright/pfe-demo-flow.spec.mjs",
+    "capture:pfe": "node tests/playwright/capture-pfe-report.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

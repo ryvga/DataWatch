@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#52657d"/></marker>
+    <style>
+      .title{font:700 42px Arial,sans-serif;fill:#172033}.actor{font:600 20px Arial,sans-serif;fill:#172033}.msg{font:18px Arial,sans-serif;fill:#29384d}.note{font:16px Arial,sans-serif;fill:#475569}.life{stroke:#9aa9ba;stroke-width:2;stroke-dasharray:8 8}.line{stroke:#52657d;stroke-width:2.5;fill:none;marker-end:url(#arrow)}.return{stroke:#5bb8ce;stroke-width:2.5;fill:none;stroke-dasharray:7 6;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1600" height="980" fill="#fff"/>
+  <text x="800" y="60" text-anchor="middle" class="title">Séquence de détection et de traitement d’un incident</text>
+  <g>
+    <rect x="50" y="100" width="210" height="66" rx="12" fill="#e6f6fa" stroke="#5bb8ce"/><text x="155" y="140" text-anchor="middle" class="actor">APScheduler</text>
+    <rect x="310" y="100" width="210" height="66" rx="12" fill="#eaf4ff" stroke="#73a7d7"/><text x="415" y="140" text-anchor="middle" class="actor">Worker Celery</text>
+    <rect x="570" y="100" width="210" height="66" rx="12" fill="#f8fafc" stroke="#94a3b8"/><text x="675" y="140" text-anchor="middle" class="actor">Source métier</text>
+    <rect x="830" y="100" width="210" height="66" rx="12" fill="#f8fafc" stroke="#94a3b8"/><text x="935" y="140" text-anchor="middle" class="actor">PostgreSQL</text>
+    <rect x="1090" y="100" width="210" height="66" rx="12" fill="#fff3f1" stroke="#e58b7b"/><text x="1195" y="128" text-anchor="middle" class="actor">LLM et</text><text x="1195" y="151" text-anchor="middle" class="actor">alertes</text>
+    <rect x="1350" y="100" width="200" height="66" rx="12" fill="#e6f6fa" stroke="#5bb8ce"/><text x="1450" y="140" text-anchor="middle" class="actor">Opérateur</text>
+  </g>
+  <g>
+    <line x1="155" y1="166" x2="155" y2="920" class="life"/><line x1="415" y1="166" x2="415" y2="920" class="life"/><line x1="675" y1="166" x2="675" y2="920" class="life"/><line x1="935" y1="166" x2="935" y2="920" class="life"/><line x1="1195" y1="166" x2="1195" y2="920" class="life"/><line x1="1450" y1="166" x2="1450" y2="920" class="life"/>
+    <line x1="155" y1="225" x2="415" y2="225" class="line"/><text x="285" y="214" text-anchor="middle" class="msg">1. Déclencher le profilage</text>
+    <line x1="415" y1="310" x2="675" y2="310" class="line"/><text x="545" y="299" text-anchor="middle" class="msg">2. Exécuter la requête agrégée</text>
+    <line x1="675" y1="380" x2="415" y2="380" class="return"/><text x="545" y="369" text-anchor="middle" class="msg">3. Retourner les métriques</text>
+    <line x1="415" y1="465" x2="935" y2="465" class="line"/><text x="675" y="454" text-anchor="middle" class="msg">4. Persister le profil et les contrôles</text>
+    <rect x="330" y="505" width="430" height="72" rx="10" fill="#f8fafc" stroke="#cbd5e1"/><text x="545" y="535" text-anchor="middle" class="note">Évaluation hybride : règles, z-score,</text><text x="545" y="559" text-anchor="middle" class="note">Isolation Forest et STL si l’historique le permet</text>
+    <line x1="415" y1="625" x2="935" y2="625" class="line"/><text x="675" y="614" text-anchor="middle" class="msg">5. Créer ou enrichir l’incident dédupliqué</text>
+    <line x1="415" y1="705" x2="1195" y2="705" class="line"/><text x="805" y="694" text-anchor="middle" class="msg">6. Transmettre un contexte minimal et structuré</text>
+    <line x1="1195" y1="775" x2="935" y2="775" class="return"/><text x="1065" y="764" text-anchor="middle" class="msg">7. Enregistrer narration et preuve d’envoi</text>
+    <line x1="1195" y1="835" x2="1450" y2="835" class="line"/><text x="1322" y="824" text-anchor="middle" class="msg">8. Notifier</text>
+    <line x1="1450" y1="895" x2="935" y2="895" class="line"/><text x="1192" y="884" text-anchor="middle" class="msg">9. Consulter, affecter et acquitter</text>
+  </g>
+</svg>

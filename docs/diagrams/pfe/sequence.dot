@@ -1,0 +1,25 @@
+digraph Sequence {
+  graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.35", ranksep="0.38", fontname="Arial", labelloc="t", label="Séquence de détection et de traitement d'un incident", fontsize=20, fontcolor="#172033"];
+  node [shape=box, style="rounded,filled", fillcolor="#F8FAFC", color="#94A3B8", fontname="Arial", fontsize=10, fontcolor="#172033"];
+  edge [color="#64748B", penwidth=1.1, arrowsize=0.65, fontname="Arial", fontsize=9, fontcolor="#334155"];
+  s1 [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD BGCOLOR="#E6F6FA" CELLPADDING="7">1 · Planificateur</TD></TR></TABLE>>];
+  s2 [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD BGCOLOR="#EAF4FF" CELLPADDING="7">2 · Worker</TD></TR></TABLE>>];
+  s3 [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD BGCOLOR="#F1F5F9" CELLPADDING="7">3 · Source métier</TD></TR></TABLE>>];
+  s4 [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD BGCOLOR="#F1F5F9" CELLPADDING="7">4 · PostgreSQL</TD></TR></TABLE>>];
+  s5 [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD BGCOLOR="#FFF3F1" CELLPADDING="7">5 · LLM / Alertes</TD></TR></TABLE>>];
+  s6 [shape=plain, label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0"><TR><TD BGCOLOR="#E6F6FA" CELLPADDING="7">6 · Opérateur</TD></TR></TABLE>>];
+  {rank=same; s1;s2;s3;s4;s5;s6}
+  a [label="APScheduler déclenche un contrôle", fillcolor="#FFFFFF"];
+  b [label="Le worker calcule un profil agrégé", fillcolor="#FFFFFF"];
+  c [label="Les règles, z-score, Isolation Forest et STL évaluent l'historique", fillcolor="#FFFFFF"];
+  d [label="Un incident dédupliqué est créé avec sa preuve", fillcolor="#FFFFFF"];
+  e [label="Une narration et une alerte sont produites", fillcolor="#FFFFFF"];
+  f [label="L'opérateur consulte, assigne et accuse réception", fillcolor="#FFFFFF"];
+  s1 -> a [style=invis]; a -> b -> c -> d -> e -> f [color="#5B92A8"];
+  a -> s2 [label="déclenche", constraint=false];
+  b -> s3 [label="SQL agrégé", constraint=false];
+  c -> s4 [label="historique", constraint=false];
+  d -> s4 [label="incident", constraint=false];
+  e -> s5 [label="contexte minimal", constraint=false];
+  f -> s6 [label="workflow humain", constraint=false];
+}

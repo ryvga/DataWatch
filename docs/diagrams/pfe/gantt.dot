@@ -1,0 +1,14 @@
+digraph Gantt {
+  graph [bgcolor="white", pad="0.18", fontname="Arial", labelloc="t", label="Planification du projet par sprints", fontsize=20, fontcolor="#172033"];
+  node [shape=plain, fontname="Arial"];
+  gantt [label=<<TABLE BORDER="0" CELLBORDER="1" COLOR="#CBD5E1" CELLSPACING="0" CELLPADDING="8">
+    <TR><TD BGCOLOR="#172033"><FONT COLOR="white"><B>Lot / sprint</B></FONT></TD><TD BGCOLOR="#172033"><FONT COLOR="white"><B>S1</B></FONT></TD><TD BGCOLOR="#172033"><FONT COLOR="white"><B>S2</B></FONT></TD><TD BGCOLOR="#172033"><FONT COLOR="white"><B>S3</B></FONT></TD><TD BGCOLOR="#172033"><FONT COLOR="white"><B>S4</B></FONT></TD><TD BGCOLOR="#172033"><FONT COLOR="white"><B>S5</B></FONT></TD><TD BGCOLOR="#172033"><FONT COLOR="white"><B>S6</B></FONT></TD><TD BGCOLOR="#172033"><FONT COLOR="white"><B>S7</B></FONT></TD></TR>
+    <TR><TD ALIGN="LEFT">Cadrage et architecture</TD><TD BGCOLOR="#5BB8CE"> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD></TR>
+    <TR><TD ALIGN="LEFT">Multi-tenant et sources</TD><TD> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD></TR>
+    <TR><TD ALIGN="LEFT">Profilage et détection</TD><TD> </TD><TD> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD> </TD><TD> </TD><TD> </TD></TR>
+    <TR><TD ALIGN="LEFT">Incidents, narration et alertes</TD><TD> </TD><TD> </TD><TD> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD> </TD><TD> </TD></TR>
+    <TR><TD ALIGN="LEFT">Gouvernance IA et contrôles</TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD> </TD></TR>
+    <TR><TD ALIGN="LEFT">Tests, stabilisation et démonstration</TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD><TD BGCOLOR="#5BB8CE"> </TD><TD BGCOLOR="#5BB8CE"> </TD></TR>
+    <TR><TD ALIGN="LEFT">Rapport et soutenance</TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD><TD> </TD><TD BGCOLOR="#E58B7B"> </TD></TR>
+  </TABLE>>];
+}

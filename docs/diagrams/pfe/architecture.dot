@@ -1,0 +1,32 @@
+digraph Architecture {
+  graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.45", ranksep="0.62", fontname="Arial", labelloc="t", label="Architecture en couches de DataWatch", fontsize=20, fontcolor="#172033"];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, color="#CBD5E1", penwidth=1.2, fillcolor="#F8FAFC", fontcolor="#172033", margin="0.18,0.11"];
+  edge [color="#64748B", penwidth=1.25, arrowsize=0.7, fontname="Arial", fontsize=9, fontcolor="#475569"];
+
+  subgraph cluster_ui { label="Couche présentation"; color="#D7EEF5"; style="rounded,filled"; fillcolor="#F4FBFD";
+    jury [label="Utilisateur / jury"];
+    react [label="Application web React\nOperations · Incidents · Tables · Alertes · Gouvernance IA", fillcolor="#E6F6FA", color="#5BB8CE"];
+  }
+  subgraph cluster_api { label="Couche services"; color="#D7EEF5"; style="rounded,filled"; fillcolor="#F8FAFC";
+    api [label="API FastAPI\nAuthentification · isolation multi-tenant · règles métier", fillcolor="#EAF4FF", color="#73A7D7"];
+    scheduler [label="APScheduler\nplanification"];
+    worker [label="Celery Worker\nprofilage et détection"];
+    narration [label="Service de narration LLM\ncontexte minimal · recommandations"];
+    alerts [label="Service d'alertes\ne-mail · Slack · PagerDuty"];
+  }
+  subgraph cluster_data { label="Couche données et intégrations"; color="#D7EEF5"; style="rounded,filled"; fillcolor="#F8FAFC";
+    pg [label="PostgreSQL DataWatch\n29 tables · historique · incidents", fillcolor="#F1F5F9"];
+    redis [label="Redis\ncache · file de tâches"];
+    sources [label="Sources surveillées\nPostgreSQL stable · DuckDB/SQLite bêta"];
+    mail [label="Canaux externes\nMailHog en démonstration"];
+  }
+  jury -> react [label="consulte et agit"];
+  react -> api [label="HTTPS / JSON"];
+  api -> pg; api -> redis;
+  scheduler -> worker [label="déclenche"];
+  worker -> sources [label="requêtes agrégées", dir=both];
+  worker -> pg [label="profils · contrôles"];
+  worker -> narration [label="incident détecté"];
+  narration -> pg [label="explication"];
+  worker -> alerts; alerts -> mail;
+}

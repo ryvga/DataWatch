@@ -1,0 +1,22 @@
+digraph UseCases {
+  graph [rankdir=LR, bgcolor="white", pad="0.25", nodesep="0.4", ranksep="0.45", fontname="Arial", labelloc="t", label="Diagramme des cas d'utilisation", fontsize=20, fontcolor="#172033"];
+  node [fontname="Arial", fontsize=10, fontcolor="#172033"];
+  edge [color="#64748B", penwidth=1.0, arrowsize=0.6];
+  op [shape=plaintext, label="Responsable Data\n/ Opérateur"];
+  admin [shape=plaintext, label="Administrateur\nd'organisation"];
+  staff [shape=plaintext, label="Personnel\nDataWatch"];
+  subgraph cluster_system { label="DataWatch"; color="#5BB8CE"; style="rounded,filled"; fillcolor="#F8FCFD";
+    login [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="S'authentifier"];
+    source [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Connecter une source"];
+    monitor [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Configurer la surveillance"];
+    incident [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Analyser un incident"];
+    assign [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Affecter et acquitter"];
+    alert [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Configurer les alertes"];
+    team [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Gérer équipes et astreinte"];
+    ai [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Examiner les preuves IA"];
+    tenant [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Administrer les espaces"];
+  }
+  op -> login; op -> monitor; op -> incident; op -> assign; op -> ai;
+  admin -> login; admin -> source; admin -> alert; admin -> team; admin -> ai;
+  staff -> login; staff -> tenant;
+}
