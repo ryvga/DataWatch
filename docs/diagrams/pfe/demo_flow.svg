@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="520" viewBox="0 0 1900 520">
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#697386"/></marker></defs>
+  <rect width="1900" height="520" fill="#fff"/>
+  <text x="950" y="72" text-anchor="middle" font-family="Arial" font-size="42" font-weight="700" fill="#18212F">Parcours de démonstration DataWatch</text>
+  <g font-family="Arial" text-anchor="middle" fill="#18212F">
+    <rect x="45" y="175" width="300" height="170" rx="20" fill="#F5F6F8" stroke="#B8C0CC" stroke-width="3"/><text x="195" y="228" font-size="24" font-weight="700">1 · Opérations</text><text x="195" y="284" font-size="21">Prioriser</text>
+    <rect x="420" y="175" width="300" height="170" rx="20" fill="#FFF3F1" stroke="#C96A5B" stroke-width="3"/><text x="570" y="228" font-size="24" font-weight="700">2 · Incident P1</text><text x="570" y="284" font-size="21">Expliquer</text>
+    <rect x="795" y="175" width="300" height="170" rx="20" fill="#F5F6F8" stroke="#B8C0CC" stroke-width="3"/><text x="945" y="228" font-size="24" font-weight="700">3 · Table orders</text><text x="945" y="284" font-size="21">Vérifier</text>
+    <rect x="1170" y="175" width="300" height="170" rx="20" fill="#F5F6F8" stroke="#B8C0CC" stroke-width="3"/><text x="1320" y="228" font-size="24" font-weight="700">4 · Alertes</text><text x="1320" y="284" font-size="21">Prouver l’envoi</text>
+    <rect x="1545" y="155" width="310" height="210" rx="20" fill="#EEF7F2" stroke="#72AA88" stroke-width="3"/><text x="1700" y="215" font-size="24" font-weight="700">5 · Gouvernance IA</text><text x="1700" y="270" font-size="21">Tracer les preuves</text><text x="1700" y="306" font-size="18" fill="#395A47">sans certifier</text>
+  </g>
+  <g stroke="#697386" stroke-width="5" fill="none" marker-end="url(#a)"><path d="M345 260 H405"/><path d="M720 260 H780"/><path d="M1095 260 H1155"/><path d="M1470 260 H1530"/></g>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="520" viewBox="0 0 1800 520">
+  <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#697386"/></marker></defs>
+  <rect width="1800" height="520" fill="#fff"/>
+  <text x="900" y="72" text-anchor="middle" font-family="Arial" font-size="42" font-weight="700" fill="#18212F">Validation locale reproductible</text>
+  <g font-family="Arial" text-anchor="middle" fill="#18212F">
+    <rect x="55" y="165" width="360" height="190" rx="22" fill="#F5F6F8" stroke="#B8C0CC" stroke-width="3"/>
+    <text x="235" y="225" font-size="26" font-weight="700">Pile seedée</text><text x="235" y="274" font-size="21">API, PostgreSQL</text><text x="235" y="309" font-size="21">et Redis prêts</text>
+    <rect x="495" y="165" width="360" height="190" rx="22" fill="#EEF7F2" stroke="#72AA88" stroke-width="3"/>
+    <text x="675" y="225" font-size="26" font-weight="700">5 parcours navigateur</text><text x="675" y="274" font-size="21">réussis sans erreur</text><text x="675" y="309" font-size="21">visible</text>
+    <rect x="935" y="165" width="360" height="190" rx="22" fill="#F5F6F8" stroke="#B8C0CC" stroke-width="3"/>
+    <text x="1115" y="225" font-size="26" font-weight="700">Backend dans l’image</text><text x="1115" y="276" font-size="25">321 réussis</text><text x="1115" y="313" font-size="21">50 ignorés</text>
+    <rect x="1375" y="145" width="370" height="230" rx="22" fill="#FFF3F1" stroke="#C96A5B" stroke-width="3"/>
+    <text x="1560" y="207" font-size="26" font-weight="700">Limites documentées</text><text x="1560" y="258" font-size="21">2 échecs de montage</text><text x="1560" y="294" font-size="21">services optionnels absents</text><text x="1560" y="330" font-size="18" fill="#7A3430">Aucune promesse de SLA</text>
+  </g>
+  <g stroke="#697386" stroke-width="5" fill="none" marker-end="url(#a)"><path d="M415 260 H480"/><path d="M855 260 H920"/><path d="M1295 260 H1360"/></g>
+</svg>

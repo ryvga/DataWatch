@@ -1,0 +1,12 @@
+digraph Validation {
+  graph [rankdir=LR, bgcolor="white", pad="0.25", nodesep="0.45", ranksep="0.65", fontname="Arial"];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=12, color="#B8C0CC", fontcolor="#18212F", penwidth=1.2, margin="0.18,0.12"];
+  edge [color="#697386", penwidth=1.3, arrowsize=0.7];
+
+  stack [label="Pile seedée\nAPI, PostgreSQL et Redis prêts", fillcolor="#F5F6F8"];
+  browser [label="5 parcours navigateur\nréussis sans erreur visible", fillcolor="#EEF7F2", color="#72AA88"];
+  backend [label="Backend dans l'image\n321 réussis · 50 ignorés", fillcolor="#F5F6F8"];
+  limits [label="Limites documentées\n2 échecs de montage · services optionnels absents", fillcolor="#FFF3F1", color="#C96A5B"];
+
+  stack -> browser -> backend -> limits;
+}

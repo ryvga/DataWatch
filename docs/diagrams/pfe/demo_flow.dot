@@ -1,0 +1,13 @@
+digraph DemoFlow {
+  graph [rankdir=LR, bgcolor="white", pad="0.2", nodesep="0.32", ranksep="0.55", fontname="Arial"];
+  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, color="#B8C0CC", fontcolor="#18212F", penwidth=1.1, margin="0.15,0.10", width=1.55];
+  edge [color="#697386", penwidth=1.25, arrowsize=0.65];
+
+  ops [label="1 · Opérations\nPrioriser", fillcolor="#F5F6F8"];
+  incident [label="2 · Incident P1\nExpliquer", fillcolor="#FFF3F1", color="#C96A5B"];
+  table [label="3 · Table orders\nVérifier", fillcolor="#F5F6F8"];
+  alerts [label="4 · Alertes\nProuver l'envoi", fillcolor="#F5F6F8"];
+  gov [label="5 · Gouvernance IA\nTracer sans certifier", fillcolor="#EEF7F2", color="#72AA88"];
+
+  ops -> incident -> table -> alerts -> gov;
+}

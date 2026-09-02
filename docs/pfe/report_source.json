@@ -1,0 +1,2382 @@
+{
+  "title": "Rapport PFE — DataWatch — Mounir Gaiby",
+  "revisionId": "ANLCKQlJDJX5sAE76wXRLSWa_yAipRpN4mzYuSoYpEbY914PtmLhrmyf3PH-uNPliW7_6nHPN6FDPFB3VeIQmLz8JlvdyQ1Zqc6FOpRkA6I",
+  "paragraphs": [
+    {
+      "text": "ISGA CASABLANCA",
+      "startIndex": 4,
+      "endIndex": 19,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3CI — Big Data et Intelligence Artificielle",
+      "startIndex": 20,
+      "endIndex": 63,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "PROJET DE FIN D’ÉTUDES",
+      "startIndex": 65,
+      "endIndex": 87,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Conception et réalisation de DataWatch",
+      "startIndex": 91,
+      "endIndex": 129,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Plateforme SaaS multi-tenant de surveillance de la qualité des données, enrichie par l’IA pour l’explication des incidents",
+      "startIndex": 130,
+      "endIndex": 252,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Réalisé par",
+      "startIndex": 262,
+      "endIndex": 273,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Encadré par",
+      "startIndex": 275,
+      "endIndex": 286,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Mounir Gaiby",
+      "startIndex": 289,
+      "endIndex": 301,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Dr. HANINE MOHAMED",
+      "startIndex": 303,
+      "endIndex": 321,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Année universitaire 2025-2026",
+      "startIndex": 324,
+      "endIndex": 353,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "I. Dédicace",
+      "startIndex": 357,
+      "endIndex": 368,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Je dédie ce travail à ma famille, à mes proches et à toutes les personnes qui ont soutenu mon parcours académique.",
+      "startIndex": 375,
+      "endIndex": 489,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "II. Remerciements",
+      "startIndex": 492,
+      "endIndex": 509,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Je tiens à exprimer ma reconnaissance à Dr. HANINE MOHAMED pour son encadrement, ses orientations méthodologiques et ses retours tout au long de ce projet. Mes remerciements s’adressent également aux enseignants de l’ISGA Casablanca, dont les enseignements ont constitué le socle technique et scientifique de ce travail.",
+      "startIndex": 510,
+      "endIndex": 830,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Je remercie enfin ma famille et mes collègues pour leur soutien, leurs encouragements et leur disponibilité. Leur confiance a été déterminante dans l’aboutissement de ce projet de fin d’études.",
+      "startIndex": 831,
+      "endIndex": 1024,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "III. Résumé",
+      "startIndex": 1027,
+      "endIndex": 1038,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "La qualité des données est un enjeu critique pour les organisations qui prennent des décisions à partir d’entrepôts, de bases opérationnelles et de flux analytiques. Pourtant, les défauts de fraîcheur, les ruptures de schéma, les pics de valeurs nulles ou les anomalies de volume sont souvent détectés tardivement, sans contexte exploitable par les équipes.",
+      "startIndex": 1039,
+      "endIndex": 1396,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Ce projet présente DataWatch, une plateforme SaaS multi-tenant de surveillance de la qualité des données. La solution profile les tables surveillées, applique des règles métier, des méthodes statistiques et des modèles d’apprentissage automatique, puis crée des incidents priorisés. Une couche de narration par grand modèle de langage propose un résumé, des hypothèses et des actions de diagnostic, tout en conservant une décision humaine.",
+      "startIndex": 1397,
+      "endIndex": 1836,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "La réalisation s’appuie sur FastAPI, PostgreSQL, Redis, Celery, React et Docker. Une validation locale reproductible a couvert les parcours de surveillance, d’alerte, de moniteurs et de gouvernance IA. Les résultats montrent la faisabilité d’une chaîne complète de détection, d’explication et d’alerte, tout en distinguant clairement les preuves locales des garanties de production.",
+      "startIndex": 1837,
+      "endIndex": 2219,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Mots-clés : qualité des données, observabilité, SaaS, multi-tenancy, détection d’anomalies, IA générative, gouvernance IA.",
+      "startIndex": 2220,
+      "endIndex": 2342,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "IV. Abstract",
+      "startIndex": 2345,
+      "endIndex": 2357,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Data quality is essential for organisations that rely on warehouses, operational databases and analytical flows. Freshness breaches, schema changes, null-value spikes and volume anomalies are often detected too late and without enough context for effective investigation.",
+      "startIndex": 2358,
+      "endIndex": 2629,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "This project presents DataWatch, a multi-tenant SaaS platform for data-quality monitoring. The solution profiles monitored tables, applies business rules, statistical methods and machine-learning models, then creates prioritised incidents. A large-language-model narration layer provides a structured summary, plausible hypotheses and investigation actions while keeping the operator in control.",
+      "startIndex": 2630,
+      "endIndex": 3025,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "The implementation uses FastAPI, PostgreSQL, Redis, Celery, React and Docker. A reproducible local validation covered monitoring, alerts, monitors and AI-governance flows. The work demonstrates an end-to-end detection, explanation and alerting chain while explicitly separating local evidence from production guarantees.",
+      "startIndex": 3026,
+      "endIndex": 3346,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Keywords: data quality, observability, SaaS, multi-tenancy, anomaly detection, generative AI, AI governance.",
+      "startIndex": 3347,
+      "endIndex": 3455,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "V. Table des matières",
+      "startIndex": 3456,
+      "endIndex": 3478,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "VI. Liste des figures\t8",
+      "startIndex": 3481,
+      "endIndex": 3504,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "VII. Liste des tableaux\t9",
+      "startIndex": 3505,
+      "endIndex": 3530,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "VIII. Liste des abréviations\t10",
+      "startIndex": 3531,
+      "endIndex": 3562,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1. Introduction générale\t1",
+      "startIndex": 3563,
+      "endIndex": 3589,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1.1 Résultats attendus\t1",
+      "startIndex": 3590,
+      "endIndex": 3614,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1.2 Organisation du rapport\t1",
+      "startIndex": 3615,
+      "endIndex": 3644,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2. Chapitre 1 : Cadre général et conduite du projet\t2",
+      "startIndex": 3645,
+      "endIndex": 3698,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.1 Introduction\t2",
+      "startIndex": 3699,
+      "endIndex": 3717,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.2 Présentation de l’organisme d’accueil\t2",
+      "startIndex": 3718,
+      "endIndex": 3761,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.3 Présentation du projet\t2",
+      "startIndex": 3762,
+      "endIndex": 3790,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.3.1 Problématique\t2",
+      "startIndex": 3791,
+      "endIndex": 3812,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.3.2 Solution proposée\t2",
+      "startIndex": 3813,
+      "endIndex": 3838,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.4 Méthodologie de travail\t2",
+      "startIndex": 3839,
+      "endIndex": 3868,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.4.1 Méthode Agile\t2",
+      "startIndex": 3869,
+      "endIndex": 3890,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.4.2 Organisation en sprints\t3",
+      "startIndex": 3891,
+      "endIndex": 3922,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.4.3 Diagramme de Gantt et jalons\t3",
+      "startIndex": 3923,
+      "endIndex": 3959,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.5 Conclusion\t3",
+      "startIndex": 3960,
+      "endIndex": 3976,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3. Chapitre 2 : État de l’art et positionnement\t4",
+      "startIndex": 3977,
+      "endIndex": 4026,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3.1 Introduction\t4",
+      "startIndex": 4027,
+      "endIndex": 4045,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3.2 Approches existantes\t4",
+      "startIndex": 4046,
+      "endIndex": 4072,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3.3 Originalité de la solution\t4",
+      "startIndex": 4073,
+      "endIndex": 4105,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3.4 Conclusion\t4",
+      "startIndex": 4106,
+      "endIndex": 4122,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4. Chapitre 3 : Analyse, conception et architecture\t5",
+      "startIndex": 4123,
+      "endIndex": 4176,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.1 Introduction\t5",
+      "startIndex": 4177,
+      "endIndex": 4195,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.2 Analyse du projet\t5",
+      "startIndex": 4196,
+      "endIndex": 4219,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.2.1 Objectifs de la solution\t5",
+      "startIndex": 4220,
+      "endIndex": 4252,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.2.2 Besoins fonctionnels\t5",
+      "startIndex": 4253,
+      "endIndex": 4281,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.2.3 Besoins non fonctionnels\t5",
+      "startIndex": 4282,
+      "endIndex": 4314,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.3 Conception de la solution\t6",
+      "startIndex": 4315,
+      "endIndex": 4346,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.4 Architecture proposée\t6",
+      "startIndex": 4347,
+      "endIndex": 4374,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.5 Modèle de données et sécurité\t6",
+      "startIndex": 4375,
+      "endIndex": 4410,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.6 Gouvernance de la couche IA\t6",
+      "startIndex": 4411,
+      "endIndex": 4444,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.7 Conclusion\t7",
+      "startIndex": 4445,
+      "endIndex": 4461,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5. Chapitre 4 : Implémentation technique et tests\t8",
+      "startIndex": 4462,
+      "endIndex": 4513,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.1 Introduction\t8",
+      "startIndex": 4514,
+      "endIndex": 4532,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.2 Workflow proposé\t8",
+      "startIndex": 4533,
+      "endIndex": 4555,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.3 Technologies utilisées\t8",
+      "startIndex": 4556,
+      "endIndex": 4584,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4 Présentation des interfaces\t8",
+      "startIndex": 4585,
+      "endIndex": 4618,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.1 Vue Opérations\t8",
+      "startIndex": 4619,
+      "endIndex": 4641,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.2 Détail de l’incident P1\t9",
+      "startIndex": 4642,
+      "endIndex": 4673,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.3 Détail de la table surveillée\t9",
+      "startIndex": 4674,
+      "endIndex": 4711,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.4 Alertes et gouvernance IA\t9",
+      "startIndex": 4712,
+      "endIndex": 4745,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.5 Règles de présentation des captures\t9",
+      "startIndex": 4746,
+      "endIndex": 4789,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.5 Tests et validation\t10",
+      "startIndex": 4790,
+      "endIndex": 4816,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.6 Discussion des limites\t10",
+      "startIndex": 4817,
+      "endIndex": 4846,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.7 Conclusion\t10",
+      "startIndex": 4847,
+      "endIndex": 4864,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "6. Conclusion générale et perspectives\t11",
+      "startIndex": 4865,
+      "endIndex": 4906,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "6.1 Cadre du travail\t11",
+      "startIndex": 4907,
+      "endIndex": 4930,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "6.2 Synthèse des apports\t11",
+      "startIndex": 4931,
+      "endIndex": 4958,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "6.3 Perspectives\t11",
+      "startIndex": 4959,
+      "endIndex": 4978,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "7. Références\t12",
+      "startIndex": 4979,
+      "endIndex": 4995,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "8. Annexes\t13",
+      "startIndex": 4996,
+      "endIndex": 5009,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Annexe A — Procédure de démonstration\t13",
+      "startIndex": 5010,
+      "endIndex": 5050,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Annexe B — Indicateurs à interpréter avec prudence\t13",
+      "startIndex": 5051,
+      "endIndex": 5104,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Annexe C — Guide de captures d’écran pour la soutenance\t13",
+      "startIndex": 5105,
+      "endIndex": 5163,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "C.1 Tableau de bord Opérations\t13",
+      "startIndex": 5164,
+      "endIndex": 5197,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "C.2 Détail de l’incident orders\t13",
+      "startIndex": 5198,
+      "endIndex": 5232,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "C.3 Routage d’alerte et gouvernance IA\t13Tableau 4",
+      "startIndex": 5233,
+      "endIndex": 5283,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "VI. Liste des figures",
+      "startIndex": 5289,
+      "endIndex": 5310,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 1.1 - Planification du projet par sprints",
+      "startIndex": 5311,
+      "endIndex": 5359,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.1 - Cas d’utilisation de DataWatch",
+      "startIndex": 5360,
+      "endIndex": 5403,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.2 - Séquence de détection et de traitement d’un incident",
+      "startIndex": 5404,
+      "endIndex": 5469,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.3 - Diagramme de classes métier simplifié",
+      "startIndex": 5470,
+      "endIndex": 5520,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.4 - Architecture en couches de DataWatch",
+      "startIndex": 5521,
+      "endIndex": 5570,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.1 - Vue Opérations et file d’incidents prioritaires",
+      "startIndex": 5571,
+      "endIndex": 5631,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.2 - Détail de l’incident critique orders",
+      "startIndex": 5632,
+      "endIndex": 5681,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.3 - Profil et métriques de la table orders",
+      "startIndex": 5682,
+      "endIndex": 5733,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.4 - Route d’alerte e-mail de démonstration",
+      "startIndex": 5734,
+      "endIndex": 5785,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.5 - Gouvernance IA observe-only",
+      "startIndex": 5786,
+      "endIndex": 5826,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.6 - Synthèse des validations locales",
+      "startIndex": 5827,
+      "endIndex": 5872,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.7 - Parcours de démonstration de l’incident orders",
+      "startIndex": 5873,
+      "endIndex": 5932,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "VII. Liste des tableaux",
+      "startIndex": 5935,
+      "endIndex": 5958,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Aucun tableau n’est référencé dans le corps du rapport ; les comparaisons sont présentées sous forme de figures ou de synthèses narratives.",
+      "startIndex": 5959,
+      "endIndex": 6098,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "VIII. Liste des abréviations",
+      "startIndex": 6101,
+      "endIndex": 6129,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Abréviation",
+      "startIndex": 6133,
+      "endIndex": 6144,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Signification",
+      "startIndex": 6146,
+      "endIndex": 6159,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "API",
+      "startIndex": 6162,
+      "endIndex": 6165,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Application Programming Interface",
+      "startIndex": 6167,
+      "endIndex": 6200,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "IA",
+      "startIndex": 6203,
+      "endIndex": 6205,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Intelligence artificielle",
+      "startIndex": 6207,
+      "endIndex": 6232,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "LLM",
+      "startIndex": 6235,
+      "endIndex": 6238,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Large Language Model",
+      "startIndex": 6240,
+      "endIndex": 6260,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "SaaS",
+      "startIndex": 6263,
+      "endIndex": 6267,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Software as a Service",
+      "startIndex": 6269,
+      "endIndex": 6290,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "SLA",
+      "startIndex": 6293,
+      "endIndex": 6296,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Service Level Agreement",
+      "startIndex": 6298,
+      "endIndex": 6321,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "JWT",
+      "startIndex": 6324,
+      "endIndex": 6327,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "JSON Web Token",
+      "startIndex": 6329,
+      "endIndex": 6343,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "ORM",
+      "startIndex": 6346,
+      "endIndex": 6349,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Object Relational Mapping",
+      "startIndex": 6351,
+      "endIndex": 6376,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "CI",
+      "startIndex": 6379,
+      "endIndex": 6381,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Continuous Integration",
+      "startIndex": 6383,
+      "endIndex": 6405,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1. Introduction générale",
+      "startIndex": 6411,
+      "endIndex": 6435,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Les entreprises s’appuient de plus en plus sur des données distribuées entre applications transactionnelles, entrepôts analytiques et services cloud. Dans cet environnement, une mauvaise qualité de données ne se limite pas à une erreur technique : elle perturbe les tableaux de bord, les décisions métiers, les traitements automatisés et la confiance des utilisateurs. La difficulté consiste donc à détecter rapidement les écarts significatifs et à fournir aux opérateurs un contexte utilisable pour agir.",
+      "startIndex": 6436,
+      "endIndex": 6941,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "L’objectif de ce projet est de concevoir et réaliser DataWatch, une plateforme de surveillance de la qualité des données adaptée à un contexte SaaS multi-tenant. La solution doit inventorier les sources, suivre les tables, produire des profils, détecter des anomalies, ouvrir des incidents et acheminer des alertes. Elle doit aussi exploiter l’IA générative pour transformer des signaux techniques en explications structurées, sans confondre une recommandation avec une décision automatique.",
+      "startIndex": 6942,
+      "endIndex": 7433,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1.1 Résultats attendus",
+      "startIndex": 7434,
+      "endIndex": 7456,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Une architecture multi-tenant séparant les données et les identités des organisations.",
+      "startIndex": 7457,
+      "endIndex": 7543,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Un profilage agrégé des tables avec métriques de volume, fraîcheur, schéma et colonnes.",
+      "startIndex": 7544,
+      "endIndex": 7631,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Une détection hybride : règles, z-score, Isolation Forest et STL lorsque l’historique est suffisant.",
+      "startIndex": 7632,
+      "endIndex": 7732,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Une gestion d’incidents, de narration IA et de routage d’alertes vérifiable localement.",
+      "startIndex": 7733,
+      "endIndex": 7820,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Une base de gouvernance IA observe-only qui rend les lacunes de preuve visibles sans prétendre certifier la conformité.",
+      "startIndex": 7821,
+      "endIndex": 7940,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "1.2 Organisation du rapport",
+      "startIndex": 7941,
+      "endIndex": 7968,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Le premier chapitre présente le contexte et la démarche. Le deuxième chapitre situe la solution par rapport aux approches existantes. Le troisième chapitre analyse les besoins et expose la conception ainsi que l’architecture. Le quatrième chapitre détaille la réalisation technique et les validations. Enfin, la conclusion générale synthétise les apports et ouvre les perspectives.",
+      "startIndex": 7969,
+      "endIndex": 8350,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2. Chapitre 1 : Cadre général et conduite du projet",
+      "startIndex": 8353,
+      "endIndex": 8404,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "2.1 Introduction",
+      "startIndex": 8405,
+      "endIndex": 8421,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Ce chapitre présente le cadre académique du projet, sa problématique et la méthode de conduite retenue. Le projet a été réalisé dans le cadre de la formation 3CI — Big Data et Intelligence Artificielle à l’ISGA Casablanca.",
+      "startIndex": 8422,
+      "endIndex": 8644,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.2 Présentation de l’organisme d’accueil",
+      "startIndex": 8645,
+      "endIndex": 8686,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Le projet est mené dans un cadre académique à l’ISGA Casablanca. L’établissement fournit l’environnement pédagogique, l’encadrement scientifique et le contexte de validation. Cette configuration oriente le travail vers une démonstration technique reproductible, documentée et utile pour une soutenance, plutôt que vers une revendication de déploiement industriel à grande échelle.",
+      "startIndex": 8687,
+      "endIndex": 9067,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.3 Présentation du projet",
+      "startIndex": 9068,
+      "endIndex": 9094,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "2.3.1 Problématique",
+      "startIndex": 9095,
+      "endIndex": 9114,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Les équipes data disposent rarement d’une vue centralisée de la santé de leurs actifs. Les contrôles sont souvent isolés dans des scripts, les alertes manquent de contexte et les anomalies statistiques demandent une expertise difficile à mobiliser immédiatement. Dans une plateforme SaaS, la difficulté augmente : l’isolement entre organisations, le chiffrement des connexions et la traçabilité des actions deviennent des exigences de conception.",
+      "startIndex": 9115,
+      "endIndex": 9561,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.3.2 Solution proposée",
+      "startIndex": 9562,
+      "endIndex": 9585,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "DataWatch centralise les sources de données, les tables surveillées, les profils et les incidents. Le système exécute des vérifications périodiques, agrège les résultats et déduplique les incidents ouverts par table. Les alertes sont routées selon le canal et la sévérité. Une narration LLM, validée selon un schéma structuré, complète la fiche incident par des hypothèses et des recommandations de diagnostic.",
+      "startIndex": 9586,
+      "endIndex": 9996,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.4 Méthodologie de travail",
+      "startIndex": 9997,
+      "endIndex": 10024,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "2.4.1 Méthode Agile",
+      "startIndex": 10025,
+      "endIndex": 10044,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "La conduite du projet s’appuie sur une démarche Agile courte et itérative. Les besoins sont priorisés, implémentés dans une verticale complète, puis vérifiés par des tests et une démonstration avant d’ouvrir l’incrément suivant.",
+      "startIndex": 10045,
+      "endIndex": 10273,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Une démarche Agile et itérative a été adoptée. Chaque incrément vise une verticale complète : besoin, modèle de données, API, interface, tests et documentation. Cette approche limite les fonctionnalités décoratives et rend chaque avancée démontrable sur une pile locale reproductible.",
+      "startIndex": 10274,
+      "endIndex": 10558,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.4.2 Organisation en sprints",
+      "startIndex": 10559,
+      "endIndex": 10588,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Le projet a été découpé en incréments fonctionnels : fondations multi-tenant, profilage et détection, narration et alertes, moniteurs et gouvernance, puis préparation de la démonstration. Chaque sprint se termine par une vérification du parcours couvert.",
+      "startIndex": 10589,
+      "endIndex": 10843,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.4.3 Diagramme de Gantt et jalons",
+      "startIndex": 10844,
+      "endIndex": 10878,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Le planning associe chaque incrément à un objectif vérifiable et à un livrable exploitable dans la démonstration. Le diagramme de Gantt définitif pourra reprendre les cinq jalons suivants :",
+      "startIndex": 10879,
+      "endIndex": 11068,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1. Cadrage — besoins, périmètre et limites.",
+      "startIndex": 11069,
+      "endIndex": 11112,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2. Conception — modèles de données et contrats.",
+      "startIndex": 11113,
+      "endIndex": 11160,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3. Réalisation — API, worker et interface.",
+      "startIndex": 11161,
+      "endIndex": 11203,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4. Validation — tests, seed et démonstration.",
+      "startIndex": 11204,
+      "endIndex": 11249,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5. Itération — retours, corrections et préparation PFE.",
+      "startIndex": 11250,
+      "endIndex": 11305,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 1.1 - Planification du projet par sprints.",
+      "startIndex": 11308,
+      "endIndex": 11357,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Le projet est organisé en sept sprints. Les deux premiers cadrent les besoins et les fondations multi-tenant. Les troisième et quatrième couvrent le profilage, la détection et la gestion d’incidents. Les cinquième et sixième stabilisent les alertes, les moniteurs et la gouvernance IA. Le dernier sprint est consacré aux tests, à la démonstration et à la rédaction.",
+      "startIndex": 11358,
+      "endIndex": 11723,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Le diagramme de Gantt de la figure 1.1 matérialise les chevauchements nécessaires entre conception, implémentation et validation. Chaque sprint se termine par une preuve visible : modèle migré, API testée, parcours navigateur ou jeu de démonstration reproductible.",
+      "startIndex": 11725,
+      "endIndex": 11989,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2.5 Conclusion",
+      "startIndex": 11992,
+      "endIndex": 12006,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Le cadrage met en évidence une double exigence : rendre la qualité des données observable et conserver une discipline de preuve adaptée à une solution SaaS. Le chapitre suivant étudie les approches qui inspirent la solution et précise son originalité.",
+      "startIndex": 12007,
+      "endIndex": 12258,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3. Chapitre 2 : État de l’art et positionnement",
+      "startIndex": 12261,
+      "endIndex": 12308,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "3.1 Introduction",
+      "startIndex": 12309,
+      "endIndex": 12325,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La surveillance de qualité des données recouvre plusieurs familles de mécanismes : validation déclarative, contrôle statistique, apprentissage automatique et observabilité opérationnelle. Aucune de ces familles ne répond seule à l’ensemble des besoins ; leur combinaison doit rester explicable et gouvernable.",
+      "startIndex": 12326,
+      "endIndex": 12635,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3.2 Approches existantes",
+      "startIndex": 12636,
+      "endIndex": 12660,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Les solutions existantes se répartissent généralement entre contrôles déclaratifs, observabilité automatisée et scripts spécifiques. Les contrôles déclaratifs sont faciles à versionner mais nécessitent une définition manuelle. Les plateformes d’observabilité accélèrent la détection, au prix d’un coût et d’une dépendance au fournisseur. Les scripts internes s’adaptent au contexte, mais deviennent vite difficiles à maintenir et à auditer.",
+      "startIndex": 12661,
+      "endIndex": 13101,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "DataWatch combine ces apports dans un prototype pédagogique : règles explicites, détection statistique, apprentissage non supervisé, gestion d’incidents et narration structurée. L’originalité ne réside pas dans un algorithme isolé, mais dans l’enchaînement vérifiable du signal jusqu’à l’action humaine, avec une séparation nette entre faits mesurés, hypothèses générées et décisions de l’opérateur.",
+      "startIndex": 13103,
+      "endIndex": 13502,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3.3 Originalité de la solution",
+      "startIndex": 13505,
+      "endIndex": 13535,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La contribution de DataWatch réside dans la chaîne intégrée allant du profilage à l’incident, puis à une narration IA structurée et à l’alerte. Le système ne présente pas le LLM comme un détecteur autonome : les contrôles déterministes et les métriques calculées restent la source de l’incident. L’IA reformule le contexte disponible et propose des actions, ce qui conserve une frontière claire entre observation, recommandation et décision humaine.",
+      "startIndex": 13536,
+      "endIndex": 13985,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3.4 Conclusion",
+      "startIndex": 13986,
+      "endIndex": 14000,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "L’étude montre que l’explicabilité et le contrôle des limites sont aussi importants que le choix d’un algorithme. Le chapitre suivant traduit ces constats en besoins, modèles et composants d’architecture.",
+      "startIndex": 14001,
+      "endIndex": 14205,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4. Chapitre 3 : Analyse, conception et architecture",
+      "startIndex": 14208,
+      "endIndex": 14259,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "4.1 Introduction",
+      "startIndex": 14260,
+      "endIndex": 14276,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La conception de DataWatch s’appuie sur la séparation des responsabilités : interface de pilotage, API métier, exécution asynchrone, persistance, cache et connecteurs. Les décisions de conception privilégient l’isolation tenant, la traçabilité et la possibilité de valider chaque étape.",
+      "startIndex": 14277,
+      "endIndex": 14563,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.2 Analyse du projet",
+      "startIndex": 14564,
+      "endIndex": 14585,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "4.2.1 Objectifs de la solution",
+      "startIndex": 14586,
+      "endIndex": 14616,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "L’analyse vise à construire une plateforme qui centralise les actifs de données, détecte les écarts de qualité, crée des incidents contextualisés et accompagne l’investigation sans automatiser la décision humaine. Les objectifs suivants structurent les besoins fonctionnels et non fonctionnels.",
+      "startIndex": 14617,
+      "endIndex": 14911,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.2.2 Besoins fonctionnels",
+      "startIndex": 14912,
+      "endIndex": 14938,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Les besoins fonctionnels couvrent six capacités cohérentes : connecter une source et vérifier sa disponibilité ; sélectionner les tables à surveiller ; produire des profils périodiques ; appliquer des règles et détecteurs hybrides ; ouvrir, affecter, acquitter puis résoudre les incidents ; enfin, acheminer les alertes et documenter les preuves de gouvernance IA.",
+      "startIndex": 14939,
+      "endIndex": 15303,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "À ces fonctions s’ajoutent des contraintes transversales : isolation multi-tenant, chiffrement des secrets, traçabilité des révisions, idempotence des exécutions, explication des signaux et dégradation explicite lorsqu’une dépendance externe est indisponible. Ces exigences structurent directement l’architecture présentée dans les figures suivantes.",
+      "startIndex": 15305,
+      "endIndex": 15655,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.2.3 Besoins non fonctionnels",
+      "startIndex": 15658,
+      "endIndex": 15688,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Sécurité : chiffrement des configurations de connexion et séparation des organisations.",
+      "startIndex": 15689,
+      "endIndex": 15776,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Fiabilité : tâches idempotentes, déduplication des incidents et reprise planifiée.",
+      "startIndex": 15777,
+      "endIndex": 15859,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Performance : profilage par requêtes agrégées plutôt que lecture ligne par ligne.",
+      "startIndex": 15860,
+      "endIndex": 15941,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Maintenabilité : API typée, migrations versionnées et tests de régression.",
+      "startIndex": 15942,
+      "endIndex": 16016,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Traçabilité : profils, résultats de contrôles, incidents et versions de moniteurs conservés.",
+      "startIndex": 16017,
+      "endIndex": 16109,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Explicabilité : scores, plages attendues et raisons de contrôle visibles dans l’interface.",
+      "startIndex": 16110,
+      "endIndex": 16200,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "4.3 Conception de la solution",
+      "startIndex": 16201,
+      "endIndex": 16230,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Le cas d’utilisation central commence lorsqu’un utilisateur configure une source et sélectionne une table. Le système programme un profilage, calcule les métriques, exécute les contrôles, crée ou met à jour un incident, prépare une narration et achemine l’alerte. L’utilisateur conserve la maîtrise : il examine l’incident, l’assigne, l’acquitte ou le résout selon son enquête.",
+      "startIndex": 16231,
+      "endIndex": 16608,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1. L’utilisateur configure une source et sélectionne une table.",
+      "startIndex": 16609,
+      "endIndex": 16672,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2. L’interface React pilote les opérations et l’investigation.",
+      "startIndex": 16673,
+      "endIndex": 16735,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3. L’API FastAPI applique les contrats REST et les règles métier.",
+      "startIndex": 16736,
+      "endIndex": 16801,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4. Le worker Celery profile les données et exécute les contrôles.",
+      "startIndex": 16802,
+      "endIndex": 16867,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5. PostgreSQL persiste les états ; Redis assure le broker et les caches.",
+      "startIndex": 16868,
+      "endIndex": 16940,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.1 - Cas d’utilisation de DataWatch.",
+      "startIndex": 16943,
+      "endIndex": 16987,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.3.1 Diagramme de séquence",
+      "startIndex": 16988,
+      "endIndex": 17015,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "La figure 3.2 détaille la succession des échanges depuis le déclenchement planifié jusqu’à l’acquittement humain. Elle montre que le profil, les résultats des contrôles et l’incident sont persistés avant la narration et l’alerte.",
+      "startIndex": 17016,
+      "endIndex": 17245,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.2 - Séquence de détection et de traitement d’un incident.",
+      "startIndex": 17248,
+      "endIndex": 17314,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.3.2 Diagramme de classes",
+      "startIndex": 17315,
+      "endIndex": 17341,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Le modèle de la figure 3.3 se concentre sur le noyau métier. L’organisation possède ses utilisateurs et ses sources ; chaque source expose des tables surveillées, dont les profils alimentent les contrôles, incidents, moniteurs et alertes. Les révisions de moniteur sont immuables afin de conserver l’historique des définitions.",
+      "startIndex": 17342,
+      "endIndex": 17669,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.3 - Diagramme de classes métier simplifié.",
+      "startIndex": 17672,
+      "endIndex": 17723,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.4 Architecture proposée",
+      "startIndex": 17724,
+      "endIndex": 17749,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "L’architecture est organisée en couches. La couche présentation est une application React. La couche application expose une API FastAPI et les règles métier. La couche d’exécution asynchrone regroupe Celery et le planificateur. PostgreSQL persiste les entités métier et Redis sert de broker et de cache. Les connecteurs encapsulent les dialectes de sources afin de préserver un contrat de profilage commun.",
+      "startIndex": 17750,
+      "endIndex": 18156,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1. APScheduler planifie le contrôle de la table.",
+      "startIndex": 18157,
+      "endIndex": 18205,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2. Celery exécute le profilage asynchrone.",
+      "startIndex": 18206,
+      "endIndex": 18248,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3. Les règles et modèles évaluent les métriques.",
+      "startIndex": 18249,
+      "endIndex": 18297,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4. Le service d’incident déduplique et priorise en P1, P2 ou P3.",
+      "startIndex": 18298,
+      "endIndex": 18362,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5. La narration LLM est générée avant le routage des alertes.",
+      "startIndex": 18363,
+      "endIndex": 18424,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 3.4 - Architecture en couches de DataWatch.",
+      "startIndex": 18427,
+      "endIndex": 18477,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.5 Modèle de données et sécurité",
+      "startIndex": 18478,
+      "endIndex": 18511,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Les tables organizations, users, data_sources, monitored_tables, table_profiles, check_results, incidents et alert_configs portent la verticale de surveillance. Les modèles de moniteurs sont versionnés afin qu’une modification ne réécrive pas silencieusement une définition active. Les secrets de connexion sont stockés chiffrés au niveau applicatif avec des clés Fernet dérivées par organisation. Cette séparation renforce l’isolation inter-tenant et réduit l’exposition des configurations.",
+      "startIndex": 18512,
+      "endIndex": 19003,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.6 Gouvernance de la couche IA",
+      "startIndex": 19004,
+      "endIndex": 19035,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La gouvernance IA est conçue en mode observe-only. Elle conserve des descripteurs de preuve metadata-only, des versions, des empreintes de contenu et des résultats de contrôles immuables. Les états inconnus, obsolètes ou non pris en charge restent visibles comme lacunes de preuve. Cette conception facilite l’audit technique mais ne constitue ni une certification juridique, ni une preuve de conformité, ni un mécanisme de blocage en production.",
+      "startIndex": 19036,
+      "endIndex": 19482,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4.7 Conclusion",
+      "startIndex": 19483,
+      "endIndex": 19497,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La conception relie les exigences à une architecture composable et testable. Le chapitre suivant présente les choix de réalisation, les interfaces et les résultats de validation.",
+      "startIndex": 19498,
+      "endIndex": 19676,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5. Chapitre 4 : Implémentation technique et tests",
+      "startIndex": 19679,
+      "endIndex": 19728,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "5.1 Introduction",
+      "startIndex": 19729,
+      "endIndex": 19745,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Cette phase concrétise les choix de conception dans une pile conteneurisée. L’objectif n’est pas de revendiquer une capacité de production universelle, mais de démontrer une verticale complète, reproductible et vérifiable localement.",
+      "startIndex": 19746,
+      "endIndex": 19979,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.2 Workflow proposé",
+      "startIndex": 19980,
+      "endIndex": 20000,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Lorsqu’une table est enregistrée, le planificateur crée un job périodique. Le worker profile la table par agrégats SQL, persiste un snapshot, puis exécute les contrôles. En cas d’échec, le service d’incident déduplique ou enrichit l’incident ouvert. Une nouvelle occurrence déclenche la narration IA, validée par un schéma, puis l’envoi d’alertes vers les canaux configurés.",
+      "startIndex": 20001,
+      "endIndex": 20375,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.3 Technologies utilisées",
+      "startIndex": 20376,
+      "endIndex": 20402,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La réalisation repose sur une pile volontairement cohérente. Python 3.12 et FastAPI portent l’API asynchrone et les contrats REST. SQLAlchemy 2.0 et PostgreSQL 16 assurent la persistance transactionnelle, les contraintes d’intégrité et l’historique JSONB. Celery et Redis exécutent les tâches de profilage hors requête utilisateur, tandis qu’APScheduler orchestre les contrôles périodiques.",
+      "startIndex": 20403,
+      "endIndex": 20793,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Côté interface, React, Vite et Tailwind structurent les écrans de pilotage et d’investigation. Docker Compose rend l’environnement reproductible pour la démonstration. Pytest vérifie les services et Playwright rejoue les parcours visibles. Ce choix d’outils privilégie l’observabilité, la séparation des responsabilités et la possibilité de tester chaque couche indépendamment.",
+      "startIndex": 20795,
+      "endIndex": 21172,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4 Présentation des interfaces",
+      "startIndex": 21175,
+      "endIndex": 21206,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La page Opérations est le point d’entrée de la démonstration. Elle met en évidence la file d’incidents, les actifs surveillés et l’état des sources. Le détail d’incident privilégie les signaux clés, la narration IA et les actions d’investigation. Les identifiants techniques et les vérifications secondaires restent accessibles sans surcharger la lecture initiale.",
+      "startIndex": 21207,
+      "endIndex": 21571,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.1 Vue Opérations",
+      "startIndex": 21572,
+      "endIndex": 21592,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "La page Opérations constitue le point d’entrée de la démonstration. Elle affiche la file d’incidents triée par sévérité, le nombre de tables actives, les sources connectées, le score de santé et le dernier profil de chaque actif.",
+      "startIndex": 21593,
+      "endIndex": 21822,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.1 - Vue Opérations et file d’incidents prioritaires.",
+      "startIndex": 21825,
+      "endIndex": 21886,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Montrer : bandeau de l’incident critique, file d’incidents, état des sources et actifs surveillés. Format recommandé : capture 16:9, données sensibles masquées.",
+      "startIndex": 21887,
+      "endIndex": 22047,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.2 Détail de l’incident P1",
+      "startIndex": 22048,
+      "endIndex": 22077,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "La fiche incident réunit la chronologie, les contrôles échoués, les valeurs observées, l’analyse IA, les causes probables, les actions recommandées et une requête de diagnostic copiable. Les hypothèses générées restent distinctes des faits mesurés.",
+      "startIndex": 22078,
+      "endIndex": 22326,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.2 - Détail de l’incident critique orders.",
+      "startIndex": 22329,
+      "endIndex": 22379,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Montrer : sévérité, métrique payment_status, fraîcheur, chronologie et bloc d’analyse IA.",
+      "startIndex": 22380,
+      "endIndex": 22469,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.3 Détail de la table surveillée",
+      "startIndex": 22470,
+      "endIndex": 22505,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Cette vue relie l’incident à l’actif concerné. Elle permet de présenter l’historique des profils et l’évolution des métriques de qualité avant et après l’anomalie.",
+      "startIndex": 22506,
+      "endIndex": 22669,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.3 - Profil et métriques de la table orders.",
+      "startIndex": 22672,
+      "endIndex": 22724,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Montrer : dernier profil, historique et variation du taux de valeurs nulles.",
+      "startIndex": 22725,
+      "endIndex": 22801,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.4 Alertes et gouvernance IA",
+      "startIndex": 22802,
+      "endIndex": 22833,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "La démonstration se poursuit dans Paramètres → Alertes avec la route email P1/P2, puis dans MailHog pour la preuve de livraison. La page Gouvernance IA présente l’inventaire, les usages déclarés, la provenance des preuves et les raisons des contrôles, dans une frontière explicitement observe-only.",
+      "startIndex": 22834,
+      "endIndex": 23132,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.4 - Route d’alerte e-mail configurée pour la démonstration.",
+      "startIndex": 23135,
+      "endIndex": 23203,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Montrer : canal email configuré et message reçu pour l’incident.",
+      "startIndex": 23204,
+      "endIndex": 23268,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.5 - File de travail de gouvernance IA en mode observe-only.",
+      "startIndex": 23271,
+      "endIndex": 23339,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Montrer : inventaire du système, preuves, états de contrôle et mention observe-only.",
+      "startIndex": 23340,
+      "endIndex": 23424,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.4.5 Règles de présentation des captures",
+      "startIndex": 23425,
+      "endIndex": 23466,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Chaque capture doit être introduite dans le texte, numérotée par chapitre et suivie d’une légende descriptive. Les mots de passe, clés, identifiants sensibles et données non publiques doivent être masqués. Utiliser une largeur homogène et éviter les captures trop longues.",
+      "startIndex": 23467,
+      "endIndex": 23739,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "1. Opérations — prioriser l’incident",
+      "startIndex": 23740,
+      "endIndex": 23776,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "2. Incident orders — expliquer les signaux",
+      "startIndex": 23777,
+      "endIndex": 23819,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "3. Table orders — vérifier les métriques",
+      "startIndex": 23820,
+      "endIndex": 23860,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "4. Alertes — prouver la livraison",
+      "startIndex": 23861,
+      "endIndex": 23894,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5. Gouvernance IA — présenter la traçabilité observe-only",
+      "startIndex": 23895,
+      "endIndex": 23952,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.7 - Parcours de démonstration de l’incident orders.",
+      "startIndex": 23953,
+      "endIndex": 24013,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.5 Tests et validation",
+      "startIndex": 24014,
+      "endIndex": 24037,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La validation combine des tests unitaires et d’intégration, une pile Docker seedée, des parcours Playwright et des contrôles de qualité de build. Le seed de démonstration crée les espaces Acme et Startup, configure une route d’alerte P1/P2 vers MailHog et attend une narration disponible pour l’incident orders avant la prise de démonstration.",
+      "startIndex": 24038,
+      "endIndex": 24381,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Validation rejouée sur la pile locale seedée",
+      "startIndex": 24382,
+      "endIndex": 24426,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "La pile Docker est saine : l’API confirme la connexion à PostgreSQL et Redis. Le seed déterministe a créé deux espaces de travail, sept tables surveillées, 463 profils historiques et sept incidents ouverts, dont l’incident P1 « orders » avec narration disponible.",
+      "startIndex": 24428,
+      "endIndex": 24691,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Les cinq parcours Playwright passent intégralement : création et test d’un moniteur, configuration d’une alerte, page Moniteurs avec temps réel, gouvernance IA et parcours PFE Operations → incident. Aucun de ces scénarios n’a signalé d’erreur console, d’erreur de page ou de réponse HTTP en échec.",
+      "startIndex": 24693,
+      "endIndex": 24990,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "La suite backend exécutée directement dans l’image de service valide 321 tests, en ignore 50 et échoue sur deux contrôles qui supposent que la racine complète du dépôt est montée dans le conteneur. Le rejeu strict depuis l’environnement hôte révèle par ailleurs une incompatibilité Python 3.14/pytest-asyncio et l’absence des services optionnels Cassandra, MySQL, MariaDB et MongoDB. Ces résultats sont consignés comme limites de l’environnement, et non présentés comme une validation totale.",
+      "startIndex": 24992,
+      "endIndex": 25484,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Figure 4.6 - Synthèse des validations locales et de leurs limites.",
+      "startIndex": 25486,
+      "endIndex": 25552,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.6 Discussion des limites",
+      "startIndex": 25555,
+      "endIndex": 25581,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Les résultats sont des preuves locales et ne constituent pas une garantie de montée en charge, de disponibilité internet ou de délai de fournisseur LLM. PostgreSQL est le connecteur stable de référence ; DuckDB et SQLite restent bêta, tandis que les autres connecteurs implémentés sont expérimentaux ou soumis à des validations d’environnement. Les résultats de la narration IA doivent être relus car ils peuvent formuler une hypothèse plausible mais non prouvée. La gouvernance IA observe l’état des preuves ; elle ne bloque pas l’exécution et ne certifie pas la conformité.",
+      "startIndex": 25582,
+      "endIndex": 26157,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "5.7 Conclusion",
+      "startIndex": 26158,
+      "endIndex": 26172,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "La réalisation met en évidence une chaîne cohérente de l’acquisition du signal jusqu’à l’alerte et à l’assistance à l’investigation. La validation, les mesures et les limites sont documentées afin que la démonstration reste honnête et reproductible.",
+      "startIndex": 26173,
+      "endIndex": 26422,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "6. Conclusion générale et perspectives",
+      "startIndex": 26425,
+      "endIndex": 26463,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "6.1 Cadre du travail",
+      "startIndex": 26464,
+      "endIndex": 26484,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Ce projet a permis de concevoir et réaliser DataWatch, une plateforme de surveillance de la qualité des données destinée à un contexte SaaS multi-tenant. La solution couvre l’enregistrement de sources, le profilage de tables, la détection hybride d’anomalies, la gestion d’incidents, l’alerte et l’assistance par narration IA. La conception privilégie le cloisonnement des organisations, la traçabilité, l’explicabilité et la validation reproductible.",
+      "startIndex": 26485,
+      "endIndex": 26936,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "6.2 Synthèse des apports",
+      "startIndex": 26937,
+      "endIndex": 26961,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Le dépôt contient un parcours principal déterministe autour d’un incident P1 orders, de sa narration, des alertes et de la gouvernance IA. Dans la session de révision du rapport, la pile Docker a été démarrée et seedée, cinq parcours navigateur ont été rejoués avec succès et la narration de l’incident orders a été vérifiée. La suite backend a confirmé 321 tests dans l’image de service, avec 50 tests ignorés et deux échecs liés au montage incomplet de la racine du dépôt ; le rejeu strict a également exposé les dépendances optionnelles manquantes et l’incompatibilité de l’environnement Python 3.14. Les choix de preuve limitent volontairement les affirmations : les résultats locaux ne sont ni un SLA, ni une mesure de charge à grande échelle, ni une certification de conformité.",
+      "startIndex": 26962,
+      "endIndex": 27746,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "6.3 Perspectives",
+      "startIndex": 27747,
+      "endIndex": 27763,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Mener des benchmarks répétés par connecteur, volume, largeur de schéma et niveau de concurrence.",
+      "startIndex": 27764,
+      "endIndex": 27860,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Évaluer précision, rappel et faux positifs des détecteurs sur des jeux de données annotés.",
+      "startIndex": 27861,
+      "endIndex": 27951,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Ajouter des packs de politiques, exceptions temporaires et gates de publication explicitement gouvernés.",
+      "startIndex": 27952,
+      "endIndex": 28056,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Étendre les validations verticales des connecteurs cloud avec des identifiants et coûts contrôlés.",
+      "startIndex": 28057,
+      "endIndex": 28155,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Mettre en place des mécanismes de feedback humain sur les narrations IA et leurs hypothèses.",
+      "startIndex": 28156,
+      "endIndex": 28248,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Industrialiser les exports de preuves et les tableaux de bord de conformité sans assimiler observation et certification.",
+      "startIndex": 28249,
+      "endIndex": 28369,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "7. Références",
+      "startIndex": 28372,
+      "endIndex": 28385,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "[1] DataWatch, Documentation d’architecture du projet, dépôt source, consultée en août 2026.",
+      "startIndex": 28386,
+      "endIndex": 28478,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[2] DataWatch, Release verification baseline — 2026-08-21, dossier docs/evidence du projet.",
+      "startIndex": 28479,
+      "endIndex": 28570,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[3] DataWatch, AI governance phase-two evidence — 2026-08-21, dossier docs/evidence du projet.",
+      "startIndex": 28571,
+      "endIndex": 28665,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[4] FastAPI, Documentation officielle. https://fastapi.tiangolo.com/",
+      "startIndex": 28666,
+      "endIndex": 28734,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[5] PostgreSQL Global Development Group, Documentation PostgreSQL. https://www.postgresql.org/docs/",
+      "startIndex": 28735,
+      "endIndex": 28834,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[6] React, Documentation officielle. https://react.dev/",
+      "startIndex": 28835,
+      "endIndex": 28890,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[7] Celery Project, Documentation officielle. https://docs.celeryq.dev/",
+      "startIndex": 28891,
+      "endIndex": 28962,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[8] Docker, Documentation officielle. https://docs.docker.com/",
+      "startIndex": 28963,
+      "endIndex": 29025,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "[9] ISO/IEC 25010:2023, Systems and software engineering — Product quality model.",
+      "startIndex": 29026,
+      "endIndex": 29107,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "8. Annexes",
+      "startIndex": 29110,
+      "endIndex": 29120,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_1",
+      "isListItem": false
+    },
+    {
+      "text": "Annexe A — Procédure de démonstration",
+      "startIndex": 29121,
+      "endIndex": 29158,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Démarrer la pile Docker et exécuter le seed déterministe.",
+      "startIndex": 29159,
+      "endIndex": 29216,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Se connecter à l’espace Acme et ouvrir Opérations.",
+      "startIndex": 29217,
+      "endIndex": 29267,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Ouvrir l’incident P1 orders, puis présenter les signaux, la narration et les actions.",
+      "startIndex": 29268,
+      "endIndex": 29353,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Afficher le détail de la table et la route d’alerte, puis MailHog.",
+      "startIndex": 29354,
+      "endIndex": 29420,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Présenter la gouvernance IA en précisant son périmètre observe-only.",
+      "startIndex": 29421,
+      "endIndex": 29489,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": true
+    },
+    {
+      "text": "Annexe B — Indicateurs à interpréter avec prudence",
+      "startIndex": 29490,
+      "endIndex": 29540,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Les p50 et p95 mentionnés dans ce rapport ont été obtenus sur une pile Docker locale avec requêtes séquentielles. Ils servent à comparer des régressions dans un même environnement ; ils ne doivent pas être présentés comme des engagements de production. De même, une narration LLM validée atteste de la conformité du format de sortie dans un essai, mais pas d’une exactitude universelle ni d’une latence garantie.",
+      "startIndex": 29541,
+      "endIndex": 29953,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "Annexe C — Guide de captures d’écran pour la soutenance",
+      "startIndex": 29954,
+      "endIndex": 30009,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_2",
+      "isListItem": false
+    },
+    {
+      "text": "Cette annexe précise les captures à intégrer lorsque la pile de démonstration est démarrée. Chaque image doit être lisible, sans données sensibles, et accompagnée d’une légende expliquant le point vérifié.",
+      "startIndex": 30010,
+      "endIndex": 30215,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "C.1 Tableau de bord Opérations",
+      "startIndex": 30216,
+      "endIndex": 30246,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Capture attendue : file des incidents, actifs surveillés et état de santé des sources. La légende doit préciser la priorité de l’incident choisi.",
+      "startIndex": 30247,
+      "endIndex": 30392,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "C.2 Détail de l’incident orders",
+      "startIndex": 30393,
+      "endIndex": 30424,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Capture attendue : signaux déclencheurs, sévérité P1/P2, narration IA et actions proposées. La légende doit distinguer une hypothèse générée d’un fait observé.",
+      "startIndex": 30425,
+      "endIndex": 30584,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    },
+    {
+      "text": "C.3 Routage d’alerte et gouvernance IA",
+      "startIndex": 30585,
+      "endIndex": 30623,
+      "tabId": "t.0",
+      "namedStyleType": "HEADING_3",
+      "isListItem": false
+    },
+    {
+      "text": "Capture attendue : route MailHog ou canal configuré, puis écran de gouvernance en mode observe-only. La légende doit expliciter que cette gouvernance ne certifie pas la conformité.",
+      "startIndex": 30624,
+      "endIndex": 30804,
+      "tabId": "t.0",
+      "namedStyleType": "NORMAL_TEXT",
+      "isListItem": false
+    }
+  ]
+}
