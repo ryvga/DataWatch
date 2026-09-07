@@ -1119,11 +1119,12 @@ def build():
             if action[0] in ("h2", "h3"):
                 extra_level = 2 if action[0] == "h2" else 3
                 toc_entries.append((action[1], page_map.get(action[1], ""), heading_anchor(action[1]), extra_level))
-    toc_entries.extend([
-        ("Annexe D — Dictionnaire du modèle de données", page_map.get("Annexe D — Dictionnaire du modèle de données", ""), "annex_d", 2),
-        ("Annexe E — État du jeu de démonstration", page_map.get("Annexe E — État du jeu de démonstration", ""), "annex_e", 2),
-        ("Annexe F — Commandes de reproduction", page_map.get("Annexe F — Commandes de reproduction", ""), "annex_f", 2),
-    ])
+    toc_entries.append((
+        "Annexe D — Repères techniques et reproduction",
+        page_map.get("Annexe D — Repères techniques et reproduction", ""),
+        "annex_d",
+        2,
+    ))
 
     add_heading(doc, "V. Table des matières", 1, front=True, anchor="front_toc", bookmark_id=bookmark_id); bookmark_id += 1
     add_live_index(doc, toc_entries, 'TOC \\o "1-3" \\h \\z \\u')
@@ -1153,14 +1154,8 @@ def build():
         ("Tableau 4.1 — Technologies principales et justification", page_map.get("Tableau 4.1", ""), "tab_4_1", 2),
         ("Tableau 4.2 — Matrice de validation fonctionnelle", page_map.get("Tableau 4.2", ""), "tab_4_2", 2),
         ("Annexes", "", None, 0),
+        ("Tableau D.1 — Repères vérifiables du prototype", page_map.get("Tableau D.1", ""), "tab_d_1", 2),
     ]
-    for index, table_info in enumerate(database_evidence["tables"], 1):
-        label = f"Tableau D.{index}"
-        table_entries.append((f"{label} — Structure de {table_info['name']}", page_map.get(label, ""), f"tab_d_{index}", 2))
-    table_entries.append(("Tableau E.1 — Effectifs du jeu de démonstration", page_map.get("Tableau E.1", ""), "tab_e_1", 2))
-    for index, (_, caption) in enumerate(SAMPLE_TABLES, 2):
-        label = f"Tableau E.{index}"
-        table_entries.append((f"{label} — {caption}", page_map.get(label, ""), f"tab_e_{index}", 2))
     add_static_index(doc, table_entries)
     add_heading(doc, "VIII. Liste des abréviations", 1, front=True, anchor="front_abbr", bookmark_id=bookmark_id); bookmark_id += 1
     add_abbreviations(doc)
@@ -1236,52 +1231,25 @@ def build():
         add_body(doc, text)
 
     doc.add_page_break()
-    add_heading(doc, "Annexe D — Dictionnaire du modèle de données", 2, anchor="annex_d", bookmark_id=bookmark_id); bookmark_id += 1
-    add_body(doc, "Cette annexe décrit les 29 tables applicatives réellement chargées par SQLAlchemy. La table technique alembic_version est exclue. Chaque ligne provient des métadonnées du code : aucun champ n’a été reconstitué à la main. Les références multiples matérialisent les contraintes composites employées pour maintenir l’isolation entre organisations.")
-    for index, table_info in enumerate(database_evidence["tables"], 1):
-        rows = []
-        unique_columns = {column for constraint in table_info.get("unique_constraints", []) for column in constraint}
-        for column in table_info["columns"]:
-            flags = []
-            if column["primary_key"]: flags.append("PK")
-            flags.append("facultatif" if column["nullable"] else "obligatoire")
-            if column["name"] in unique_columns: flags.append("unicité composée")
-            rows.append([
-                column["name"], column["type"], ", ".join(flags),
-                ", ".join(column["foreign_keys"]) if column["foreign_keys"] else "—",
-            ])
-        label = f"Tableau D.{index}"
-        caption = f"Structure de {table_info['name']} — {table_info['responsibility']}"
-        bookmark_id = add_academic_table(
-            doc, label, caption, ["Colonne", "Type", "Contraintes", "Référence(s)"],
-            rows, [2050, 1900, 2250, 2700], f"tab_d_{index}", bookmark_id,
-        )
-
-    doc.add_page_break()
-    add_heading(doc, "Annexe E — État du jeu de démonstration", 2, anchor="annex_e", bookmark_id=bookmark_id); bookmark_id += 1
+    add_heading(doc, "Annexe D — Repères techniques et reproduction", 2, anchor="annex_d", bookmark_id=bookmark_id); bookmark_id += 1
+    add_body(doc, "Cette annexe conserve uniquement les chiffres nécessaires pour relire la démonstration et reproduire le rapport. Le modèle relationnel complet est déjà présenté par les figures 3.15 à 3.18 ; répéter ici les colonnes de chacune des 29 tables alourdissait le document sans améliorer l’analyse.")
     total_rows = sum(database_evidence["seeded_row_counts"].values())
-    add_body(doc, f"Le seed contrôlé contient {total_rows} lignes applicatives. Sa densité n’est pas uniforme : 463 profils et 376 résultats de contrôle donnent de la matière aux courbes, tandis que les entités de configuration restent volontairement peu nombreuses. Les extraits ci-dessous retirent mots de passe, clés, jetons et configurations chiffrées.")
-    counts = sorted(database_evidence["seeded_row_counts"].items(), key=lambda item: (-item[1], item[0]))
+    counts = database_evidence["seeded_row_counts"]
     bookmark_id = add_academic_table(
-        doc, "Tableau E.1", "Effectifs du jeu de démonstration", ["Table", "Lignes", "Lecture"],
-        [[name, str(count), "historique dense" if count >= 100 else ("scénario présent" if count else "structure prête, non seedée")] for name, count in counts],
-        [3500, 1200, 4200], "tab_e_1", bookmark_id,
+        doc, "Tableau D.1", "Repères vérifiables du prototype", ["Repère", "Valeur", "Lecture"],
+        [
+            ["Modèle applicatif", str(len(database_evidence["tables"])), "Tables SQLAlchemy, hors table technique de migration"],
+            ["Jeu de démonstration", str(total_rows), "Lignes applicatives seedées"],
+            ["Profils de table", str(counts.get("table_profiles", 0)), "Historique utilisé par les courbes et détecteurs"],
+            ["Résultats de contrôle", str(counts.get("check_results", 0)), "Observations persistées et explicables"],
+            ["Tables surveillées", str(counts.get("monitored_tables", 0)), "Actifs configurés dans les workspaces de démonstration"],
+            ["Incidents", str(counts.get("incidents", 0)), "Scénarios ouverts ou historisés"],
+            ["Contrôles de gouvernance IA", str(counts.get("ai_control_evaluations", 0)), "Preuves du prototype observe-only"],
+        ],
+        [2850, 1200, 4850], "tab_d_1", bookmark_id,
     )
-    for index, (sample_key, caption) in enumerate(SAMPLE_TABLES, 2):
-        sample_rows = database_evidence["non_sensitive_seed_samples"].get(sample_key, [])
-        if not sample_rows:
-            continue
-        headers = list(sample_rows[0].keys())
-        values = [[str(row.get(header, "—")) for header in headers] for row in sample_rows]
-        widths = [8950 // len(headers)] * len(headers)
-        widths[-1] += 8950 - sum(widths)
-        bookmark_id = add_academic_table(
-            doc, f"Tableau E.{index}", caption, headers, values, widths, f"tab_e_{index}", bookmark_id,
-        )
-
-    doc.add_page_break()
-    add_heading(doc, "Annexe F — Commandes de reproduction", 2, anchor="annex_f", bookmark_id=bookmark_id); bookmark_id += 1
-    add_body(doc, "Les commandes suivantes reconstruisent la pile, réinitialisent les données, réexportent la preuve du schéma et régénèrent les 24 vues du rapport. Les identifiants de démonstration restent dans le guide local ; ils ne constituent pas des secrets de production.")
+    add_heading(doc, "D.1 Commandes de reproduction", 3)
+    add_body(doc, "Les commandes suivantes reconstruisent la pile, réinitialisent les données, réexportent la preuve du schéma et régénèrent les vues du rapport. Les identifiants de démonstration restent dans le guide local ; ils ne constituent pas des secrets de production.")
     add_code_block(doc, [
         "docker compose up -d --wait",
         "docker compose --profile seed run --rm --entrypoint python seed /scripts/quickstart.py --reset",
