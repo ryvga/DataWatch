@@ -1,6 +1,8 @@
-# Démonstration PFE DataWatch — parcours à enregistrer
+# Démonstration PFE DataWatch — conducteur d’enregistrement
 
-## 1. Préparer l’environnement
+Durée cible : 9 minutes. Résolution : 1920 × 1080. Zoom navigateur : 100 %. Fermer les outils de développement et les notifications système.
+
+## 1. Remettre la démonstration à zéro
 
 ```bash
 docker compose up -d --wait
@@ -8,47 +10,80 @@ docker compose --profile seed run --rm --entrypoint python seed /scripts/quickst
 curl -fsS http://localhost:8000/ready
 ```
 
-Ne commencer l’enregistrement qu’après le message `Acme orders narration is ready for recording`.
+Attendre le message `Acme orders narration is ready for recording`. Garder MailHog ouvert dans un second onglet : `http://localhost:8025`.
 
-## 2. Ouvrir les écrans
+## 2. Préparer les deux parcours
 
-- Application : `http://acme-corp.localhost:5173`
+- Workspace client : `http://acme-corp.localhost:5173`
 - Compte : `mounir@acme.io`
 - Mot de passe : `demo1234`
-- Courriels de démonstration : `http://localhost:8025`
+- Portail staff : `http://staff.localhost:5173`
 
-## 3. Parcours principal — 6 à 7 minutes
+## 3. Conducteur principal
 
-1. Se connecter puis rester sur **Operations**.
-2. Montrer les quatre tables surveillées, la source connectée, le score de santé et la file d’incidents.
-3. Ouvrir l’incident P1 `orders — payment_status null rate spiked and freshness breach`.
-4. Montrer les signaux, la chronologie, l’analyse IA, les causes probables, les actions recommandées et les requêtes de diagnostic.
-5. Faire une pause sur les valeurs mesurées, puis sur le libellé qui présente les causes proposées par l’IA comme des hypothèses à vérifier.
-6. Ouvrir **View table detail** et montrer le profil, la fraîcheur, le taux de valeurs nulles et l’historique des contrôles.
-7. Revenir à l’incident, l’affecter à **Data Engineering**, puis cliquer **Acknowledge**. Ne pas le résoudre.
-8. Ouvrir **Settings → Alerts** et montrer la route `pfe-demo@acme.test` à partir de la sévérité P2.
-9. Ouvrir MailHog et montrer le message reçu pour l’incident.
-10. Ouvrir **AI Governance**, sélectionner le système d’assistance et montrer la carte des usages, la provenance des preuves et les raisons de contrôle.
-11. Terminer sur la mention **Observe only** : la fonction rend les lacunes visibles, mais ne certifie pas la conformité et ne bloque pas l’exécution.
+### 00:00–00:45 — Problème et promesse
 
-## 4. Captures du rapport
+1. Afficher la page de connexion, puis ouvrir le workspace Acme Corp.
+2. Sur **Operations**, montrer le score de santé, les quatre tables suivies et la file d’incidents.
+3. Dire une seule idée : DataWatch transforme des mesures techniques en file d’investigation exploitable.
 
-Les fichiers sont générés par :
+### 00:45–02:45 — De l’alerte au diagnostic
+
+1. Ouvrir **Incidents** puis l’incident P1 `orders — payment_status null rate spiked and freshness breach`.
+2. Montrer la sévérité, les signaux mesurés, la chronologie et le contexte de la table.
+3. Ouvrir le volet d’analyse IA : causes probables, actions suggérées et requêtes de diagnostic.
+4. Faire apparaître la réserve « hypothèses à vérifier ». Ne jamais présenter la narration comme une preuve automatique.
+5. Affecter l’incident à **Data Engineering**, puis cliquer **Acknowledge**. Ne pas le résoudre : l’état seedé doit rester réutilisable.
+
+### 02:45–04:20 — Catalogue, profil et moniteurs
+
+1. Ouvrir **Tables**, puis `public.orders`.
+2. Parcourir le profil, la fraîcheur, les colonnes, le taux de nullité et l’historique des contrôles.
+3. Montrer **Monitor recommendations**, puis le catalogue des moniteurs.
+4. Ouvrir le constructeur DSL. Montrer les paramètres et l’aperçu sans enregistrer de règle jetable.
+
+### 04:20–05:40 — Exploitation collective
+
+1. Ouvrir **Reports** et afficher le rapport hebdomadaire.
+2. Ouvrir **Teams**, puis **Data Engineering** afin de montrer membres et responsabilités.
+3. Dans **Data sources**, montrer la source active et le catalogue des connecteurs.
+4. Dans **Settings → Alerts**, montrer la route `pfe-demo@acme.test` et les préférences individuelles.
+5. Basculer vers MailHog et afficher le message lié à l’incident.
+
+### 05:40–07:25 — Gouvernance IA observable
+
+1. Ouvrir **AI Governance** et sélectionner le système d’assistance enregistré.
+2. Montrer l’usage déclaré, les preuves, les évaluations et la chronologie.
+3. Terminer cette séquence sur **Observe only** : DataWatch rend les lacunes visibles ; il ne délivre ni certification juridique ni blocage automatique.
+
+### 07:25–08:35 — Administration multi-tenant
+
+1. Se déconnecter et ouvrir le portail staff.
+2. Se connecter avec le compte staff de la seed locale.
+3. Montrer le tableau de bord global, la liste des organisations et le détail d’**Acme Corp**.
+4. Pointer les utilisateurs et les sources sans emprunter l’identité d’un membre du tenant.
+
+### 08:35–09:00 — Clôture
+
+1. Revenir sur **Operations**.
+2. Résumer visuellement le trajet : source → profil → contrôle → incident → investigation → notification.
+3. Laisser l’écran sur l’incident P1 et son état reconnu.
+
+## 4. Captures utilisées dans le rapport
+
+Les 24 vues se régénèrent avec :
 
 ```bash
 cd frontend
 npm run capture:pfe
 ```
 
-- `docs/screenshots/pfe/01-operations-report.png` → figure 4.1
-- `docs/screenshots/pfe/02-incident-orders-report.png` → figure 4.2
-- `docs/screenshots/pfe/03-table-orders-report.png` → figure 4.3
-- `docs/screenshots/pfe/04-alerts-report.png` → figure 4.4
-- `docs/screenshots/pfe/05-ai-governance-report.png` → figure 4.5
+La correspondance est directe : `01-workspace-login-report.png` à `24-admin-organization-detail-report.png` deviennent les figures 4.1 à 4.24. Les fichiers sans suffixe `-report` conservent le cadre complet du navigateur ; les variantes `-report` sont recadrées pour la page A4.
 
-## 5. Plan de secours
+## 5. Reprise rapide
 
-- Si l’incident `orders` ou sa narration n’apparaît pas, relancer le seed avec `--reset`.
-- Si une route d’alerte manque après les tests navigateur, relancer le seed : le scénario de test nettoie ses données.
-- Si une capture affiche un squelette de chargement, ne pas la conserver ; attendre le titre réel de la page et reprendre la capture.
-- Ne pas ouvrir Billing, Reports ou un écran vide pendant le parcours principal.
+- Écran vide ou squelette : attendre le titre réel, puis reprendre la séquence.
+- Incident ou narration absent : relancer la seed avec `--reset`.
+- Route d’alerte modifiée par un essai : relancer la seed.
+- Page staff vide : arrêter l’enregistrement ; la vue doit afficher les utilisateurs et les sources d’Acme Corp.
+- Ne montrer aucune variable d’environnement, chaîne de connexion, clé API ou configuration chiffrée.

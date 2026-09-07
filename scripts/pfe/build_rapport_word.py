@@ -16,6 +16,7 @@ from docx.shared import Cm, Pt, RGBColor
 
 ROOT = Path("/Users/mounir/Documents/Claude/Projects/DataWatch")
 SOURCE = ROOT / "docs/pfe/report_source.json"
+DATABASE_EVIDENCE = ROOT / "docs/pfe/database_evidence.json"
 OUT = ROOT / "output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx"
 PAGE_MAP_PATH = ROOT / "tmp/pfe/report-page-map.json"
 
@@ -26,22 +27,67 @@ LIGHT = "EEF0F3"
 ACCENT = "B1202D"
 ACCENT_SOFT = "F8EAEC"
 
-FIGURES = {
-    "Figure 1.1": ROOT / "docs/diagrams/pfe/gantt-doc.png",
-    "Figure 3.1": ROOT / "docs/diagrams/pfe/use_cases-doc.png",
-    "Figure 3.2": ROOT / "docs/diagrams/pfe/sequence-uml-doc.png",
-    "Figure 3.3": ROOT / "docs/diagrams/pfe/classes-doc.png",
-    "Figure 3.4": ROOT / "docs/diagrams/pfe/architecture-doc.png",
-    "Figure 4.1": ROOT / "docs/screenshots/pfe/01-operations-report.png",
-    "Figure 4.2": ROOT / "docs/screenshots/pfe/02-incident-orders-report.png",
-    "Figure 4.3": ROOT / "docs/screenshots/pfe/03-table-orders-report.png",
-    "Figure 4.4": ROOT / "docs/screenshots/pfe/04-alerts-report.png",
-    "Figure 4.5": ROOT / "docs/screenshots/pfe/05-ai-governance-report.png",
-    "Figure 4.6": ROOT / "docs/diagrams/pfe/validation-doc.png",
-    "Figure 4.7": ROOT / "docs/diagrams/pfe/demo_flow-doc.png",
-}
+FIGURE_CATALOG = [
+    ("Figure 1.1", "Planification du PFE du 1er juin au 31 août et continuité du produit", "docs/diagrams/pfe/gantt-doc.png"),
+    ("Figure 3.1", "Vue globale des acteurs et domaines fonctionnels", "docs/diagrams/pfe/use_cases-doc.png"),
+    ("Figure 3.2", "Cas d’utilisation du workspace client", "docs/diagrams/pfe/use_cases_workspace-doc.png"),
+    ("Figure 3.3", "Cas d’utilisation du portail staff", "docs/diagrams/pfe/use_cases_staff-doc.png"),
+    ("Figure 3.4", "Séquence de connexion et d’inscription d’une source", "docs/diagrams/pfe/sequence_source-doc.png"),
+    ("Figure 3.5", "Séquence de profilage et de détection", "docs/diagrams/pfe/sequence_monitoring-doc.png"),
+    ("Figure 3.6", "Séquence d’investigation d’un incident", "docs/diagrams/pfe/sequence_investigation-doc.png"),
+    ("Figure 3.7", "Séquence d’évaluation de la gouvernance IA", "docs/diagrams/pfe/sequence_ai_governance-doc.png"),
+    ("Figure 3.8", "Cycle de vie d’un incident DataWatch", "docs/diagrams/pfe/activity_incident-doc.png"),
+    ("Figure 3.9", "Classes du noyau de surveillance", "docs/diagrams/pfe/classes_monitoring-doc.png"),
+    ("Figure 3.10", "Classes d’identité et de collaboration", "docs/diagrams/pfe/classes_collaboration-doc.png"),
+    ("Figure 3.11", "Classes des moniteurs typés et révisions", "docs/diagrams/pfe/classes_monitors-doc.png"),
+    ("Figure 3.12", "Classes du registre de gouvernance IA", "docs/diagrams/pfe/classes_ai_governance-doc.png"),
+    ("Figure 3.13", "Architecture logique en couches", "docs/diagrams/pfe/architecture-doc.png"),
+    ("Figure 3.14", "Déploiement de la pile de démonstration", "docs/diagrams/pfe/deployment-doc.png"),
+    ("Figure 3.15", "Cartographie des 29 tables applicatives", "docs/diagrams/pfe/erd_overview-doc.png"),
+    ("Figure 3.16", "Modèle relationnel du cœur de surveillance", "docs/diagrams/pfe/erd_core-doc.png"),
+    ("Figure 3.17", "Modèle relationnel identité, équipes et astreintes", "docs/diagrams/pfe/erd_identity-doc.png"),
+    ("Figure 3.18", "Modèle relationnel du registre de gouvernance IA", "docs/diagrams/pfe/erd_ai_governance-doc.png"),
+    ("Figure 4.1", "Connexion au workspace Acme Corp", "docs/screenshots/pfe/01-workspace-login-report.png"),
+    ("Figure 4.2", "Vue Opérations et incidents prioritaires", "docs/screenshots/pfe/02-operations-report.png"),
+    ("Figure 4.3", "Catalogue des tables surveillées", "docs/screenshots/pfe/03-tables-catalogue-report.png"),
+    ("Figure 4.4", "Liste filtrable des incidents", "docs/screenshots/pfe/04-incidents-list-report.png"),
+    ("Figure 4.5", "Détail de l’incident critique orders", "docs/screenshots/pfe/05-incident-detail-report.png"),
+    ("Figure 4.6", "Analyse IA de l’incident et actions proposées", "docs/screenshots/pfe/06-incident-ai-analysis-report.png"),
+    ("Figure 4.7", "Profil de la table public.orders", "docs/screenshots/pfe/07-table-orders-report.png"),
+    ("Figure 4.8", "Recommandations de moniteurs pour public.orders", "docs/screenshots/pfe/08-monitor-recommendations-report.png"),
+    ("Figure 4.9", "Catalogue des moniteurs typés", "docs/screenshots/pfe/09-monitors-catalogue-report.png"),
+    ("Figure 4.10", "Constructeur de moniteur DSL", "docs/screenshots/pfe/10-monitor-builder-report.png"),
+    ("Figure 4.11", "Rapports hebdomadaires de santé", "docs/screenshots/pfe/11-weekly-reports-report.png"),
+    ("Figure 4.12", "Répertoire des équipes", "docs/screenshots/pfe/12-teams-report.png"),
+    ("Figure 4.13", "Membres de l’équipe Data Engineering", "docs/screenshots/pfe/13-team-detail-report.png"),
+    ("Figure 4.14", "Sources de données enregistrées", "docs/screenshots/pfe/14-data-sources-report.png"),
+    ("Figure 4.15", "Catalogue des connecteurs disponibles", "docs/screenshots/pfe/15-connector-catalogue-report.png"),
+    ("Figure 4.16", "Routes d’alerte par canal et sévérité", "docs/screenshots/pfe/16-alert-routes-report.png"),
+    ("Figure 4.17", "Préférences individuelles de notification", "docs/screenshots/pfe/17-notification-preferences-report.png"),
+    ("Figure 4.18", "File de travail de gouvernance IA", "docs/screenshots/pfe/18-ai-systems-report.png"),
+    ("Figure 4.19", "Détail d’un système IA déclaré", "docs/screenshots/pfe/19-ai-governance-detail-report.png"),
+    ("Figure 4.20", "Chronologie des preuves de gouvernance", "docs/screenshots/pfe/20-ai-evidence-timeline-report.png"),
+    ("Figure 4.21", "Connexion isolée au portail staff", "docs/screenshots/pfe/21-staff-login-report.png"),
+    ("Figure 4.22", "Administration des organisations clientes", "docs/screenshots/pfe/22-admin-organizations-report.png"),
+    ("Figure 4.23", "Tableau de bord global du portail staff", "docs/screenshots/pfe/23-admin-dashboard-report.png"),
+    ("Figure 4.24", "Détail opérationnel de l’organisation Acme Corp", "docs/screenshots/pfe/24-admin-organization-detail-report.png"),
+]
+FIGURES = {label: ROOT / path for label, _, path in FIGURE_CATALOG}
+FIGURE_META = {label: (caption, ROOT / path) for label, caption, path in FIGURE_CATALOG}
+SAMPLE_TABLES = [
+    ("organizations", "Organisations de démonstration"),
+    ("acme_users", "Utilisateurs Acme sans identifiants sensibles"),
+    ("acme_teams", "Équipes Acme"),
+    ("acme_sources", "Sources Acme"),
+    ("acme_tables", "Tables surveillées chez Acme"),
+    ("acme_incidents", "Incidents Acme ouverts"),
+    ("acme_ai_systems", "Systèmes IA déclarés"),
+]
 
-SKIP_BODY_INDEXES = set(range(185, 190)) | set(range(199, 204)) | set(range(241, 246)) | {224, 228, 232, 236, 238}
+SKIP_BODY_INDEXES = (
+    set(range(185, 190)) | set(range(199, 204)) | set(range(241, 246)) |
+    {152, 190, 193, 196, 204, 223, 224, 227, 228, 231, 232, 235, 236, 237, 238, 246, 253}
+)
 
 
 def set_font(run, size=None, bold=None, italic=None, color=None):
@@ -260,6 +306,12 @@ def add_list(doc, text, num_id):
 def add_callout(doc, title, text):
     table = doc.add_table(rows=1, cols=1)
     table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    # Word exposes the shaded callout as a one-row table to assistive tools.
+    # Mark that semantic row explicitly so the label is announced as its header.
+    tr_pr = table.rows[0]._tr.get_or_add_trPr()
+    tbl_header = OxmlElement("w:tblHeader")
+    tbl_header.set(qn("w:val"), "true")
+    tr_pr.append(tbl_header)
     cell = table.cell(0, 0)
     set_table_cell_margins(cell, top=150, start=220, bottom=150, end=220)
     shd = OxmlElement("w:shd"); shd.set(qn("w:fill"), "F7F7F8"); cell._tc.get_or_add_tcPr().append(shd)
@@ -745,6 +797,58 @@ ENRICHMENTS = {
     ],
 }
 
+# Visual evidence is attached to the section that explains it. This keeps the
+# report readable: one argument, one figure, then the interpretation.
+ENRICHMENTS.setdefault("2.4.3 Diagramme de Gantt et jalons", []).extend([
+    ("p", "Le calendrier ne simule pas une succession parfaitement linéaire. L’architecture démarre pendant le cadrage ; la détection chevauche le profilage ; les tests commencent avant la fermeture fonctionnelle. La ligne rouge du 31 août borne la période évaluée. Au-delà, la barre grise assume le statut réel du projet : le produit continue."),
+    ("figure", "Figure 1.1"),
+])
+ENRICHMENTS.setdefault("4.3 Conception de la solution", []).extend([
+    ("figure", "Figure 3.1"), ("figure", "Figure 3.2"), ("figure", "Figure 3.3"),
+])
+ENRICHMENTS.setdefault("4.3.1 Diagramme de séquence", []).extend([
+    ("figure", "Figure 3.4"), ("figure", "Figure 3.5"), ("figure", "Figure 3.6"),
+    ("figure", "Figure 3.7"), ("figure", "Figure 3.8"),
+])
+ENRICHMENTS.setdefault("4.3.2 Diagramme de classes", []).extend([
+    ("p", "Quatre vues remplacent un diagramme monolithique devenu illisible sur A4. Elles conservent les cardinalités et les frontières de domaine : surveillance, collaboration, moniteurs versionnés, puis gouvernance IA."),
+    ("figure", "Figure 3.9"), ("figure", "Figure 3.10"), ("figure", "Figure 3.11"), ("figure", "Figure 3.12"),
+])
+ENRICHMENTS.setdefault("4.4 Architecture proposée", []).extend([
+    ("figure", "Figure 3.13"), ("figure", "Figure 3.14"),
+])
+ENRICHMENTS.setdefault("4.5 Modèle de données et sécurité", []).extend([
+    ("h3", "3.5.4 Structure relationnelle complète"),
+    ("p", "Le schéma physique compte 29 tables applicatives. La vue d’ensemble révèle quatre masses nettes : identité et collaboration, surveillance, moniteurs typés, gouvernance IA. Trois vues relationnelles détaillées suivent. Le dictionnaire exhaustif — colonnes, types, nullabilité, clés et effectifs seedés — est reporté en annexe afin de garder ce chapitre respirable."),
+    ("figure", "Figure 3.15"), ("figure", "Figure 3.16"), ("figure", "Figure 3.17"), ("figure", "Figure 3.18"),
+])
+ENRICHMENTS.setdefault("5.4.1 Vue Opérations", []).extend([
+    ("p", "Le parcours commence avant le tableau de bord. Le sous-domaine dans l’URL fixe le workspace ; la page de connexion reste volontairement sobre. Une fois authentifié, l’opérateur reçoit la file priorisée et le catalogue des actifs, pas un mur de graphiques décoratifs."),
+    ("figure", "Figure 4.1"), ("figure", "Figure 4.2"), ("figure", "Figure 4.3"),
+])
+ENRICHMENTS.setdefault("5.4.2 Détail de l’incident P1", []).extend([
+    ("p", "L’enquête tient sur trois plans : la liste situe l’urgence, le détail rassemble les faits horodatés, puis la narration IA propose des pistes clairement séparées des mesures. L’opérateur garde la décision — affecter, acquitter, résoudre ou documenter un faux positif."),
+    ("figure", "Figure 4.4"), ("figure", "Figure 4.5"), ("figure", "Figure 4.6"),
+])
+ENRICHMENTS.setdefault("5.4.3 Détail de la table surveillée", []).extend([
+    ("p", "La fiche public.orders relie série temporelle, contrôles et configuration. Les recommandations ne s’activent pas en silence : elles conduisent vers le catalogue des moniteurs et un constructeur DSL qui expose définition, mode et validation."),
+    ("figure", "Figure 4.7"), ("figure", "Figure 4.8"), ("figure", "Figure 4.9"), ("figure", "Figure 4.10"),
+])
+ENRICHMENTS.setdefault("5.4.4 Alertes et gouvernance IA", []).extend([
+    ("h3", "4.4.4.1 Rapports, équipes et astreintes"),
+    ("p", "La réponse à l’incident dépasse l’écran technique. Les rapports condensent une semaine ; les équipes rendent l’affectation concrète ; les créneaux d’astreinte indiquent qui peut réellement recevoir une escalade."),
+    ("figure", "Figure 4.11"), ("figure", "Figure 4.12"), ("figure", "Figure 4.13"),
+    ("h3", "4.4.4.2 Sources, connecteurs et notifications"),
+    ("p", "Le catalogue distingue les capacités annoncées de chaque moteur. La source seedée sert de verticale vérifiée ; le routage et les préférences montrent ensuite comment la même alerte se distribue sans imposer un canal unique."),
+    ("figure", "Figure 4.14"), ("figure", "Figure 4.15"), ("figure", "Figure 4.16"), ("figure", "Figure 4.17"),
+    ("h3", "4.4.4.3 Registre de gouvernance IA"),
+    ("p", "Le registre ne fabrique aucun label de conformité. Il affiche versions, usages déclarés, manifestes, preuves et résultats de contrôle ; l’état observe-only signale les manques sans transformer un test technique en certification."),
+    ("figure", "Figure 4.18"), ("figure", "Figure 4.19"), ("figure", "Figure 4.20"),
+    ("h3", "4.4.4.4 Portail staff"),
+    ("p", "L’administration de la plateforme utilise une authentification séparée. Le staff voit les organisations, les usages et l’état d’un tenant ; il n’emprunte pas l’identité d’un membre du workspace."),
+    ("figure", "Figure 4.21"), ("figure", "Figure 4.22"), ("figure", "Figure 4.23"), ("figure", "Figure 4.24"),
+])
+
 
 def add_enrichments(doc, heading, bookmark_id):
     for action in ENRICHMENTS.get(heading, []):
@@ -762,11 +866,18 @@ def add_enrichments(doc, heading, bookmark_id):
         elif kind == "table":
             _, label, caption, headers, rows, widths, anchor = action
             bookmark_id = add_academic_table(doc, label, caption, headers, rows, widths, anchor, bookmark_id)
+        elif kind == "figure":
+            label = action[1]
+            caption, path = FIGURE_META[label]
+            anchor = "fig_" + label.split()[1].replace(".", "_")
+            add_picture(doc, path, label, caption, anchor=anchor, bookmark_id=bookmark_id)
+            bookmark_id += 1
     return bookmark_id
 
 
 def build():
     data = json.loads(SOURCE.read_text())
+    database_evidence = json.loads(DATABASE_EVIDENCE.read_text())
     paras = data["paragraphs"]
     doc = Document()
     configure_styles(doc)
@@ -815,28 +926,25 @@ def build():
             if action[0] in ("h2", "h3"):
                 extra_level = 2 if action[0] == "h2" else 3
                 toc_entries.append((action[1], page_map.get(action[1], ""), heading_anchor(action[1]), extra_level))
-    toc_entries.append(("Annexe D — Commandes de reproduction", page_map.get("Annexe D — Commandes de reproduction", ""), "annex_d", 2))
+    toc_entries.extend([
+        ("Annexe D — Dictionnaire du modèle de données", page_map.get("Annexe D — Dictionnaire du modèle de données", ""), "annex_d", 2),
+        ("Annexe E — État du jeu de démonstration", page_map.get("Annexe E — État du jeu de démonstration", ""), "annex_e", 2),
+        ("Annexe F — Commandes de reproduction", page_map.get("Annexe F — Commandes de reproduction", ""), "annex_f", 2),
+    ])
 
     add_heading(doc, "V. Table des matières", 1, front=True, anchor="front_toc", bookmark_id=bookmark_id); bookmark_id += 1
     add_live_index(doc, toc_entries, 'TOC \\o "1-3" \\h \\z \\u')
     add_heading(doc, "VI. Liste des figures", 1, front=True, anchor="front_figures", bookmark_id=bookmark_id); bookmark_id += 1
-    figure_entries = [
-        ("Chapitre 1 — Cadre général", "", None, 0),
-        ("Figure 1.1 — Planification du projet par sprints", page_map.get("Figure 1.1", ""), "fig_1_1", 2),
-        ("Chapitre 3 — Analyse et conception", "", None, 0),
-        ("Figure 3.1 — Cas d’utilisation de DataWatch", page_map.get("Figure 3.1", ""), "fig_3_1", 2),
-        ("Figure 3.2 — Séquence de détection et de traitement d’un incident", page_map.get("Figure 3.2", ""), "fig_3_2", 2),
-        ("Figure 3.3 — Diagramme de classes métier simplifié", page_map.get("Figure 3.3", ""), "fig_3_3", 2),
-        ("Figure 3.4 — Architecture en couches de DataWatch", page_map.get("Figure 3.4", ""), "fig_3_4", 2),
-        ("Chapitre 4 — Réalisation et validation", "", None, 0),
-        ("Figure 4.1 — Vue Opérations et file d’incidents prioritaires", page_map.get("Figure 4.1", ""), "fig_4_1", 2),
-        ("Figure 4.2 — Détail de l’incident critique orders", page_map.get("Figure 4.2", ""), "fig_4_2", 2),
-        ("Figure 4.3 — Profil et métriques de la table orders", page_map.get("Figure 4.3", ""), "fig_4_3", 2),
-        ("Figure 4.4 — Route d’alerte e-mail configurée pour la démonstration", page_map.get("Figure 4.4", ""), "fig_4_4", 2),
-        ("Figure 4.5 — File de travail de gouvernance IA en mode observe-only", page_map.get("Figure 4.5", ""), "fig_4_5", 2),
-        ("Figure 4.6 — Parcours de démonstration de l’incident orders", page_map.get("Figure 4.6", ""), "fig_4_6", 2),
-        ("Figure 4.7 — Synthèse des validations locales et de leurs limites", page_map.get("Figure 4.7", ""), "fig_4_7", 2),
-    ]
+    figure_entries = []
+    current_chapter = None
+    chapter_titles = {"1": "Chapitre 1 — Cadre général", "3": "Chapitre 3 — Analyse et conception", "4": "Chapitre 4 — Réalisation et validation"}
+    for label, caption, _ in FIGURE_CATALOG:
+        chapter = label.split()[1].split(".")[0]
+        if chapter != current_chapter:
+            figure_entries.append((chapter_titles[chapter], "", None, 0))
+            current_chapter = chapter
+        anchor = "fig_" + label.split()[1].replace(".", "_")
+        figure_entries.append((f"{label} — {caption}", page_map.get(label, ""), anchor, 2))
     add_static_index(doc, figure_entries)
     add_heading(doc, "VII. Liste des tableaux", 1, front=True, anchor="front_tables", bookmark_id=bookmark_id); bookmark_id += 1
     table_entries = [
@@ -851,7 +959,15 @@ def build():
         ("Chapitre 4 — Réalisation et validation", "", None, 0),
         ("Tableau 4.1 — Technologies principales et justification", page_map.get("Tableau 4.1", ""), "tab_4_1", 2),
         ("Tableau 4.2 — Matrice de validation fonctionnelle", page_map.get("Tableau 4.2", ""), "tab_4_2", 2),
+        ("Annexes", "", None, 0),
     ]
+    for index, table_info in enumerate(database_evidence["tables"], 1):
+        label = f"Tableau D.{index}"
+        table_entries.append((f"{label} — Structure de {table_info['name']}", page_map.get(label, ""), f"tab_d_{index}", 2))
+    table_entries.append(("Tableau E.1 — Effectifs du jeu de démonstration", page_map.get("Tableau E.1", ""), "tab_e_1", 2))
+    for index, (_, caption) in enumerate(SAMPLE_TABLES, 2):
+        label = f"Tableau E.{index}"
+        table_entries.append((f"{label} — {caption}", page_map.get(label, ""), f"tab_e_{index}", 2))
     add_static_index(doc, table_entries)
     add_heading(doc, "VIII. Liste des abréviations", 1, front=True, anchor="front_abbr", bookmark_id=bookmark_id); bookmark_id += 1
     add_abbreviations(doc)
@@ -926,12 +1042,59 @@ def build():
             continue
         add_body(doc, text)
 
-    add_heading(doc, "Annexe D — Commandes de reproduction", 2, anchor="annex_d", bookmark_id=bookmark_id); bookmark_id += 1
-    add_body(doc, "Les commandes suivantes reconstruisent la pile de démonstration, réinitialisent les données et régénèrent les cinq captures utilisées dans le rapport.")
+    doc.add_page_break()
+    add_heading(doc, "Annexe D — Dictionnaire du modèle de données", 2, anchor="annex_d", bookmark_id=bookmark_id); bookmark_id += 1
+    add_body(doc, "Cette annexe décrit les 29 tables applicatives réellement chargées par SQLAlchemy. La table technique alembic_version est exclue. Chaque ligne provient des métadonnées du code : aucun champ n’a été reconstitué à la main. Les références multiples matérialisent les contraintes composites employées pour maintenir l’isolation entre organisations.")
+    for index, table_info in enumerate(database_evidence["tables"], 1):
+        rows = []
+        unique_columns = {column for constraint in table_info.get("unique_constraints", []) for column in constraint}
+        for column in table_info["columns"]:
+            flags = []
+            if column["primary_key"]: flags.append("PK")
+            flags.append("facultatif" if column["nullable"] else "obligatoire")
+            if column["name"] in unique_columns: flags.append("unicité composée")
+            rows.append([
+                column["name"], column["type"], ", ".join(flags),
+                ", ".join(column["foreign_keys"]) if column["foreign_keys"] else "—",
+            ])
+        label = f"Tableau D.{index}"
+        caption = f"Structure de {table_info['name']} — {table_info['responsibility']}"
+        bookmark_id = add_academic_table(
+            doc, label, caption, ["Colonne", "Type", "Contraintes", "Référence(s)"],
+            rows, [2050, 1900, 2250, 2700], f"tab_d_{index}", bookmark_id,
+        )
+
+    doc.add_page_break()
+    add_heading(doc, "Annexe E — État du jeu de démonstration", 2, anchor="annex_e", bookmark_id=bookmark_id); bookmark_id += 1
+    total_rows = sum(database_evidence["seeded_row_counts"].values())
+    add_body(doc, f"Le seed contrôlé contient {total_rows} lignes applicatives. Sa densité n’est pas uniforme : 463 profils et 376 résultats de contrôle donnent de la matière aux courbes, tandis que les entités de configuration restent volontairement peu nombreuses. Les extraits ci-dessous retirent mots de passe, clés, jetons et configurations chiffrées.")
+    counts = sorted(database_evidence["seeded_row_counts"].items(), key=lambda item: (-item[1], item[0]))
+    bookmark_id = add_academic_table(
+        doc, "Tableau E.1", "Effectifs du jeu de démonstration", ["Table", "Lignes", "Lecture"],
+        [[name, str(count), "historique dense" if count >= 100 else ("scénario présent" if count else "structure prête, non seedée")] for name, count in counts],
+        [3500, 1200, 4200], "tab_e_1", bookmark_id,
+    )
+    for index, (sample_key, caption) in enumerate(SAMPLE_TABLES, 2):
+        sample_rows = database_evidence["non_sensitive_seed_samples"].get(sample_key, [])
+        if not sample_rows:
+            continue
+        headers = list(sample_rows[0].keys())
+        values = [[str(row.get(header, "—")) for header in headers] for row in sample_rows]
+        widths = [8950 // len(headers)] * len(headers)
+        widths[-1] += 8950 - sum(widths)
+        bookmark_id = add_academic_table(
+            doc, f"Tableau E.{index}", caption, headers, values, widths, f"tab_e_{index}", bookmark_id,
+        )
+
+    doc.add_page_break()
+    add_heading(doc, "Annexe F — Commandes de reproduction", 2, anchor="annex_f", bookmark_id=bookmark_id); bookmark_id += 1
+    add_body(doc, "Les commandes suivantes reconstruisent la pile, réinitialisent les données, réexportent la preuve du schéma et régénèrent les 24 vues du rapport. Les identifiants de démonstration restent dans le guide local ; ils ne constituent pas des secrets de production.")
     add_code_block(doc, [
         "docker compose up -d --wait",
         "docker compose --profile seed run --rm --entrypoint python seed /scripts/quickstart.py --reset",
         "curl -fsS http://localhost:8000/ready",
+        "python scripts/pfe/export_database_evidence.py",
+        "python scripts/pfe/generate_report_visuals.py",
         "cd frontend && npm run capture:pfe",
     ])
 

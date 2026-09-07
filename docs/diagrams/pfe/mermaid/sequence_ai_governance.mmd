@@ -1,0 +1,23 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','primaryColor':'#F7F3F2','primaryTextColor':'#171717','primaryBorderColor':'#B4232F','lineColor':'#5B6068','secondaryColor':'#F3F4F6','tertiaryColor':'#FFFFFF','clusterBkg':'#FFFFFF','clusterBorder':'#D1D5DB','actorBkg':'#FFFFFF','actorBorder':'#B4232F','actorTextColor':'#171717','signalColor':'#404040','signalTextColor':'#171717','noteBkgColor':'#FFF7ED','noteBorderColor':'#C2410C','noteTextColor':'#171717'}}}%%
+sequenceDiagram
+    autonumber
+    actor Owner as Responsable IA
+    participant UI as AI Governance
+    participant API as API gouvernance
+    participant DB as Ledger PostgreSQL
+    participant Eval as Évaluateur de contrôles
+    participant Alerts as Routage incidents
+    Owner->>UI: Enregistrer système, usages et responsables
+    UI->>API: Créer version et déclaration
+    API->>DB: Écrire des révisions immuables
+    Owner->>UI: Activer un manifeste
+    UI->>API: Comparer puis activer par CAS
+    API->>DB: Lier manifeste et déploiement
+    API->>Eval: Évaluer preuves valides à la date de coupure
+    Eval->>DB: Écrire preuve et résultat typé
+    alt contrôle non satisfait
+      Eval->>DB: Dédupliquer un incident de gouvernance
+      Eval->>Alerts: Émettre un signal observe-only
+    end
+    API-->>UI: Statut, raisons, confiance et risque résiduel
+    Note over UI,Alerts: Aucun blocage automatique ni certificat de conformité

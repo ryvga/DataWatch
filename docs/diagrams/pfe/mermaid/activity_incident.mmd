@@ -1,0 +1,22 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','primaryColor':'#F7F3F2','primaryTextColor':'#171717','primaryBorderColor':'#B4232F','lineColor':'#5B6068','secondaryColor':'#F3F4F6','tertiaryColor':'#FFFFFF','clusterBkg':'#FFFFFF','clusterBorder':'#D1D5DB','actorBkg':'#FFFFFF','actorBorder':'#B4232F','actorTextColor':'#171717','signalColor':'#404040','signalTextColor':'#171717','noteBkgColor':'#FFF7ED','noteBorderColor':'#C2410C','noteTextColor':'#171717'}}}%%
+flowchart TD
+    start((Début)) --> detect[Exécuter les contrôles]
+    detect --> failed{Au moins un échec ?}
+    failed -- Non --> clean[Aucun incident] --> finish((Fin))
+    failed -- Oui --> open[Incident ouvert]
+    open --> dedupe[Ajouter le signal au même incident]
+    dedupe --> open
+    open --> triage[Prendre en charge et investiguer]
+    open --> mute[Mettre temporairement en sourdine]
+    mute -->|fin de la période| open
+    triage --> decision{Conclusion de l'enquête}
+    decision -->|impact confirmé| ack[Acquitter]
+    decision -->|preuve contraire| falsep[Classer faux positif]
+    ack --> recovered{Métriques revenues à la normale ?}
+    recovered -- Non --> triage
+    recovered -- Oui --> resolved[Résoudre] --> finish
+    falsep --> finish
+    resolved -. anomalie distincte .-> reopened[Réouvrir]
+    style failed fill:#FFF7ED,stroke:#C2410C
+    style decision fill:#FFF7ED,stroke:#C2410C
+    style recovered fill:#FFF7ED,stroke:#C2410C

@@ -31,7 +31,7 @@ for paragraph in doc.paragraphs:
     if style.startswith("Heading"):
         targets.append((text, normalize(text)))
     elif style == "Caption":
-        match = re.match(r"((?:Figure|Tableau) \d+\.\d+)", text)
+        match = re.match(r"((?:Figure|Tableau) (?:\d+|[A-Z])\.\d+)", text)
         if match:
             targets.append((match.group(1), normalize(match.group(1))))
 

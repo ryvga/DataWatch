@@ -1,0 +1,68 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','primaryColor':'#F7F3F2','primaryTextColor':'#171717','primaryBorderColor':'#B4232F','lineColor':'#5B6068','secondaryColor':'#F3F4F6','tertiaryColor':'#FFFFFF','clusterBkg':'#FFFFFF','clusterBorder':'#D1D5DB','actorBkg':'#FFFFFF','actorBorder':'#B4232F','actorTextColor':'#171717','signalColor':'#404040','signalTextColor':'#171717','noteBkgColor':'#FFF7ED','noteBorderColor':'#C2410C','noteTextColor':'#171717'}}}%%
+erDiagram
+    organizations ||--o{ data_sources : owns
+    data_sources ||--o{ monitored_tables : exposes
+    monitored_tables ||--o{ table_profiles : produces
+    table_profiles ||--o{ check_results : evaluates
+    monitored_tables ||--o{ incidents : triggers
+    monitored_tables ||--o{ alert_configs : routes
+    monitored_tables ||--o{ custom_monitors : runs
+    monitored_tables ||--o{ monitors : defines
+    monitors ||--o{ monitor_revisions : versions
+    monitors ||--o{ monitor_runs : executes
+    monitor_revisions ||--o{ monitor_runs : pins
+    monitors ||--o| monitor_evaluation_states : tracks
+    organizations {
+      uuid id PK
+      string slug
+      string plan
+    }
+    data_sources {
+      uuid id PK
+      uuid org_id FK
+      string type
+      jsonb connection_config
+    }
+    monitored_tables {
+      uuid id PK
+      uuid source_id FK
+      string table_name
+      jsonb check_config
+    }
+    table_profiles {
+      uuid id PK
+      uuid table_id FK
+      bigint row_count
+      jsonb column_metrics
+    }
+    check_results {
+      uuid id PK
+      uuid profile_id FK
+      string check_type
+      string status
+    }
+    incidents {
+      uuid id PK
+      uuid table_id FK
+      string severity
+      string status
+      jsonb llm_narration
+    }
+    monitors {
+      uuid id PK
+      uuid table_id FK
+      string status
+      uuid active_revision_id FK
+    }
+    monitor_revisions {
+      uuid id PK
+      uuid monitor_id FK
+      int revision
+      string definition_hash
+    }
+    monitor_runs {
+      uuid id PK
+      uuid revision_id FK
+      string status
+      jsonb result
+    }

@@ -1,0 +1,40 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','primaryColor':'#F7F3F2','primaryTextColor':'#171717','primaryBorderColor':'#B4232F','lineColor':'#5B6068','secondaryColor':'#F3F4F6','tertiaryColor':'#FFFFFF','clusterBkg':'#FFFFFF','clusterBorder':'#D1D5DB','actorBkg':'#FFFFFF','actorBorder':'#B4232F','actorTextColor':'#171717','signalColor':'#404040','signalTextColor':'#171717','noteBkgColor':'#FFF7ED','noteBorderColor':'#C2410C','noteTextColor':'#171717'}}}%%
+flowchart TB
+    U[Utilisateurs workspace et staff]
+    subgraph PRESENTATION[Couche présentation]
+      React[SPA React Vite]
+      Admin[Portail staff séparé]
+    end
+    subgraph API[Couche application]
+      FastAPI[API FastAPI et contrats]
+      Auth[JWT, clés API et isolation tenant]
+      Scheduler[APScheduler]
+    end
+    subgraph DOMAIN[Couche métier]
+      Profile[Profilage]
+      Detect[Détection hybride]
+      Incident[Incidents]
+      Narration[Narration IA]
+      Governance[Gouvernance IA observe-only]
+      Alerts[Alertes et collaboration]
+    end
+    subgraph ASYNC[Couche asynchrone]
+      Celery[Workers Celery]
+      Redis[(Redis)]
+    end
+    subgraph DATA[Couche données et intégrations]
+      PG[(PostgreSQL 16)]
+      Connectors[Registre de connecteurs]
+      Sources[(Sources clientes)]
+      Providers[OpenRouter, SMTP, Slack, PagerDuty]
+    end
+    U --> React & Admin
+    React & Admin --> FastAPI
+    FastAPI --> Auth & Scheduler & DOMAIN
+    Scheduler --> Celery
+    Celery <--> Redis
+    Celery --> Profile --> Connectors --> Sources
+    Profile --> Detect --> Incident --> Narration --> Alerts
+    Governance --> Alerts
+    DOMAIN --> PG
+    Narration & Alerts --> Providers

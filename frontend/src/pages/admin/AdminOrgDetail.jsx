@@ -94,9 +94,9 @@ export default function AdminOrgDetail() {
       toast.error(orgResult.reason?.response?.data?.detail || 'Failed to load organization')
     }
 
-    if (usersResult.status === 'fulfilled') setUsers(unwrapList(usersResult.value.data))
+    if (usersResult.status === 'fulfilled') setUsers(unwrapList(usersResult.value.data).items)
     if (usageResult.status === 'fulfilled') setUsage(usageResult.value.data || {})
-    if (sourcesResult.status === 'fulfilled') setSources(unwrapList(sourcesResult.value.data))
+    if (sourcesResult.status === 'fulfilled') setSources(unwrapList(sourcesResult.value.data).items)
     setLoading(false)
   }
 

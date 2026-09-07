@@ -1,0 +1,3139 @@
+{
+  "generated_at": "2026-09-06T21:49:39.505685+00:00",
+  "database": "PostgreSQL 16",
+  "application_table_count": 29,
+  "migration_table_excluded": "alembic_version",
+  "tables": [
+    {
+      "name": "ai_approvals",
+      "responsibility": "Avis humains append-only sur un manifeste",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_release_manifests.org_id",
+            "users.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_release_manifests.system_id"
+          ]
+        },
+        {
+          "name": "manifest_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_release_manifests.id"
+          ]
+        },
+        {
+          "name": "reviewer_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "reviewer_role",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "decision",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "rationale",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evidence_snapshot_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evidence_class",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id",
+          "system_id"
+        ]
+      ]
+    },
+    {
+      "name": "ai_control_evaluations",
+      "responsibility": "Résultats typés des contrôles de gouvernance",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_data_use_revisions.org_id",
+            "ai_deployments.org_id",
+            "ai_evidence.org_id",
+            "ai_release_manifests.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_data_use_revisions.system_id",
+            "ai_deployments.system_id",
+            "ai_evidence.system_id",
+            "ai_release_manifests.system_id"
+          ]
+        },
+        {
+          "name": "deployment_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_deployments.id"
+          ]
+        },
+        {
+          "name": "manifest_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_release_manifests.id"
+          ]
+        },
+        {
+          "name": "data_use_revision_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "ai_data_use_revisions.id"
+          ]
+        },
+        {
+          "name": "evidence_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "ai_evidence.id"
+          ]
+        },
+        {
+          "name": "control_id",
+          "type": "VARCHAR(80)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(24)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evidence_class",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "observed",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "expected",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "reason_code",
+          "type": "VARCHAR(80)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evaluator_version",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "input_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "idempotency_key",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id",
+          "system_id"
+        ],
+        [
+          "idempotency_key",
+          "org_id"
+        ]
+      ]
+    },
+    {
+      "name": "ai_data_use_revisions",
+      "responsibility": "Déclarations versionnées des usages de données",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.org_id",
+            "data_sources.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.system_id"
+          ]
+        },
+        {
+          "name": "version_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.id"
+          ]
+        },
+        {
+          "name": "source_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "data_sources.id",
+            "monitored_tables.source_id"
+          ]
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitored_tables.id"
+          ]
+        },
+        {
+          "name": "ordinal",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "use_kind",
+          "type": "VARCHAR(24)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "fields",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "purpose",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "necessity",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "steward",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "sensitivity_ceiling",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "retention_days",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "residency",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "allowed_transformations",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "expected_db_roles",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "vector_contract",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "schema_fingerprint",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "canonical_definition",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "definition_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evidence_class",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "change_rationale",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id",
+          "system_id"
+        ],
+        [
+          "ordinal",
+          "version_id"
+        ]
+      ]
+    },
+    {
+      "name": "ai_deployments",
+      "responsibility": "Déploiements et manifeste actif",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_release_manifests.org_id",
+            "ai_systems.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_release_manifests.system_id",
+            "ai_systems.id"
+          ]
+        },
+        {
+          "name": "environment",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "region",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "workload_identity_hash",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(24)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "active_manifest_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "ai_release_manifests.id"
+          ]
+        },
+        {
+          "name": "active_manifest_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "activation_generation",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "environment",
+          "org_id",
+          "region",
+          "system_id"
+        ],
+        [
+          "id",
+          "org_id",
+          "system_id"
+        ]
+      ]
+    },
+    {
+      "name": "ai_evidence",
+      "responsibility": "Descripteurs de preuves immuables et sans données brutes",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_data_use_revisions.org_id",
+            "ai_deployments.org_id",
+            "ai_release_manifests.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_data_use_revisions.system_id",
+            "ai_deployments.system_id",
+            "ai_release_manifests.system_id"
+          ]
+        },
+        {
+          "name": "deployment_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_deployments.id"
+          ]
+        },
+        {
+          "name": "manifest_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_release_manifests.id"
+          ]
+        },
+        {
+          "name": "data_use_revision_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "ai_data_use_revisions.id"
+          ]
+        },
+        {
+          "name": "source_profile_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "table_profiles.id"
+          ]
+        },
+        {
+          "name": "evidence_type",
+          "type": "VARCHAR(80)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evidence_class",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "producer",
+          "type": "VARCHAR(120)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "descriptor",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "provenance",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "content_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evaluator_version",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "redaction_class",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "retention_class",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "valid_from",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "valid_until",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "collected_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "idempotency_key",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id",
+          "system_id"
+        ],
+        [
+          "idempotency_key",
+          "org_id"
+        ]
+      ]
+    },
+    {
+      "name": "ai_governance_incidents",
+      "responsibility": "Incidents de gouvernance dédupliqués en observation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_control_evaluations.org_id",
+            "ai_deployments.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_control_evaluations.system_id",
+            "ai_deployments.system_id"
+          ]
+        },
+        {
+          "name": "deployment_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_deployments.id"
+          ]
+        },
+        {
+          "name": "evaluation_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_control_evaluations.id"
+          ]
+        },
+        {
+          "name": "control_id",
+          "type": "VARCHAR(80)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "dedupe_key",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "severity",
+          "type": "VARCHAR(8)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(24)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(500)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "resolved_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "ai_release_manifests",
+      "responsibility": "Manifestes de mise en production adressés par contenu",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.system_id"
+          ]
+        },
+        {
+          "name": "version_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.id"
+          ]
+        },
+        {
+          "name": "schema_version",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "canonical_manifest",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "manifest_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "evidence_cutoff",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id",
+          "system_id"
+        ],
+        [
+          "manifest_hash",
+          "org_id",
+          "system_id"
+        ]
+      ]
+    },
+    {
+      "name": "ai_system_versions",
+      "responsibility": "Versions immuables des systèmes IA",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_systems.org_id"
+          ]
+        },
+        {
+          "name": "system_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_systems.id"
+          ]
+        },
+        {
+          "name": "version_number",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "definition",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "definition_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "provider",
+          "type": "VARCHAR(120)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "model",
+          "type": "VARCHAR(200)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "artifact_hash",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "prompt_config_hash",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "evaluation_suite_hash",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "change_rationale",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id",
+          "system_id"
+        ],
+        [
+          "system_id",
+          "version_number"
+        ]
+      ]
+    },
+    {
+      "name": "ai_systems",
+      "responsibility": "Registre des systèmes IA et responsabilités",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.system_id"
+          ]
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "ai_system_versions.org_id",
+            "organizations.id",
+            "teams.org_id",
+            "users.org_id",
+            "users.org_id",
+            "users.org_id"
+          ]
+        },
+        {
+          "name": "slug",
+          "type": "VARCHAR(100)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "lifecycle_status",
+          "type": "VARCHAR(24)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "intended_purpose",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "prohibited_uses",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "affected_population",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "autonomy_level",
+          "type": "VARCHAR(32)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "human_oversight",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "business_owner_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "technical_owner_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "risk_owner_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "team_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "teams.id"
+          ]
+        },
+        {
+          "name": "risk_context",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "current_version_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "ai_system_versions.id"
+          ]
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "current_version_id",
+          "id",
+          "org_id"
+        ],
+        [
+          "id",
+          "org_id"
+        ],
+        [
+          "org_id",
+          "slug"
+        ]
+      ]
+    },
+    {
+      "name": "alert_configs",
+      "responsibility": "Routes Slack, e-mail ou PagerDuty",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "monitored_tables.id"
+          ]
+        },
+        {
+          "name": "channel",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "config",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "api_keys",
+      "responsibility": "Empreintes des clés d'accès programmatiques",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(100)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "key_hash",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_used_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "check_results",
+      "responsibility": "Résultats unitaires des contrôles de qualité",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitored_tables.id"
+          ]
+        },
+        {
+          "name": "profile_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "table_profiles.id"
+          ]
+        },
+        {
+          "name": "check_type",
+          "type": "VARCHAR(100)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "check_name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "column_name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "observed_value",
+          "type": "FLOAT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "expected_range",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "deviation_score",
+          "type": "FLOAT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "checked_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "custom_monitors",
+      "responsibility": "Moniteurs SQL historiques restreints",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitored_tables.id"
+          ]
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "sql_query",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "severity",
+          "type": "VARCHAR(10)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "run_on_profile",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_run_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_result",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "data_sources",
+      "responsibility": "Sources de données et configuration chiffrée",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "type",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "connection_config",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_connected_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id"
+        ]
+      ]
+    },
+    {
+      "name": "incidents",
+      "responsibility": "Anomalies regroupées et cycle de traitement",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitored_tables.id"
+          ]
+        },
+        {
+          "name": "severity",
+          "type": "VARCHAR(10)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR(500)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "fired_checks",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "llm_narration",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "acknowledged_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "resolved_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "assignee_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "assigned_team_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "teams.id"
+          ]
+        },
+        {
+          "name": "acknowledged_by_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "resolved_by_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "invites",
+      "responsibility": "Invitations temporaires des membres",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "role",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "token",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "invited_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "expires_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "accepted_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "token"
+        ]
+      ]
+    },
+    {
+      "name": "monitor_evaluation_states",
+      "responsibility": "État de brèche, reprise et temporisation",
+      "columns": [
+        {
+          "name": "monitor_id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": [
+            "monitor_revisions.monitor_id",
+            "monitor_runs.monitor_id",
+            "monitors.id"
+          ]
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitors.org_id",
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "revision_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitor_revisions.id"
+          ]
+        },
+        {
+          "name": "phase",
+          "type": "VARCHAR(20)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "breach_streak",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "recovery_streak",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "cooldown_until",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_run_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "monitor_runs.id"
+          ]
+        },
+        {
+          "name": "last_sequence_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_idempotency_key",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "version",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "monitor_revisions",
+      "responsibility": "Révisions immuables des définitions DSL",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "monitor_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitors.id"
+          ]
+        },
+        {
+          "name": "revision",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "definition_version",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "definition_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "definition",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "validation_status",
+          "type": "VARCHAR(20)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "schema_fingerprint",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "monitor_id"
+        ],
+        [
+          "monitor_id",
+          "revision"
+        ]
+      ]
+    },
+    {
+      "name": "monitor_runs",
+      "responsibility": "Exécutions idempotentes liées à une révision",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitors.org_id",
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "monitor_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitor_revisions.monitor_id",
+            "monitors.id",
+            "monitors.id"
+          ]
+        },
+        {
+          "name": "revision_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitor_revisions.id"
+          ]
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitored_tables.id",
+            "monitors.table_id"
+          ]
+        },
+        {
+          "name": "idempotency_key",
+          "type": "VARCHAR(128)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "trigger_type",
+          "type": "VARCHAR(20)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "profile_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "sequence_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "queued_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "plan_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "planner_version",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "definition_hash",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "schema_fingerprint",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "attempt",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "claim_token",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "lease_expires_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "measurements",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "result",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "error_code",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "error",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "started_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "completed_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "monitor_id"
+        ],
+        [
+          "idempotency_key",
+          "org_id"
+        ]
+      ]
+    },
+    {
+      "name": "monitored_tables",
+      "responsibility": "Tables inscrites au cycle de surveillance",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "source_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "data_sources.id"
+          ]
+        },
+        {
+          "name": "schema_name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "table_name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "freshness_column",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "check_interval_minutes",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "sensitivity",
+          "type": "FLOAT",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "dbt_model_yaml",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "autopilot",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "check_config",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_profiled_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "owner_team_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "teams.id"
+          ]
+        },
+        {
+          "name": "owner_user_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "source_id"
+        ],
+        [
+          "schema_name",
+          "source_id",
+          "table_name"
+        ]
+      ]
+    },
+    {
+      "name": "monitors",
+      "responsibility": "Identité et cycle de vie des moniteurs typés",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": [
+            "monitor_revisions.monitor_id"
+          ]
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitored_tables.id"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(63)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "mode",
+          "type": "VARCHAR(20)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(20)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "current_revision",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "active_revision_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "monitor_revisions.id"
+          ]
+        },
+        {
+          "name": "created_by",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "updated_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "activated_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id"
+        ],
+        [
+          "id",
+          "table_id"
+        ],
+        [
+          "name",
+          "org_id",
+          "table_id"
+        ]
+      ]
+    },
+    {
+      "name": "oncall_schedules",
+      "responsibility": "Créneaux d'astreinte des équipes",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "team_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "teams.id"
+          ]
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "starts_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "ends_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "organizations",
+      "responsibility": "Espaces clients, offre et état d'abonnement",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "slug",
+          "type": "VARCHAR(100)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "plan",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "llm_api_key_encrypted",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "llm_model",
+          "type": "VARCHAR(200)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "stripe_customer_id",
+          "type": "VARCHAR(100)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "paypal_subscription_id",
+          "type": "VARCHAR(100)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "billing_period",
+          "type": "VARCHAR(20)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "subscription_status",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "trial_ends_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "staff_users",
+      "responsibility": "Comptes séparés du personnel DataWatch",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "password_hash",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "full_name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "table_profiles",
+      "responsibility": "Instantanés de profilage et provenance",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "table_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "monitored_tables.id"
+          ]
+        },
+        {
+          "name": "collected_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "row_count",
+          "type": "BIGINT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "freshness_seconds",
+          "type": "FLOAT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "schema_fingerprint",
+          "type": "VARCHAR(64)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "column_metrics",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "profile_provenance",
+          "type": "JSONB",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "profiling_duration_ms",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "error",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "team_members",
+      "responsibility": "Appartenance et rôle d'un utilisateur dans une équipe",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "team_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "teams.id"
+          ]
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "role",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "joined_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "teams",
+      "responsibility": "Équipes opérationnelles d'une organisation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "description",
+          "type": "TEXT",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "color",
+          "type": "VARCHAR(7)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id"
+        ]
+      ]
+    },
+    {
+      "name": "user_notification_prefs",
+      "responsibility": "Préférences individuelles de notification",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "user_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "users.id"
+          ]
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "notify_assigned",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "notify_team",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "notify_status_change",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "daily_digest",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "digest_hour",
+          "type": "INTEGER",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "mute_until",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": []
+    },
+    {
+      "name": "users",
+      "responsibility": "Comptes humains rattachés à une organisation",
+      "columns": [
+        {
+          "name": "id",
+          "type": "UUID",
+          "primary_key": true,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "org_id",
+          "type": "UUID",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": [
+            "organizations.id"
+          ]
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "password_hash",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "role",
+          "type": "VARCHAR(50)",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "full_name",
+          "type": "VARCHAR(255)",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        },
+        {
+          "name": "is_active",
+          "type": "BOOLEAN",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "created_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": false,
+          "foreign_keys": []
+        },
+        {
+          "name": "last_login_at",
+          "type": "DATETIME",
+          "primary_key": false,
+          "nullable": true,
+          "foreign_keys": []
+        }
+      ],
+      "unique_constraints": [
+        [
+          "id",
+          "org_id"
+        ]
+      ]
+    }
+  ],
+  "seeded_row_counts": {
+    "teams": 5,
+    "users": 5,
+    "invites": 0,
+    "api_keys": 0,
+    "monitors": 0,
+    "incidents": 7,
+    "ai_systems": 1,
+    "ai_evidence": 12,
+    "staff_users": 1,
+    "ai_approvals": 1,
+    "data_sources": 2,
+    "monitor_runs": 0,
+    "team_members": 7,
+    "alert_configs": 1,
+    "check_results": 376,
+    "organizations": 2,
+    "ai_deployments": 1,
+    "table_profiles": 463,
+    "custom_monitors": 0,
+    "monitored_tables": 7,
+    "oncall_schedules": 6,
+    "monitor_revisions": 0,
+    "ai_system_versions": 1,
+    "ai_release_manifests": 1,
+    "ai_data_use_revisions": 1,
+    "ai_control_evaluations": 12,
+    "ai_governance_incidents": 5,
+    "user_notification_prefs": 5,
+    "monitor_evaluation_states": 0
+  },
+  "non_sensitive_seed_samples": {
+    "organizations": [
+      {
+        "name": "Acme Corp",
+        "plan": "growth",
+        "slug": "acme-corp",
+        "subscription_status": "active"
+      },
+      {
+        "name": "Startup.io",
+        "plan": "growth",
+        "slug": "startup-io",
+        "subscription_status": "active"
+      }
+    ],
+    "acme_users": [
+      {
+        "role": "admin",
+        "full_name": "Alice Chen",
+        "is_active": true
+      },
+      {
+        "role": "member",
+        "full_name": "Bob Martin",
+        "is_active": true
+      },
+      {
+        "role": "owner",
+        "full_name": null,
+        "is_active": true
+      }
+    ],
+    "acme_teams": [
+      {
+        "name": "Analytics",
+        "description": "Business intelligence and reporting"
+      },
+      {
+        "name": "Data Engineering",
+        "description": "Owns all data pipelines and warehouse integrity"
+      },
+      {
+        "name": "Platform",
+        "description": "Infrastructure and developer tooling"
+      }
+    ],
+    "acme_sources": [
+      {
+        "name": "Acme Shop DB (live)",
+        "type": "postgres",
+        "status": "connected"
+      }
+    ],
+    "acme_tables": [
+      {
+        "table": "events",
+        "active": true,
+        "schema": "public",
+        "sensitivity": 3,
+        "interval_minutes": 5
+      },
+      {
+        "table": "orders",
+        "active": true,
+        "schema": "public",
+        "sensitivity": 3,
+        "interval_minutes": 5
+      },
+      {
+        "table": "products",
+        "active": true,
+        "schema": "public",
+        "sensitivity": 3,
+        "interval_minutes": 15
+      },
+      {
+        "table": "users",
+        "active": true,
+        "schema": "public",
+        "sensitivity": 3,
+        "interval_minutes": 10
+      }
+    ],
+    "acme_incidents": [
+      {
+        "title": "[P1] events — freshness SLA breached",
+        "status": "open",
+        "severity": "P1"
+      },
+      {
+        "title": "[P1] orders — payment_status null rate spiked and freshness breach",
+        "status": "open",
+        "severity": "P1"
+      },
+      {
+        "title": "[P1] products — freshness SLA breached",
+        "status": "open",
+        "severity": "P1"
+      },
+      {
+        "title": "[P1] users — freshness SLA breached",
+        "status": "open",
+        "severity": "P1"
+      }
+    ],
+    "acme_ai_systems": [
+      {
+        "name": "Support knowledge assistant",
+        "autonomy_level": "assistive",
+        "lifecycle_status": "production"
+      }
+    ]
+  },
+  "redaction_policy": [
+    "password_hash",
+    "key_hash",
+    "tokens",
+    "connection_config",
+    "llm_api_key_encrypted",
+    "raw prompts, outputs, rows and embeddings"
+  ]
+}

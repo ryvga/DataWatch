@@ -2019,7 +2019,7 @@
       "isListItem": false
     },
     {
-      "text": "La suite backend exécutée directement dans l’image de service valide 321 tests, en ignore 50 et échoue sur deux contrôles qui supposent que la racine complète du dépôt est montée dans le conteneur. Le rejeu strict depuis l’environnement hôte révèle par ailleurs une incompatibilité Python 3.14/pytest-asyncio et l’absence des services optionnels Cassandra, MySQL, MariaDB et MongoDB. Ces résultats sont consignés comme limites de l’environnement, et non présentés comme une validation totale.",
+      "text": "Dans le conteneur API standard, 321 tests réussissent, 50 sont ignorés et deux contrôles échouent parce que seule la racine backend est montée. Rejouée dans la même image avec le dépôt complet disponible, la suite atteint 323 réussites et 50 tests ignorés. Le rejeu hôte strict reste distinct : Python 3.14, pytest-asyncio et plusieurs services optionnels demandent un environnement dédié. Ces limites sont consignées ; elles ne deviennent pas, par glissement de vocabulaire, une validation totale.",
       "startIndex": 24992,
       "endIndex": 25484,
       "tabId": "t.0",
@@ -2099,7 +2099,7 @@
       "isListItem": false
     },
     {
-      "text": "Le dépôt contient un parcours principal déterministe autour d’un incident P1 orders, de sa narration, des alertes et de la gouvernance IA. Dans la session de révision du rapport, la pile Docker a été démarrée et seedée, cinq parcours navigateur ont été rejoués avec succès et la narration de l’incident orders a été vérifiée. La suite backend a confirmé 321 tests dans l’image de service, avec 50 tests ignorés et deux échecs liés au montage incomplet de la racine du dépôt ; le rejeu strict a également exposé les dépendances optionnelles manquantes et l’incompatibilité de l’environnement Python 3.14. Les choix de preuve limitent volontairement les affirmations : les résultats locaux ne sont ni un SLA, ni une mesure de charge à grande échelle, ni une certification de conformité.",
+      "text": "La révision finale a démarré et seedé la pile Docker, rejoué cinq parcours navigateur et vérifié l’incident P1 orders. Avec la racine du dépôt montée dans l’image de service, la suite backend atteint 323 réussites et 50 tests ignorés. Le rejeu hôte a aussi exposé des dépendances optionnelles absentes et l’incompatibilité de Python 3.14. Ce sont des preuves locales : ni SLA, ni test de charge, ni certification.",
       "startIndex": 26962,
       "endIndex": 27746,
       "tabId": "t.0",
@@ -2131,7 +2131,7 @@
       "isListItem": true
     },
     {
-      "text": "Ajouter des packs de politiques, exceptions temporaires et gates de publication explicitement gouvernés.",
+      "text": "Ajouter des packs de politiques, des exceptions temporaires et des exports de preuves gouvernés, sans confondre observation et certification.",
       "startIndex": 27952,
       "endIndex": 28056,
       "tabId": "t.0",
@@ -2150,14 +2150,6 @@
       "text": "Mettre en place des mécanismes de feedback humain sur les narrations IA et leurs hypothèses.",
       "startIndex": 28156,
       "endIndex": 28248,
-      "tabId": "t.0",
-      "namedStyleType": "NORMAL_TEXT",
-      "isListItem": true
-    },
-    {
-      "text": "Industrialiser les exports de preuves et les tableaux de bord de conformité sans assimiler observation et certification.",
-      "startIndex": 28249,
-      "endIndex": 28369,
       "tabId": "t.0",
       "namedStyleType": "NORMAL_TEXT",
       "isListItem": true

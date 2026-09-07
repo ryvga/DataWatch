@@ -1,0 +1,16 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','primaryColor':'#F7F3F2','primaryTextColor':'#171717','primaryBorderColor':'#B4232F','lineColor':'#5B6068','secondaryColor':'#F3F4F6','tertiaryColor':'#FFFFFF','clusterBkg':'#FFFFFF','clusterBorder':'#D1D5DB','actorBkg':'#FFFFFF','actorBorder':'#B4232F','actorTextColor':'#171717','signalColor':'#404040','signalTextColor':'#171717','noteBkgColor':'#FFF7ED','noteBorderColor':'#C2410C','noteTextColor':'#171717'}}}%%
+flowchart LR
+    op["Opérateur data"]
+    admin["Administrateur d'organisation"]
+    staff["Personnel DataWatch"]
+    subgraph DW[DataWatch]
+      observe([Observer la qualité])
+      configure([Configurer la surveillance])
+      respond([Traiter un incident])
+      govern([Gouverner les systèmes IA])
+      operate([Administrer la plateforme])
+    end
+    op --> observe & respond & govern
+    admin --> observe & configure & respond & govern
+    staff --> operate
+    style DW fill:#fff,stroke:#B4232F,stroke-width:2px

@@ -1,0 +1,21 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','primaryColor':'#F7F3F2','primaryTextColor':'#171717','primaryBorderColor':'#B4232F','lineColor':'#5B6068','secondaryColor':'#F3F4F6','tertiaryColor':'#FFFFFF','clusterBkg':'#FFFFFF','clusterBorder':'#D1D5DB','actorBkg':'#FFFFFF','actorBorder':'#B4232F','actorTextColor':'#171717','signalColor':'#404040','signalTextColor':'#171717','noteBkgColor':'#FFF7ED','noteBorderColor':'#C2410C','noteTextColor':'#171717'}}}%%
+sequenceDiagram
+    autonumber
+    participant S as APScheduler
+    participant W as Worker Celery
+    participant C as Connecteur source
+    participant P as ProfilerService
+    participant A as AnomalyService
+    participant I as IncidentService
+    participant DB as PostgreSQL
+    S->>W: profile_table(table_id)
+    W->>C: Requête agrégée unique
+    C-->>P: Métriques et schéma
+    P->>DB: Enregistrer TableProfile
+    W->>A: run_anomaly_checks
+    A->>DB: Lire historique et configuration
+    A->>A: Règles + z-score + IsoForest + STL
+    A->>DB: Enregistrer CheckResults
+    A->>I: Regrouper les échecs
+    I->>DB: Créer ou enrichir l'incident ouvert
+    I-->>W: incident_id
