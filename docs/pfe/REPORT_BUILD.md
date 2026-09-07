@@ -50,6 +50,6 @@ Dans Microsoft Word, sélectionner tout puis actualiser les champs avant le dép
 - chapitres et sous-titres hiérarchisés, conclusion et annexes sur des pages dédiées ;
 - 43 figures : Gantt, 18 vues de conception et 24 captures réelles ;
 - dictionnaire exhaustif des 29 tables, effectifs seedés et extraits nettoyés ;
-- légendes solidaires de leurs figures, en-têtes de tableaux répétés et liens internes actifs ;
+- chaque figure introduite dans le texte, accompagnée d’une légende descriptive puis d’une interprétation propre ; légendes solidaires de leurs figures, en-têtes de tableaux répétés et liens internes actifs ;
 - aucune clé, aucun jeton et aucune chaîne de connexion dans les annexes ou captures ;
 - inspection visuelle de chaque page du PDF, audit d’accessibilité et tests applicatifs avant livraison.

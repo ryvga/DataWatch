@@ -74,6 +74,184 @@ FIGURE_CATALOG = [
 ]
 FIGURES = {label: ROOT / path for label, _, path in FIGURE_CATALOG}
 FIGURE_META = {label: (caption, ROOT / path) for label, caption, path in FIGURE_CATALOG}
+
+# Every visual receives its own introduction and interpretation.  The first
+# sentence tells the reader why the figure is being shown; the second paragraph
+# records the evidence or design decision that should be retained from it.
+FIGURE_CONTEXT = {
+    "Figure 1.1": (
+        "La figure 1.1 replace les travaux dans les trois mois retenus pour le PFE, du 1er juin au 31 août, puis distingue la continuité du produit après cette échéance académique.",
+        "La lecture horizontale révèle des chevauchements assumés : le profilage commence avant la clôture de l’architecture, tandis que les tests accompagnent les derniers incréments. Le jalon du 31 août ferme l’évaluation du PFE, pas le développement de DataWatch.",
+    ),
+    "Figure 3.1": (
+        "La figure 3.1 condense le périmètre fonctionnel autour de trois acteurs : l’administrateur d’organisation, l’opérateur data et le personnel DataWatch.",
+        "Cette séparation évite de confondre exploitation d’un workspace et administration de la plateforme. Le personnel DataWatch administre le SaaS ; il ne traite pas les incidents à la place du client.",
+    ),
+    "Figure 3.2": (
+        "La figure 3.2 détaille les actions réalisées dans un workspace client, depuis la configuration initiale jusqu’à l’investigation d’un incident.",
+        "Deux responsabilités ressortent. Le propriétaire configure sources, membres et notifications ; l’opérateur consulte les profils, crée des moniteurs et pilote le cycle de vie des incidents. Les cas communs restent soumis à l’isolation du tenant.",
+    ),
+    "Figure 3.3": (
+        "La figure 3.3 isole les cas d’utilisation réservés à l’administration interne de DataWatch.",
+        "Le compte staff consulte les indicateurs globaux, ouvre une organisation, gère son offre et administre les comptes internes. Ce périmètre possède son propre mécanisme d’authentification et ne réutilise pas une session client.",
+    ),
+    "Figure 3.4": (
+        "La figure 3.4 suit l’inscription d’une source, de la saisie du formulaire jusqu’à l’activation de la surveillance d’une table découverte.",
+        "Le secret est chiffré avec une clé dérivée de l’organisation avant persistance. La connexion est ensuite testée par l’adaptateur concerné ; seules ses capacités déclarées et les tables accessibles sont renvoyées à l’interface.",
+    ),
+    "Figure 3.5": (
+        "La figure 3.5 expose la chaîne asynchrone qui transforme une planification en profil, résultats de contrôle et incident éventuel.",
+        "APScheduler déclenche le worker Celery. Une requête agrégée produit le profil, puis les règles, le z-score, Isolation Forest et STL sont évalués selon l’historique disponible. L’incident n’est créé ou enrichi qu’après persistance des résultats.",
+    ),
+    "Figure 3.6": (
+        "La figure 3.6 décrit l’enquête menée depuis l’ouverture d’un incident critique dans l’interface.",
+        "L’API réunit mesures, signaux, chronologie et narration structurée. L’opérateur peut ensuite affecter l’incident, l’acquitter ou le résoudre ; chaque transition est horodatée, tandis que l’alerte externe reste un canal de diffusion et non la source de vérité.",
+    ),
+    "Figure 3.7": (
+        "La figure 3.7 montre comment une version déclarée et un manifeste actif sont rapprochés des preuves disponibles avant l’évaluation des contrôles de gouvernance IA.",
+        "Le registre écrit des résultats immuables et peut ouvrir un incident de gouvernance. La dernière branche est volontairement non bloquante : le prototype émet un signal observe-only, sans autoriser ni interdire une mise en production.",
+    ),
+    "Figure 3.8": (
+        "La figure 3.8 représente les états successifs d’un incident et les décisions accessibles à l’opérateur.",
+        "Un signal peut être regroupé avec un incident déjà ouvert. Après acquittement, l’investigation mène soit à une résolution, soit à la déclaration d’un faux positif ; une nouvelle anomalie peut rouvrir le travail au lieu d’effacer l’historique.",
+    ),
+    "Figure 3.9": (
+        "La figure 3.9 extrait les classes qui portent la surveillance, du connecteur enregistré jusqu’au résultat de contrôle.",
+        "DataSource possède les actifs surveillés ; chaque MonitoredTable accumule des TableProfile et peut porter un Incident ainsi qu’une configuration d’alerte. CheckResult conserve le fait mesuré séparément de la décision d’incident.",
+    ),
+    "Figure 3.10": (
+        "La figure 3.10 regroupe identité, invitations, équipes, préférences de notification, astreintes et clés d’API autour de l’organisation.",
+        "Organization constitue la frontière de tenant. Les associations TeamMember et OncallSchedule rendent l’affectation explicite, alors que StaffUser reste hors de ce graphe afin de préserver la séparation entre comptes clients et comptes internes.",
+    ),
+    "Figure 3.11": (
+        "La figure 3.11 détaille le modèle des moniteurs typés et la conservation de leurs révisions.",
+        "Monitor porte l’identité stable et pointe vers une révision courante. MonitorRevision, MonitorRun et les états d’évaluation séparent définition, exécution et temporisation des alertes ; une modification ne réécrit donc pas la règle qui a produit un résultat passé.",
+    ),
+    "Figure 3.12": (
+        "La figure 3.12 présente les classes du registre expérimental de gouvernance IA.",
+        "AISystem sert de racine à des versions, usages déclarés, manifestes, déploiements, approbations et preuves. Les évaluations et incidents conservent leur provenance, mais ce modèle de traçabilité reste observe-only et ne représente pas une certification automatisée.",
+    ),
+    "Figure 3.13": (
+        "La figure 3.13 situe les composants de DataWatch entre interface, API, traitements différés, persistance et services externes.",
+        "L’API FastAPI centralise contrats et autorisations ; Celery absorbe les opérations longues ; PostgreSQL conserve l’historique et Redis transporte ou met en cache les travaux temporaires. Les connecteurs demeurent derrière une couche d’adaptation commune.",
+    ),
+    "Figure 3.14": (
+        "La figure 3.14 traduit cette architecture dans la machine Docker Compose utilisée pour la démonstration.",
+        "Le navigateur atteint le frontend Nginx puis l’API. Le worker partage PostgreSQL et Redis avec l’API, interroge la base métier Acme et remet les courriels à MailHog ; cette topologie prouve le parcours local, pas une haute disponibilité de production.",
+    ),
+    "Figure 3.15": (
+        "La figure 3.15 offre une carte compacte des 29 tables applicatives avant leur décomposition en vues lisibles.",
+        "Quatre zones apparaissent : identité et collaboration, surveillance, moniteurs versionnés et gouvernance IA. Les relations convergent vers organizations, clé de l’isolation multi-tenant, tandis que staff_users demeure volontairement séparée.",
+    ),
+    "Figure 3.16": (
+        "La figure 3.16 agrandit le modèle relationnel utilisé par le parcours principal de qualité des données.",
+        "Les clés étrangères relient source, table, profils, résultats et incidents sans dupliquer le fait observé. Les configurations d’alerte et moniteurs restent rattachés au même tenant, ce qui permet de vérifier l’appartenance lors de chaque opération.",
+    ),
+    "Figure 3.17": (
+        "La figure 3.17 isole les tables d’identité, d’invitation, d’équipe et d’astreinte.",
+        "Les rôles d’organisation et d’équipe sont distincts. Cette granularité autorise, par exemple, un membre ordinaire du workspace à devenir responsable opérationnel d’une équipe sans lui donner les droits d’administration du tenant.",
+    ),
+    "Figure 3.18": (
+        "La figure 3.18 développe la partie relationnelle consacrée au prototype de gouvernance IA.",
+        "Les révisions et manifestes sont conservés comme instantanés, puis reliés aux déploiements, preuves et évaluations. Cette structure prépare la traçabilité et le rejeu ; elle ne démontre ni l’équité du modèle ni son usage juridique conforme.",
+    ),
+    "Figure 4.1": (
+        "La figure 4.1 ouvre le parcours réel par l’écran de connexion du workspace Acme Corp.",
+        "Le champ Workspace matérialise l’isolation multi-tenant avant même l’authentification. L’utilisateur choisit ensuite connexion ou inscription ; aucune vue opérationnelle n’est accessible sans contexte d’organisation explicite.",
+    ),
+    "Figure 4.2": (
+        "La figure 4.2 présente la première vue obtenue après authentification sur le jeu de démonstration Acme.",
+        "La bannière signale quatre incidents critiques. La file les classe par priorité, tandis que le panneau latéral résume quatre tables actives, une source connectée et un score de santé de 48 sur 100 : l’écran conduit immédiatement vers l’actif qui exige une action.",
+    ),
+    "Figure 4.3": (
+        "La figure 4.3 inventorie les quatre tables surveillées de la source Acme Shop DB.",
+        "Chaque ligne expose volumétrie, dernière exécution, état et action manuelle. Les quatre badges Incident correspondent à l’état volontairement dégradé du seed ; ils donnent une matière stable à la démonstration et ne décrivent pas une exploitation réelle.",
+    ),
+    "Figure 4.4": (
+        "La figure 4.4 recentre l’investigation sur la liste filtrable des incidents.",
+        "Les onglets séparent ouverts, en cours d’analyse, résolus et ignorés ; la recherche et les filtres de sévérité réduisent la file. Les quatre lignes P1 visibles proviennent du même instantané de démonstration que la vue Opérations.",
+    ),
+    "Figure 4.5": (
+        "La figure 4.5 ouvre l’incident P1 de public.orders, déclenché par une hausse du taux de valeurs nulles de payment_status et une rupture de fraîcheur.",
+        "La chronologie, les faits, la table affectée et l’affectation sont réunis sans masquer l’origine du signal. Les boutons Acquitter et Résoudre modifient l’état de travail ; ils ne corrigent pas automatiquement la donnée source.",
+    ),
+    "Figure 4.6": (
+        "La figure 4.6 agrandit la narration IA associée au même incident.",
+        "Le texte distingue résumé, causes probables et impact, avec des niveaux de confiance visibles. Ces propositions accélèrent l’enquête, mais restent des hypothèses à confronter aux métriques et au système source avant toute décision.",
+    ),
+    "Figure 4.7": (
+        "La figure 4.7 montre le profil courant de public.orders et son historique récent.",
+        "Le seed affiche 8 500 lignes, une fraîcheur datée, un taux de nullité agrégé et un incident actif. Les graphiques replacent ces valeurs dans le temps ; le tableau de colonnes permet ensuite de localiser la dérive plutôt que de s’arrêter au score global.",
+    ),
+    "Figure 4.8": (
+        "La figure 4.8 poursuit la même fiche avec les dérives de percentiles, exclusions de colonnes, routes d’alerte et recommandations de moniteurs.",
+        "Une recommandation ne devient pas silencieusement un contrôle actif. L’utilisateur la relit, choisit sa portée, puis ouvre le constructeur ; ce passage protège le catalogue contre des règles opaques générées sans validation humaine.",
+    ),
+    "Figure 4.9": (
+        "La figure 4.9 présente le catalogue des moniteurs typés avant la création d’une première règle dans ce seed.",
+        "Les compteurs à zéro sont intentionnels et rendent la limite visible. L’écran sépare moniteurs DSL et contrôles SQL historiques, rappelle le principe de révision liée au schéma et propose un point d’entrée unique pour la création.",
+    ),
+    "Figure 4.10": (
+        "La figure 4.10 ouvre le constructeur d’un moniteur de volume sur public.orders.",
+        "Le formulaire rend explicites le type de règle, le seuil, la sévérité, le mode d’exécution, le déclencheur et les conditions de récupération. Valider et prévisualiser précède l’activation afin que la définition soit contrôlée avant de devenir une révision immuable.",
+    ),
+    "Figure 4.11": (
+        "La figure 4.11 synthétise la semaine seedée sous forme d’indicateurs de santé et de contrôles en échec.",
+        "Le score de 54, les quatre incidents ouverts, les 152 contrôles réussis et les quatre tables surveillées partagent le même intervalle. La zone de résumé IA reste vide tant que l’utilisateur ne demande pas sa génération, ce qui évite de présenter un texte absent comme une preuve.",
+    ),
+    "Figure 4.12": (
+        "La figure 4.12 recense les équipes créées dans le workspace Acme.",
+        "Data Engineering, Analytics et Platform possèdent des membres et responsabilités distinctes. Cette vue transforme une simple liste d’utilisateurs en structure d’affectation exploitable pour les incidents et les astreintes.",
+    ),
+    "Figure 4.13": (
+        "La figure 4.13 ouvre le détail de l’équipe Data Engineering.",
+        "L’onglet Membres expose les rôles au sein de l’équipe et permet leur modification sans changer le rôle global dans l’organisation. Les autres onglets relient la même équipe aux astreintes, incidents et tables dont elle a la charge.",
+    ),
+    "Figure 4.14": (
+        "La figure 4.14 affiche les sources enregistrées dans les paramètres du workspace.",
+        "Acme Shop DB est la seule source connectée du scénario et utilise PostgreSQL. Ce choix borne clairement la preuve d’intégration : le catalogue propose davantage de moteurs, mais cette capture n’atteste que la verticale réellement démarrée.",
+    ),
+    "Figure 4.15": (
+        "La figure 4.15 montre le formulaire d’ajout d’une source et la sélection du connecteur PostgreSQL.",
+        "Hôte, port, base, utilisateur et mot de passe sont saisis avant le test de connexion. Le mot de passe n’est jamais réaffiché après enregistrement ; le backend chiffre la configuration dans le contexte du tenant.",
+    ),
+    "Figure 4.16": (
+        "La figure 4.16 présente les canaux disponibles et la route e-mail utilisée pendant la démonstration.",
+        "La route pfe-demo@acme.test couvre tous les incidents du workspace à partir de P2. Slack, PagerDuty et les webhooks restent visibles comme capacités de routage, sans laisser croire que chacun a été validé dans cette session locale.",
+    ),
+    "Figure 4.17": (
+        "La figure 4.17 descend au niveau des préférences de notification de l’utilisateur connecté.",
+        "Les bascules distinguent attribution, activité d’équipe et changement d’état ; le digest quotidien possède sa propre heure et son fuseau. Une route d’organisation définit donc la livraison possible, tandis que ces préférences règlent ce que chaque personne souhaite recevoir.",
+    ),
+    "Figure 4.18": (
+        "La figure 4.18 ouvre la file de travail du prototype de gouvernance IA.",
+        "Un seul système seedé apparaît : Support knowledge assistant, avec trois responsables sur trois et cinq contrôles ouverts. Cette faible volumétrie est volontaire ; elle démontre le registre et ses états, pas sa capacité à gouverner un portefeuille industriel.",
+    ),
+    "Figure 4.19": (
+        "La figure 4.19 détaille l’état calculé pour le système IA de support.",
+        "L’écran affiche une action requise, une confiance des preuves de 81,8 % et un risque résiduel de 27,4 sur 100. Les cartes de contrôle exposent leurs raisons et leurs échecs ; ces nombres appartiennent au scénario seedé et ne sont ni un score réglementaire ni une certification.",
+    ),
+    "Figure 4.20": (
+        "La figure 4.20 prolonge cette fiche par la chronologie des preuves attachées au système.",
+        "Chaque entrée conserve type, provenance, validité et empreinte afin de rendre une évaluation rejouable. Le registre ne stocke ni prompts ni réponses métier : la chronologie porte uniquement sur des métadonnées techniques bornées.",
+    ),
+    "Figure 4.21": (
+        "La figure 4.21 montre la porte d’entrée distincte du portail réservé au personnel DataWatch.",
+        "L’absence de champ Workspace n’est pas un oubli : les comptes staff appartiennent à un domaine d’identité séparé. Une session client ne peut donc pas être recyclée pour ouvrir les fonctions d’administration globale.",
+    ),
+    "Figure 4.22": (
+        "La figure 4.22 présente l’inventaire des organisations depuis le portail staff.",
+        "Le seed contient deux tenants actifs, cinq membres au total et un revenu mensuel estimé à 298 dollars. Recherche, filtres de plan et statut précèdent l’ouverture d’une organisation ; les valeurs restent des données de démonstration.",
+    ),
+    "Figure 4.23": (
+        "La figure 4.23 rassemble les indicateurs commerciaux et opérationnels visibles par le staff.",
+        "Le tableau de bord sépare revenu récurrent, abonnements, activité récente, organisations, utilisateurs, sources, tables et incidents. Le graphique hebdomadaire contextualise le stock par un flux de créations, sans prétendre constituer une comptabilité de production.",
+    ),
+    "Figure 4.24": (
+        "La figure 4.24 ouvre la fiche administrative d’Acme Corp.",
+        "Le plan Growth actif est affiché à 149 dollars par mois, avec une source, quatre tables et trois membres. Les compteurs sur trente jours permettent de vérifier l’activité déclarée avant une modification d’abonnement ; ils restent isolés des écrans opérationnels du client.",
+    ),
+}
 SAMPLE_TABLES = [
     ("organizations", "Organisations de démonstration"),
     ("acme_users", "Utilisateurs Acme sans identifiants sensibles"),
@@ -486,6 +664,16 @@ def add_picture(doc, path, label, caption, anchor=None, bookmark_id=None):
         add_bookmark(cap, anchor, bookmark_id)
 
 
+def add_contextual_picture(doc, path, label, caption, anchor=None, bookmark_id=None):
+    """Introduce, display, and interpret one visual as a complete academic unit."""
+    introduction, interpretation = FIGURE_CONTEXT[label]
+    lead = add_body(doc, introduction, after=4)
+    lead.paragraph_format.keep_with_next = True
+    add_picture(doc, path, label, caption, anchor=anchor, bookmark_id=bookmark_id)
+    reading = add_body(doc, interpretation, align=WD_ALIGN_PARAGRAPH.JUSTIFY, after=9)
+    reading.paragraph_format.keep_together = True
+
+
 def add_code_block(doc, lines):
     for line in lines:
         p = doc.add_paragraph()
@@ -874,7 +1062,7 @@ def add_enrichments(doc, heading, bookmark_id):
             label = action[1]
             caption, path = FIGURE_META[label]
             anchor = "fig_" + label.split()[1].replace(".", "_")
-            add_picture(doc, path, label, caption, anchor=anchor, bookmark_id=bookmark_id)
+            add_contextual_picture(doc, path, label, caption, anchor=anchor, bookmark_id=bookmark_id)
             bookmark_id += 1
     return bookmark_id
 
@@ -1008,7 +1196,7 @@ def build():
             source_label = label
             if label == "Figure 4.7": label = "Figure 4.6"
             elif label == "Figure 4.6": label = "Figure 4.7"
-            add_picture(doc, FIGURES[source_label], label, caption, anchor="fig_" + label.split()[1].replace(".", "_"), bookmark_id=bookmark_id); bookmark_id += 1
+            add_contextual_picture(doc, FIGURES[source_label], label, caption, anchor="fig_" + label.split()[1].replace(".", "_"), bookmark_id=bookmark_id); bookmark_id += 1
             continue
         if style in ("HEADING_1", "HEADING_2", "HEADING_3"):
             level = {"HEADING_1": 1, "HEADING_2": 2, "HEADING_3": 3}[style]
