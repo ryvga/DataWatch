@@ -159,6 +159,6 @@ Confirm figure scale, caption pairing, page breaks, Roman preliminaries, Arabic 
 
 Run the accessibility audit, validate one balanced Word TOC field, compile the generation scripts and run `git diff --check`.
 
-- [ ] **Step 4: Commit and push**
+- [x] **Step 4: Commit and push**
 
 Commit the report, reproducible sources, captures and evidence manifest, then push the current main branch as previously requested for cross-computer continuation.
