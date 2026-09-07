@@ -147,7 +147,7 @@
       "isListItem": false
     },
     {
-      "text": "La réalisation s’appuie sur FastAPI, PostgreSQL, Redis, Celery, React et Docker. Une validation locale reproductible a couvert les parcours de surveillance, d’alerte, de moniteurs et de gouvernance IA. Les résultats montrent la faisabilité d’une chaîne complète de détection, d’explication et d’alerte, tout en distinguant clairement les preuves locales des garanties de production.",
+      "text": "La réalisation s’appuie sur FastAPI, PostgreSQL, Redis, Celery, React et Docker. Une validation locale reproductible a couvert les parcours de surveillance, d’alerte et de moniteurs, ainsi qu’un petit prototype de gouvernance IA en mode observation. Les résultats montrent la faisabilité d’une chaîne de détection, d’explication et d’alerte. Ils ne transforment ni la gouvernance expérimentale ni les preuves locales en garantie de production.",
       "startIndex": 1837,
       "endIndex": 2219,
       "tabId": "t.0",
@@ -1875,7 +1875,7 @@
       "isListItem": false
     },
     {
-      "text": "La démonstration se poursuit dans Paramètres → Alertes avec la route email P1/P2, puis dans MailHog pour la preuve de livraison. La page Gouvernance IA présente l’inventaire, les usages déclarés, la provenance des preuves et les raisons des contrôles, dans une frontière explicitement observe-only.",
+      "text": "La démonstration se poursuit dans Paramètres → Alertes avec la route email P1/P2, puis dans MailHog pour la preuve de livraison. La page Gouvernance IA présente un prototype observe-only : inventaire, usages déclarés, provenance des preuves et raisons des contrôles. Le scénario est restreint à une verticale PostgreSQL/pgvector seedée ; il sert à éprouver le modèle de données et l’interface, pas à prouver une gouvernance industrielle.",
       "startIndex": 22834,
       "endIndex": 23132,
       "tabId": "t.0",
@@ -2043,7 +2043,7 @@
       "isListItem": false
     },
     {
-      "text": "Les résultats sont des preuves locales et ne constituent pas une garantie de montée en charge, de disponibilité internet ou de délai de fournisseur LLM. PostgreSQL est le connecteur stable de référence ; DuckDB et SQLite restent bêta, tandis que les autres connecteurs implémentés sont expérimentaux ou soumis à des validations d’environnement. Les résultats de la narration IA doivent être relus car ils peuvent formuler une hypothèse plausible mais non prouvée. La gouvernance IA observe l’état des preuves ; elle ne bloque pas l’exécution et ne certifie pas la conformité.",
+      "text": "Les résultats sont des preuves locales et ne constituent pas une garantie de montée en charge, de disponibilité internet ou de délai de fournisseur LLM. PostgreSQL est le connecteur stable de référence ; DuckDB et SQLite restent bêta, tandis que les autres connecteurs implémentés sont expérimentaux ou soumis à des validations d’environnement. Les résultats de la narration IA doivent être relus car ils peuvent formuler une hypothèse plausible mais non prouvée. La gouvernance IA reste une preuve de concept centrée sur un système seedé : elle observe l’état de quelques preuves, ne bloque pas l’exécution, ne vérifie ni biais ni robustesse et ne certifie aucune conformité.",
       "startIndex": 25582,
       "endIndex": 26157,
       "tabId": "t.0",
@@ -2131,7 +2131,7 @@
       "isListItem": true
     },
     {
-      "text": "Ajouter des packs de politiques, des exceptions temporaires et des exports de preuves gouvernés, sans confondre observation et certification.",
+      "text": "Faire évoluer la gouvernance IA du prototype observe-only vers un parcours configurable : versions, usages, manifestes, approbations, gates de release, exports d’audit et rétention maîtrisée.",
       "startIndex": 27952,
       "endIndex": 28056,
       "tabId": "t.0",
