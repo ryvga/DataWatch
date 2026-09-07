@@ -805,6 +805,7 @@ def cover(doc):
     logo_header.set(qn("w:val"), "true")
     logo_row_properties.append(logo_header)
     for cell in logos.rows[0].cells:
+        cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
         set_table_cell_margins(cell, 40, 100, 40, 100)
         borders = OxmlElement("w:tcBorders")
         for edge in ("top", "bottom", "start", "end", "insideH", "insideV"):
