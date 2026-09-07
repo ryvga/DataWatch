@@ -139,7 +139,7 @@
       "isListItem": false
     },
     {
-      "text": "Ce projet présente DataWatch, une plateforme SaaS multi-tenant de surveillance de la qualité des données. La solution profile les tables surveillées, applique des règles métier, des méthodes statistiques et des modèles d’apprentissage automatique, puis crée des incidents priorisés. Une couche de narration par grand modèle de langage propose un résumé, des hypothèses et des actions de diagnostic, tout en conservant une décision humaine.",
+      "text": "Ce projet présente DataWatch, une plateforme SaaS multi-tenant de surveillance de la qualité des données. Son architecture répond aux quatre tensions du Big Data : le volume est condensé par des agrégats calculés sur la source, la variété passe par des contrats de connecteurs, la vélocité par une exécution Redis/Celery et la véracité par des profils horodatés. La détection associe règles métier, z-score, Isolation Forest et STL avant de créer des incidents priorisés. Une narration par grand modèle de langage propose ensuite un résumé, des hypothèses et des actions de diagnostic, sans retirer la décision à l’opérateur.",
       "startIndex": 1397,
       "endIndex": 1836,
       "tabId": "t.0",
@@ -179,7 +179,7 @@
       "isListItem": false
     },
     {
-      "text": "This project presents DataWatch, a multi-tenant SaaS platform for data-quality monitoring. The solution profiles monitored tables, applies business rules, statistical methods and machine-learning models, then creates prioritised incidents. A large-language-model narration layer provides a structured summary, plausible hypotheses and investigation actions while keeping the operator in control.",
+      "text": "This project presents DataWatch, a multi-tenant SaaS platform for data-quality monitoring. Its architecture addresses four recurring data-system pressures: volume through source-side aggregation, variety through connector contracts, velocity through Redis/Celery execution, and veracity through timestamped profiles. Detection combines business rules, z-scores, Isolation Forest and STL before prioritised incidents are created. A large-language-model layer then supplies a structured summary, plausible hypotheses and investigation actions while keeping the operator in control.",
       "startIndex": 2630,
       "endIndex": 3025,
       "tabId": "t.0",
@@ -2083,7 +2083,7 @@
       "isListItem": false
     },
     {
-      "text": "Ce projet a permis de concevoir et réaliser DataWatch, une plateforme de surveillance de la qualité des données destinée à un contexte SaaS multi-tenant. La solution couvre l’enregistrement de sources, le profilage de tables, la détection hybride d’anomalies, la gestion d’incidents, l’alerte et l’assistance par narration IA. La conception privilégie le cloisonnement des organisations, la traçabilité, l’explicabilité et la validation reproductible.",
+      "text": "Ce projet a permis de concevoir et réaliser DataWatch, une plateforme de surveillance de la qualité des données destinée à un contexte SaaS multi-tenant. Sa chaîne technique relie variété des sources, profilage agrégé, exécution asynchrone, détection hybride, incidents, alertes et narration IA. Elle traite ainsi les contraintes de volume, vélocité et véracité sans déplacer les données métier ligne par ligne. La conception privilégie le cloisonnement des organisations, la traçabilité, l’explicabilité et la validation reproductible.",
       "startIndex": 26485,
       "endIndex": 26936,
       "tabId": "t.0",
