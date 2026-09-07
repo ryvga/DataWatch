@@ -115,7 +115,7 @@
       "isListItem": false
     },
     {
-      "text": "Je remercie enfin ma famille et mes collègues pour leur soutien, leurs encouragements et leur disponibilité. Leur confiance a été déterminante dans l’aboutissement de ce projet de fin d’études.",
+      "text": "Je remercie mes collègues de l’équipe Payments chez Oyster pour les échanges professionnels qui nourrissent chaque jour ma manière de concevoir des systèmes fiables. Je remercie enfin ma famille et mes proches pour leur soutien, leurs encouragements et leur disponibilité. Leur confiance a compté dans l’aboutissement de ce projet de fin d’études.",
       "startIndex": 831,
       "endIndex": 1024,
       "tabId": "t.0",
@@ -683,7 +683,7 @@
       "isListItem": false
     },
     {
-      "text": "Figure 1.1 - Planification du projet par sprints",
+      "text": "Figure 1.2 - Planification du projet par sprints",
       "startIndex": 5311,
       "endIndex": 5359,
       "tabId": "t.0",
@@ -1051,7 +1051,7 @@
       "isListItem": false
     },
     {
-      "text": "Ce chapitre présente le cadre académique du projet, sa problématique et la méthode de conduite retenue. Le projet a été réalisé dans le cadre de la formation 3CI — Big Data et Intelligence Artificielle à l’ISGA Casablanca.",
+      "text": "Ce chapitre présente Oyster, mon environnement professionnel, puis la problématique et la méthode de conduite retenues pour DataWatch. Le projet répond aux exigences du PFE de la filière 3CI Big Data et Intelligence Artificielle à l’ISGA Casablanca. Il a été mené en parallèle de mon emploi de Software Engineer dans l’équipe Payments d’Oyster.",
       "startIndex": 8422,
       "endIndex": 8644,
       "tabId": "t.0",
@@ -1067,7 +1067,7 @@
       "isListItem": false
     },
     {
-      "text": "Le projet est mené dans un cadre académique à l’ISGA Casablanca. L’établissement fournit l’environnement pédagogique, l’encadrement scientifique et le contexte de validation. Cette configuration oriente le travail vers une démonstration technique reproductible, documentée et utile pour une soutenance, plutôt que vers une revendication de déploiement industriel à grande échelle.",
+      "text": "Oyster constitue l’entreprise d’accueil au sens professionnel du rapport. DataWatch demeure un projet de fin d’études distinct de mon activité salariée. Cette séparation protège les informations internes de l’entreprise et permet d’évaluer le projet sur ses propres preuves, son code, ses tests et sa démonstration reproductible.",
       "startIndex": 8687,
       "endIndex": 9067,
       "tabId": "t.0",
@@ -1219,7 +1219,7 @@
       "isListItem": false
     },
     {
-      "text": "Figure 1.1 - Planification du projet par sprints.",
+      "text": "Figure 1.2 - Planification du projet par sprints.",
       "startIndex": 11308,
       "endIndex": 11357,
       "tabId": "t.0",
@@ -1235,7 +1235,7 @@
       "isListItem": false
     },
     {
-      "text": "Le diagramme de Gantt de la figure 1.1 matérialise les chevauchements nécessaires entre conception, implémentation et validation. Chaque sprint se termine par une preuve visible : modèle migré, API testée, parcours navigateur ou jeu de démonstration reproductible.",
+      "text": "Le diagramme de Gantt de la figure 1.2 matérialise les chevauchements nécessaires entre conception, implémentation et validation. Chaque sprint se termine par une preuve visible : modèle migré, API testée, parcours navigateur ou jeu de démonstration reproductible.",
       "startIndex": 11725,
       "endIndex": 11989,
       "tabId": "t.0",

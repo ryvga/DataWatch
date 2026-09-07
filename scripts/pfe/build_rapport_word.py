@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from pathlib import Path
 
@@ -17,6 +18,10 @@ from docx.shared import Cm, Pt, RGBColor
 ROOT = Path("/Users/mounir/Documents/Claude/Projects/DataWatch")
 SOURCE = ROOT / "docs/pfe/report_source.json"
 DATABASE_EVIDENCE = ROOT / "docs/pfe/database_evidence.json"
+STRUCTURE_REFERENCE = ROOT / "docs/pfe/reference/Structure_Rapport_ISGA.pdf"
+ISGA_LOGO = ROOT / "docs/pfe/assets/isga-logo.png"
+OYSTER_LOGO = ROOT / "docs/pfe/assets/oyster-logo-black.png"
+STRUCTURE_REFERENCE_SHA256 = "7203827df3a626be6df3a2095af5e2abbd2133c93f8bc467bb909eb3e4bbae3c"
 OUT = ROOT / "output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx"
 PAGE_MAP_PATH = ROOT / "tmp/pfe/report-page-map.json"
 
@@ -28,7 +33,8 @@ ACCENT = "B1202D"
 ACCENT_SOFT = "F8EAEC"
 
 FIGURE_CATALOG = [
-    ("Figure 1.1", "Planification du PFE du 1er juin au 31 août et continuité du produit", "docs/diagrams/pfe/gantt-doc.png"),
+    ("Figure 1.1", "Identité visuelle officielle d’Oyster", "docs/pfe/assets/oyster-logo-black.png"),
+    ("Figure 1.2", "Planification du PFE du 1er juin au 31 août et continuité du produit", "docs/diagrams/pfe/gantt-doc.png"),
     ("Figure 3.1", "Vue globale des acteurs et domaines fonctionnels", "docs/diagrams/pfe/use_cases-doc.png"),
     ("Figure 3.2", "Cas d’utilisation du workspace client", "docs/diagrams/pfe/use_cases_workspace-doc.png"),
     ("Figure 3.3", "Cas d’utilisation du portail staff", "docs/diagrams/pfe/use_cases_staff-doc.png"),
@@ -80,7 +86,11 @@ FIGURE_META = {label: (caption, ROOT / path) for label, caption, path in FIGURE_
 # records the evidence or design decision that should be retained from it.
 FIGURE_CONTEXT = {
     "Figure 1.1": (
-        "La figure 1.1 replace les travaux dans les trois mois retenus pour le PFE, du 1er juin au 31 août, puis distingue la continuité du produit après cette échéance académique.",
+        "La figure 1.1 présente l’identité visuelle officielle d’Oyster, l’entreprise dans laquelle j’exerce mon activité professionnelle.",
+        "Ce repère distingue clairement le contexte d’emploi du périmètre technique du PFE. DataWatch reste un projet académique personnel. Il ne constitue ni un produit Oyster, ni une reproduction de ses systèmes internes.",
+    ),
+    "Figure 1.2": (
+        "La figure 1.2 replace les travaux dans les trois mois retenus pour le PFE, du 1er juin au 31 août, puis distingue la continuité du produit après cette échéance académique.",
         "La lecture horizontale révèle des chevauchements assumés : le profilage commence avant la clôture de l’architecture, tandis que les tests accompagnent les derniers incréments. Le jalon du 31 août ferme l’évaluation du PFE, pas le développement de DataWatch.",
     ),
     "Figure 3.1": (
@@ -268,6 +278,16 @@ SKIP_BODY_INDEXES = (
 )
 
 
+def clean_report_text(value):
+    """Apply the author's punctuation rules to every visible report string."""
+    text = str(value).replace(" — ", ", ").replace("—", "-").replace("–", "-")
+    text = re.sub(r"\s*;\s*([a-zà-öø-ÿ])", lambda match: ". " + match.group(1).upper(), text)
+    text = re.sub(r"\s*;\s*", ". ", text)
+    text = re.sub(r"\s+:\s+", " : ", text)
+    text = re.sub(r" {2,}", " ", text)
+    return text
+
+
 def set_font(run, size=None, bold=None, italic=None, color=None):
     run.font.name = FONT
     run._element.get_or_add_rPr().get_or_add_rFonts().set(qn("w:ascii"), FONT)
@@ -348,11 +368,7 @@ def set_footer(section, numbered=True):
     p.paragraph_format.space_before = Pt(2)
     p.paragraph_format.space_after = Pt(0)
     if numbered:
-        run = p.add_run("—  ")
-        set_font(run, 8.5, color=MUTED)
         add_field(p, "PAGE")
-        run = p.add_run("  —")
-        set_font(run, 8.5, color=MUTED)
 
 
 def set_header(section, text=""):
@@ -465,7 +481,7 @@ def add_body(doc, text, *, align=WD_ALIGN_PARAGRAPH.JUSTIFY, italic=False, bold=
     p = doc.add_paragraph(style="Normal")
     p.alignment = align
     p.paragraph_format.space_after = Pt(after)
-    run = p.add_run(text)
+    run = p.add_run(clean_report_text(text))
     set_font(run, 12, bold=bold, italic=italic, color=INK)
     return p
 
@@ -476,7 +492,7 @@ def add_list(doc, text, num_id):
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
     p.paragraph_format.space_after = Pt(4)
     p.paragraph_format.line_spacing = 1.2
-    run = p.add_run(text)
+    run = p.add_run(clean_report_text(text))
     set_font(run, 11.5, color=INK)
     return p
 
@@ -499,9 +515,9 @@ def add_callout(doc, title, text):
         node = OxmlElement("w:" + edge); node.set(qn("w:val"), "nil"); borders.append(node)
     cell._tc.get_or_add_tcPr().append(borders)
     p = cell.paragraphs[0]; p.paragraph_format.space_after = Pt(3)
-    r = p.add_run(title.upper()); set_font(r, 9, bold=True, color=ACCENT)
+    r = p.add_run(clean_report_text(title).upper()); set_font(r, 9, bold=True, color=ACCENT)
     p = cell.add_paragraph(); p.paragraph_format.space_after = Pt(0); p.paragraph_format.line_spacing = 1.2
-    r = p.add_run(text); set_font(r, 10.5, color=INK)
+    r = p.add_run(clean_report_text(text)); set_font(r, 10.5, color=INK)
     spacer = doc.add_paragraph(); spacer.paragraph_format.space_after = Pt(2)
     return table
 
@@ -510,8 +526,8 @@ def add_academic_table(doc, label, caption, headers, rows, widths, anchor, bookm
     cap = doc.add_paragraph(style="Caption")
     cap.alignment = WD_ALIGN_PARAGRAPH.LEFT
     cap.paragraph_format.space_before = Pt(8); cap.paragraph_format.space_after = Pt(5); cap.paragraph_format.keep_with_next = True
-    r = cap.add_run(label); set_font(r, 9.5, bold=True, color=ACCENT)
-    r = cap.add_run(" — " + caption); set_font(r, 9.5, color=MUTED)
+    r = cap.add_run(clean_report_text(label)); set_font(r, 9.5, bold=True, color=ACCENT)
+    r = cap.add_run(" : " + clean_report_text(caption)); set_font(r, 9.5, color=MUTED)
     add_bookmark(cap, anchor, bookmark_id)
     table = doc.add_table(rows=1, cols=len(headers))
     table.alignment = WD_TABLE_ALIGNMENT.CENTER; table.autofit = False
@@ -524,7 +540,7 @@ def add_academic_table(doc, label, caption, headers, rows, widths, anchor, bookm
         cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
         shd = OxmlElement("w:shd"); shd.set(qn("w:fill"), ACCENT); cell._tc.get_or_add_tcPr().append(shd)
         cell.text = ""; p = cell.paragraphs[0]; p.alignment = WD_ALIGN_PARAGRAPH.LEFT; p.paragraph_format.space_after = Pt(0)
-        r = p.add_run(text); set_font(r, 9.2, bold=True, color="FFFFFF")
+        r = p.add_run(clean_report_text(text)); set_font(r, 9.2, bold=True, color="FFFFFF")
     tr_pr = table.rows[0]._tr.get_or_add_trPr(); header = OxmlElement("w:tblHeader"); header.set(qn("w:val"), "true"); tr_pr.append(header)
     for row_idx, values in enumerate(rows):
         cells = table.add_row().cells
@@ -535,7 +551,7 @@ def add_academic_table(doc, label, caption, headers, rows, widths, anchor, bookm
                 shd = OxmlElement("w:shd"); shd.set(qn("w:fill"), "F7F7F8"); cell._tc.get_or_add_tcPr().append(shd)
             cell.text = ""; p = cell.paragraphs[0]; p.paragraph_format.space_after = Pt(0); p.paragraph_format.line_spacing = 1.1
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER if i == 0 and len(value) < 18 else WD_ALIGN_PARAGRAPH.LEFT
-            r = p.add_run(value); set_font(r, 9.2, bold=(i == 0), color=INK)
+            r = p.add_run(clean_report_text(value)); set_font(r, 9.2, bold=(i == 0), color=INK)
     for row in table.rows:
         for cell in row.cells:
             tc_pr = cell._tc.get_or_add_tcPr(); borders = OxmlElement("w:tcBorders")
@@ -564,7 +580,7 @@ def add_internal_link(paragraph, text, anchor, bold=False):
     size = OxmlElement("w:sz"); size.set(qn("w:val"), "17"); rpr.append(size)
     color = OxmlElement("w:color"); color.set(qn("w:val"), INK); rpr.append(color)
     if bold: rpr.append(OxmlElement("w:b"))
-    run.append(rpr); node = OxmlElement("w:t"); node.text = text; run.append(node); hyperlink.append(run); paragraph._p.append(hyperlink)
+    run.append(rpr); node = OxmlElement("w:t"); node.text = clean_report_text(text); run.append(node); hyperlink.append(run); paragraph._p.append(hyperlink)
 
 
 def add_heading(doc, text, level, front=False, anchor=None, bookmark_id=None):
@@ -576,7 +592,7 @@ def add_heading(doc, text, level, front=False, anchor=None, bookmark_id=None):
             remove_paragraph_border(p)
         else:
             paragraph_border(p)
-    run = p.add_run(text)
+    run = p.add_run(clean_report_text(text))
     set_font(run, 19 if level == 1 else (14.5 if level == 2 else 12.5), bold=True, color=INK)
     if anchor is not None:
         add_bookmark(p, anchor, bookmark_id)
@@ -600,7 +616,7 @@ def add_live_index(doc, entries, instruction):
         p.paragraph_format.space_before = Pt(0); p.paragraph_format.space_after = Pt(1.2); p.paragraph_format.line_spacing = 1.0
         p.paragraph_format.tab_stops.add_tab_stop(Cm(15.2), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
         if anchor is None:
-            r = p.add_run(text.upper()); set_font(r, 9, bold=True, color=ACCENT)
+            r = p.add_run(clean_report_text(text).upper()); set_font(r, 9, bold=True, color=ACCENT)
         else:
             add_internal_link(p, text, anchor, bold=(level == 1))
             r = p.add_run("\t" + str(page)); set_font(r, 8.7, bold=(level == 1), color=INK)
@@ -627,7 +643,7 @@ def add_static_index(doc, entries):
         p.paragraph_format.space_after = Pt(4 if anchor is None else 5)
         p.paragraph_format.left_indent = Cm(0.5 if anchor else 0)
         if anchor is None:
-            r = p.add_run(text.upper()); set_font(r, 10.5, bold=True, color=ACCENT)
+            r = p.add_run(clean_report_text(text).upper()); set_font(r, 10.5, bold=True, color=ACCENT)
             continue
         p.paragraph_format.tab_stops.add_tab_stop(Cm(15.2), WD_TAB_ALIGNMENT.RIGHT, WD_TAB_LEADER.DOTS)
         add_internal_link(p, text, anchor, bold=False)
@@ -654,11 +670,11 @@ def add_picture(doc, path, label, caption, anchor=None, bookmark_id=None):
     run = p.add_run()
     shape = run.add_picture(str(path), width=Cm(width), height=Cm(height))
     doc_pr = shape._inline.docPr
-    doc_pr.set("descr", caption)
+    doc_pr.set("descr", clean_report_text(caption))
     cap = doc.add_paragraph(style="Caption")
-    r = cap.add_run(label)
+    r = cap.add_run(clean_report_text(label))
     set_font(r, 9, bold=True, color=ACCENT)
-    r = cap.add_run(" — " + caption)
+    r = cap.add_run(" : " + clean_report_text(caption))
     set_font(r, 9, color=MUTED)
     if anchor is not None:
         add_bookmark(cap, anchor, bookmark_id)
@@ -768,7 +784,7 @@ def remap_heading(text):
         return replacements[text]
     m = re.match(r"([2-5])\. Chapitre ([1-4]) : (.+)", text)
     if m:
-        return f"CHAPITRE {m.group(2)} — {m.group(3).upper()}"
+        return f"CHAPITRE {m.group(2)} : {m.group(3).upper()}"
     m = re.match(r"([2-5])\.(\d(?:\.\d)?) (.+)", text)
     if m:
         old = int(m.group(1)); return f"{old-1}.{m.group(2)} {m.group(3)}"
@@ -781,28 +797,48 @@ def heading_anchor(text):
 
 
 def cover(doc):
-    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_after = Pt(12)
-    logo = p.add_run().add_picture(str(ROOT / "docs/pfe/assets/isga-logo.png"), width=Cm(5.8))
-    logo._inline.docPr.set("descr", "Logo officiel de l’ISGA")
+    logos = doc.add_table(rows=1, cols=2)
+    logos.alignment = WD_TABLE_ALIGNMENT.CENTER
+    logos.autofit = False
+    logo_row_properties = logos.rows[0]._tr.get_or_add_trPr()
+    logo_header = OxmlElement("w:tblHeader")
+    logo_header.set(qn("w:val"), "true")
+    logo_row_properties.append(logo_header)
+    for cell in logos.rows[0].cells:
+        set_table_cell_margins(cell, 40, 100, 40, 100)
+        borders = OxmlElement("w:tcBorders")
+        for edge in ("top", "bottom", "start", "end", "insideH", "insideV"):
+            node = OxmlElement("w:" + edge); node.set(qn("w:val"), "nil"); borders.append(node)
+        cell._tc.get_or_add_tcPr().append(borders)
+    left = logos.cell(0, 0).paragraphs[0]; left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    isga = left.add_run().add_picture(str(ISGA_LOGO), width=Cm(5.2))
+    isga._inline.docPr.set("descr", "Logo officiel de l’ISGA")
+    right = logos.cell(0, 1).paragraphs[0]; right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    oyster = right.add_run().add_picture(str(OYSTER_LOGO), width=Cm(5.5))
+    oyster._inline.docPr.set("descr", "Logo officiel d’Oyster")
     p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_after = Pt(2)
     r = p.add_run("ISGA CASABLANCA"); set_font(r, 11, bold=True, color=INK)
-    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_after = Pt(16)
-    r = p.add_run("3CI — Big Data et Intelligence Artificielle"); set_font(r, 10, color=MUTED)
-    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(22)
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_after = Pt(10)
+    r = p.add_run("3CI Big Data et Intelligence Artificielle"); set_font(r, 10, color=MUTED)
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before = Pt(4); p.paragraph_format.space_after = Pt(10)
     r = p.add_run("PROJET DE FIN D’ÉTUDES"); set_font(r, 13, bold=True, color=ACCENT)
     paragraph_border(p, color=ACCENT, size="10", space="10")
-    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before = Pt(16); p.paragraph_format.space_after = Pt(8)
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_after = Pt(2)
+    r = p.add_run("Pour l’obtention du diplôme d’Ingénieur d’État"); set_font(r, 10.5, color=INK)
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_after = Pt(12)
+    r = p.add_run("Filière Big Data et Intelligence Artificielle"); set_font(r, 10.5, bold=True, color=INK)
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(6)
     r = p.add_run("Conception et réalisation de DataWatch"); set_font(r, 24, bold=True, color=INK)
-    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.left_indent = Cm(1.0); p.paragraph_format.right_indent = Cm(1.0); p.paragraph_format.space_after = Pt(34)
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.left_indent = Cm(1.0); p.paragraph_format.right_indent = Cm(1.0); p.paragraph_format.space_after = Pt(20)
     r = p.add_run("Plateforme SaaS multi-tenant de surveillance de la qualité des données, enrichie par l’IA pour l’explication des incidents"); set_font(r, 12.5, color=MUTED)
-    entries = [("RÉALISÉ PAR", "Mounir Gaiby"), ("ENCADRÉ PAR", "Dr. HANINE MOHAMED"), ("FILIÈRE", "3CI — Big Data et Intelligence Artificielle")]
+    entries = [("RÉALISÉ PAR", "Mounir Gaiby"), ("ENCADRÉ PAR", "Dr. HANINE MOHAMED"), ("ENTREPRISE", "Oyster HR")]
     for label, value in entries:
         p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.LEFT; p.paragraph_format.left_indent = Cm(0.25); p.paragraph_format.space_after = Pt(8)
         p.paragraph_format.tab_stops.add_tab_stop(Cm(6.2), WD_TAB_ALIGNMENT.LEFT)
         r = p.add_run(label); set_font(r, 8.5, bold=True, color=ACCENT)
         r = p.add_run("\t" + value); set_font(r, 10.5, bold=True, color=INK)
-    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before = Pt(30)
-    r = p.add_run("Année universitaire 2025–2026"); set_font(r, 10, color=MUTED)
+    p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before = Pt(20)
+    r = p.add_run("Année universitaire 2025-2026"); set_font(r, 10, color=MUTED)
 
 
 def is_bullet_index(index):
@@ -820,16 +856,16 @@ ENRICHMENTS = {
         ("callout", "Question directrice", "Comment passer d’une métrique technique isolée à une décision d’exploitation traçable, tout en maintenant l’isolation multi-tenant et une frontière explicite entre fait observé, hypothèse IA et action humaine ?"),
     ],
     "2.2 Présentation de l’organisme d’accueil": [
-        ("h3", "1.2.1 Présentation de l’ISGA"),
-        ("p", "L’ISGA est un établissement marocain d’enseignement supérieur qui forme des ingénieurs et des managers. Son cycle d’ingénieur s’inscrit dans un cursus de cinq années et met l’accent sur la maîtrise scientifique, la conduite de projets complexes, l’ouverture professionnelle et la capacité d’adaptation [10]. Le campus de Casablanca accueille notamment la spécialisation Intelligence Artificielle et Big Data, qui fournit le cadre académique de ce projet."),
-        ("h3", "1.2.2 Environnement pédagogique du projet"),
-        ("p", "Le projet a été réalisé dans le cadre du Projet de Fin d’Études de la troisième année du cycle ingénieur. L’encadrement assure la cohérence méthodologique, la validation de la problématique et le suivi des livrables. Le travail couvre le cadrage, la conception, l’implémentation, les tests, la préparation d’une démonstration et la rédaction scientifique. Il ne correspond pas à une mission réalisée pour un client externe ; l’organisme d’accueil désigne ici l’environnement académique qui porte et évalue le projet."),
-        ("table", "Tableau 1.1", "Acteurs et responsabilités du projet", ["Acteur", "Responsabilité principale", "Livrables associés"], [
-            ["Étudiant", "Analyse, conception, développement, tests et documentation", "Code source, démonstration, rapport et présentation"],
-            ["Encadrant", "Orientation scientifique et validation méthodologique", "Revues, recommandations et validation du périmètre"],
-            ["Jury", "Évaluation de la pertinence, de la réalisation et de la maîtrise", "Questions, appréciation et décision académique"],
-            ["Utilisateur cible", "Expression des besoins d’exploitation et d’investigation", "Scénarios d’usage et critères d’acceptation"],
-        ], [1700, 3900, 3350], "tab_1_1"),
+        ("h3", "1.2.1 Présentation d’Oyster"),
+        ("p", "Oyster est une entreprise technologique fondée en 2020. Son organisation est entièrement distribuée, avec plus de 600 collaborateurs répartis dans plus de 60 pays [13]. Sa plateforme accompagne l’emploi international dans plus de 180 pays. Elle réunit les opérations d’Employer of Record, la gestion des contractuels, la paie mondiale, les avantages sociaux et l’accompagnement des mobilités [14]."),
+        ("figure", "Figure 1.1"),
+        ("h3", "1.2.2 Services et modèle opérationnel"),
+        ("p", "Le produit Oyster relie des fonctions qui doivent rester cohérentes malgré la diversité des pays, des devises et des calendriers. Le parcours couvre l’embauche, les contrats, la collecte des variables de paie, les paiements, les remboursements, les avantages et le suivi administratif. Cette activité impose une forte discipline de traçabilité. Un statut de paiement ambigu, une donnée bancaire incomplète ou un calcul arrivé en retard peut interrompre une chaîne qui traverse plusieurs systèmes."),
+        ("h3", "1.2.3 Organisation distribuée"),
+        ("p", "Oyster travaille à distance par conception. Les équipes produit, ingénierie, opérations et support collaborent à travers les fuseaux horaires. Cette organisation rend les interfaces écrites, les journaux techniques et les responsabilités explicites particulièrement utiles. Une anomalie doit pouvoir être comprise sans dépendre de la mémoire d’une seule personne ni d’une réunion immédiate."),
+        ("h3", "1.2.4 Équipe Payments et fonction occupée"),
+        ("p", "J’occupe chez Oyster le poste de Software Engineer au sein de l’équipe Payments. Mon travail concerne les fonctionnalités de paiement, leur fiabilité, leur intégration et leur maintenance. Je traite les tâches techniques liées aux flux de paiement, aux statuts, aux erreurs, aux contrôles et aux évolutions attendues par le produit. Il s’agit de mon emploi actuel. Ce PFE n’est pas un stage."),
+        ("p", "Cette expérience a orienté mon regard sur DataWatch. Dans un domaine sensible comme les paiements, un incident utile doit conserver les faits, expliquer son origine et montrer ce qui a changé. DataWatch transpose cette exigence vers la qualité des données. Le projet reste toutefois séparé d’Oyster. Il ne reprend aucun code interne, aucune donnée confidentielle et aucune architecture propriétaire de l’entreprise."),
     ],
     "2.3 Présentation du projet": [
         ("h3", "1.3.1 Contexte métier"),
@@ -850,7 +886,7 @@ ENRICHMENTS = {
         ("p", "La méthode adoptée reprend les principes de Scrum sans reproduire artificiellement tous les rôles d’une équipe complète. Le backlog est organisé par verticales démontrables, les tâches sont limitées à un résultat observable et chaque fin de sprint comprend une revue des critères d’acceptation. Les anomalies découvertes durant les tests réintègrent le backlog. La documentation et les preuves ne sont pas reportées à la fin : elles font partie de la définition de terminé."),
     ],
     "2.4.2 Organisation en sprints": [
-        ("table", "Tableau 1.2", "Découpage des sprints et critères de sortie", ["Sprint", "Objectif", "Critère de sortie"], [
+        ("table", "Tableau 1.1", "Découpage des sprints et critères de sortie", ["Sprint", "Objectif", "Critère de sortie"], [
             ["S1", "Cadrage et environnement", "Périmètre, risques et pile locale documentés"],
             ["S2", "Identités et multi-tenancy", "Authentification et isolation testées"],
             ["S3", "Sources et profilage", "Connexion, découverte et profil persistant"],
@@ -858,7 +894,7 @@ ENRICHMENTS = {
             ["S5", "Narration et alertes", "Résumé structuré et message livré"],
             ["S6", "Moniteurs et gouvernance", "Révisions traçables et contrôles observe-only"],
             ["S7", "Stabilisation PFE", "Tests, captures, démonstration et rapport"],
-        ], [1100, 3700, 4150], "tab_1_2"),
+        ], [1100, 3700, 4150], "tab_1_1"),
     ],
     "3.2 Approches existantes": [
         ("h3", "2.2.1 Contrôles déclaratifs"),
@@ -982,7 +1018,7 @@ ENRICHMENTS = {
         ("p", "Enfin, la preuve locale ne couvre ni montée en charge multi-région, ni reprise après sinistre, ni engagement de disponibilité, ni conformité réglementaire. Le mode observe-only de la gouvernance IA est intentionnel : il rend des lacunes visibles, mais ne bloque pas une release. Ces limites n’invalident pas le prototype ; elles définissent précisément le travail requis pour passer d’un PFE démontrable à un service commercial fiable."),
     ],
     "6.2 Synthèse des apports": [
-        ("p", "Sur le plan technique, le projet relie les quatre contraintes classiques d’un système data — volume, variété, vélocité et véracité — à une chaîne concrète : connecteurs, agrégats, file de tâches, profils, détecteurs, incidents, narration et alertes. L’apport IA n’est donc pas un écran ajouté après coup. Il réside dans la comparaison de méthodes déterministes, statistiques, non supervisées et temporelles, puis dans une explication générative tenue à distance de la décision. Sur le plan méthodologique, capacités déclarées, états explicites, révisions immuables et résultats reproductibles forment une discipline de preuve. Sur le plan utilisateur, des métriques éparses deviennent un parcours d’investigation."),
+        ("p", "Sur le plan technique, le projet relie quatre contraintes classiques d’un système data à une chaîne concrète. Le volume correspond aux agrégats. La variété est absorbée par les connecteurs. La vélocité passe par la file de tâches. La véracité s’appuie sur les profils, détecteurs, incidents et alertes. L’apport IA n’est donc pas un écran ajouté après coup. Il compare plusieurs méthodes de détection, puis produit une explication générative tenue à distance de la décision. Les capacités déclarées, états explicites, révisions immuables et résultats reproductibles forment une discipline de preuve. Des métriques éparses deviennent ainsi un parcours d’investigation lisible."),
     ],
 }
 
@@ -990,7 +1026,7 @@ ENRICHMENTS = {
 # report readable: one argument, one figure, then the interpretation.
 ENRICHMENTS.setdefault("2.4.3 Diagramme de Gantt et jalons", []).extend([
     ("p", "Le calendrier ne simule pas une succession parfaitement linéaire. L’architecture démarre pendant le cadrage ; la détection chevauche le profilage ; les tests commencent avant la fermeture fonctionnelle. La ligne rouge du 31 août borne la période évaluée. Au-delà, la barre grise assume le statut réel du projet : le produit continue."),
-    ("figure", "Figure 1.1"),
+    ("figure", "Figure 1.2"),
 ])
 ENRICHMENTS.setdefault("4.3 Conception de la solution", []).extend([
     ("figure", "Figure 3.1"), ("figure", "Figure 3.2"), ("figure", "Figure 3.3"),
@@ -1069,6 +1105,12 @@ def add_enrichments(doc, heading, bookmark_id):
 
 
 def build():
+    for required in (SOURCE, DATABASE_EVIDENCE, STRUCTURE_REFERENCE, ISGA_LOGO, OYSTER_LOGO):
+        if not required.exists():
+            raise FileNotFoundError(f"Élément obligatoire du rapport absent : {required}")
+    reference_hash = hashlib.sha256(STRUCTURE_REFERENCE.read_bytes()).hexdigest()
+    if reference_hash != STRUCTURE_REFERENCE_SHA256:
+        raise ValueError("Le guide de structure ISGA a changé. Revalider sa structure avant de reconstruire le rapport.")
     data = json.loads(SOURCE.read_text())
     database_evidence = json.loads(DATABASE_EVIDENCE.read_text())
     paras = data["paragraphs"]
@@ -1120,8 +1162,8 @@ def build():
                 extra_level = 2 if action[0] == "h2" else 3
                 toc_entries.append((action[1], page_map.get(action[1], ""), heading_anchor(action[1]), extra_level))
     toc_entries.append((
-        "Annexe D — Repères techniques et reproduction",
-        page_map.get("Annexe D — Repères techniques et reproduction", ""),
+        "Annexe D : Repères techniques et reproduction",
+        page_map.get("Annexe D : Repères techniques et reproduction", ""),
         "annex_d",
         2,
     ))
@@ -1131,36 +1173,35 @@ def build():
     add_heading(doc, "VI. Liste des figures", 1, front=True, anchor="front_figures", bookmark_id=bookmark_id); bookmark_id += 1
     figure_entries = []
     current_chapter = None
-    chapter_titles = {"1": "Chapitre 1 — Cadre général", "3": "Chapitre 3 — Analyse et conception", "4": "Chapitre 4 — Réalisation et validation"}
+    chapter_titles = {"1": "Chapitre 1 : Cadre général", "3": "Chapitre 3 : Analyse et conception", "4": "Chapitre 4 : Réalisation et validation"}
     for label, caption, _ in FIGURE_CATALOG:
         chapter = label.split()[1].split(".")[0]
         if chapter != current_chapter:
             figure_entries.append((chapter_titles[chapter], "", None, 0))
             current_chapter = chapter
         anchor = "fig_" + label.split()[1].replace(".", "_")
-        figure_entries.append((f"{label} — {caption}", page_map.get(label, ""), anchor, 2))
+        figure_entries.append((f"{label} : {caption}", page_map.get(label, ""), anchor, 2))
     add_static_index(doc, figure_entries)
     add_heading(doc, "VII. Liste des tableaux", 1, front=True, anchor="front_tables", bookmark_id=bookmark_id); bookmark_id += 1
     table_entries = [
-        ("Chapitre 1 — Cadre général", "", None, 0),
-        ("Tableau 1.1 — Acteurs et responsabilités du projet", page_map.get("Tableau 1.1", ""), "tab_1_1", 2),
-        ("Tableau 1.2 — Découpage des sprints et critères de sortie", page_map.get("Tableau 1.2", ""), "tab_1_2", 2),
-        ("Chapitre 2 — État de l’art", "", None, 0),
-        ("Tableau 2.1 — Positionnement synthétique des approches", page_map.get("Tableau 2.1", ""), "tab_2_1", 2),
-        ("Chapitre 3 — Analyse et conception", "", None, 0),
-        ("Tableau 3.1 — Besoins fonctionnels prioritaires", page_map.get("Tableau 3.1", ""), "tab_3_1", 2),
-        ("Tableau 3.2 — Exigences non fonctionnelles et réponses", page_map.get("Tableau 3.2", ""), "tab_3_2", 2),
-        ("Chapitre 4 — Réalisation et validation", "", None, 0),
-        ("Tableau 4.1 — Technologies principales et justification", page_map.get("Tableau 4.1", ""), "tab_4_1", 2),
-        ("Tableau 4.2 — Matrice de validation fonctionnelle", page_map.get("Tableau 4.2", ""), "tab_4_2", 2),
+        ("Chapitre 1 : Cadre général", "", None, 0),
+        ("Tableau 1.1 : Découpage des sprints et critères de sortie", page_map.get("Tableau 1.1", ""), "tab_1_1", 2),
+        ("Chapitre 2 : État de l’art", "", None, 0),
+        ("Tableau 2.1 : Positionnement synthétique des approches", page_map.get("Tableau 2.1", ""), "tab_2_1", 2),
+        ("Chapitre 3 : Analyse et conception", "", None, 0),
+        ("Tableau 3.1 : Besoins fonctionnels prioritaires", page_map.get("Tableau 3.1", ""), "tab_3_1", 2),
+        ("Tableau 3.2 : Exigences non fonctionnelles et réponses", page_map.get("Tableau 3.2", ""), "tab_3_2", 2),
+        ("Chapitre 4 : Réalisation et validation", "", None, 0),
+        ("Tableau 4.1 : Technologies principales et justification", page_map.get("Tableau 4.1", ""), "tab_4_1", 2),
+        ("Tableau 4.2 : Matrice de validation fonctionnelle", page_map.get("Tableau 4.2", ""), "tab_4_2", 2),
         ("Annexes", "", None, 0),
-        ("Tableau D.1 — Repères vérifiables du prototype", page_map.get("Tableau D.1", ""), "tab_d_1", 2),
+        ("Tableau D.1 : Repères vérifiables du prototype", page_map.get("Tableau D.1", ""), "tab_d_1", 2),
     ]
     add_static_index(doc, table_entries)
     add_heading(doc, "VIII. Liste des abréviations", 1, front=True, anchor="front_abbr", bookmark_id=bookmark_id); bookmark_id += 1
     add_abbreviations(doc)
 
-    body = doc.add_section(WD_SECTION_START.NEW_PAGE); section_geometry(body); set_page_numbering(body, "decimal", 1); set_header(body, "DataWatch — Rapport de Projet de Fin d’Études"); set_footer(body, numbered=True)
+    body = doc.add_section(WD_SECTION_START.NEW_PAGE); section_geometry(body); set_page_numbering(body, "decimal", 1); set_header(body, "DataWatch : Rapport de Projet de Fin d’Études"); set_footer(body, numbered=True)
 
     extras = {
         "3.3 Originalité de la solution": [
@@ -1183,7 +1224,7 @@ def build():
         if not text: continue
         style = paras[i].get("namedStyleType")
         if i == 146:
-            text = "Le planning associe chaque incrément à un objectif vérifiable et à un livrable exploitable dans la démonstration. La figure 1.1 synthétise les sept sprints, leurs chevauchements et leurs principaux jalons."
+            text = "Le planning associe chaque incrément à un objectif vérifiable et à un livrable exploitable dans la démonstration. La figure 1.2 synthétise les sept sprints, leurs chevauchements et leurs principaux jalons."
         if i in range(147, 152):
             continue
         fig = re.match(r"^(Figure \d+\.\d+)\s*[-–—]\s*(.+?)\.?$", text)
@@ -1202,15 +1243,17 @@ def build():
             bookmark_id = add_enrichments(doc, text, bookmark_id)
             for extra in extras.get(text, []): add_body(doc, extra)
             continue
-        if i in range(271, 280):
+        if i in range(270, 279):
             p = add_body(doc, text, align=WD_ALIGN_PARAGRAPH.LEFT, after=5)
             p.paragraph_format.left_indent = Cm(0.7); p.paragraph_format.first_line_indent = Cm(-0.7)
             for run in p.runs: set_font(run, 9.7, color=INK)
-            if i == 279:
+            if i == 278:
                 extra_refs = [
-                    "[10] ISGA, École d’ingénieur — campus Casablanca, présentation du cycle et de la spécialisation Intelligence Artificielle et Big Data, consultée en septembre 2026. https://info.isga.ma/ecole-ingenieur-casablanca",
-                    "[11] Great Expectations, Run Validations — documentation officielle, consultée en septembre 2026. https://docs.greatexpectations.io/docs/core/run_validations/",
-                    "[12] Soda, SodaCL metrics and checks — documentation officielle, consultée en septembre 2026. https://docs.soda.io/soda-cl/metrics-and-checks.html",
+                    "[10] ISGA, École d’ingénieur, campus Casablanca, présentation du cycle et de la spécialisation Intelligence Artificielle et Big Data, consultée en septembre 2026. https://info.isga.ma/ecole-ingenieur-casablanca",
+                    "[11] Great Expectations, Run Validations, documentation officielle, consultée en septembre 2026. https://docs.greatexpectations.io/docs/core/run_validations/",
+                    "[12] Soda, SodaCL metrics and checks, documentation officielle, consultée en septembre 2026. https://docs.soda.io/soda-cl/metrics-and-checks.html",
+                    "[13] Oyster, Who we are, présentation officielle de l’entreprise et de son organisation distribuée, consultée en septembre 2026. https://www.oysterhr.com/who-we-are",
+                    "[14] Oyster, plateforme mondiale d’emploi, services et couverture géographique, consultée en septembre 2026. https://www.oysterhr.com/",
                 ]
                 for ref in extra_refs:
                     rp = add_body(doc, ref, align=WD_ALIGN_PARAGRAPH.LEFT, after=5)
@@ -1231,8 +1274,8 @@ def build():
         add_body(doc, text)
 
     doc.add_page_break()
-    add_heading(doc, "Annexe D — Repères techniques et reproduction", 2, anchor="annex_d", bookmark_id=bookmark_id); bookmark_id += 1
-    add_body(doc, "Cette annexe conserve uniquement les chiffres nécessaires pour relire la démonstration et reproduire le rapport. Le modèle relationnel complet est déjà présenté par les figures 3.15 à 3.18 ; répéter ici les colonnes de chacune des 29 tables alourdissait le document sans améliorer l’analyse.")
+    add_heading(doc, "Annexe D : Repères techniques et reproduction", 2, anchor="annex_d", bookmark_id=bookmark_id); bookmark_id += 1
+    add_body(doc, "Cette annexe conserve uniquement les chiffres nécessaires pour relire la démonstration et reproduire le rapport. Le modèle relationnel complet est déjà présenté par les figures 3.15 à 3.18. Répéter ici les colonnes de chacune des 29 tables alourdirait le document sans améliorer l’analyse.")
     total_rows = sum(database_evidence["seeded_row_counts"].values())
     counts = database_evidence["seeded_row_counts"]
     bookmark_id = add_academic_table(
@@ -1260,11 +1303,20 @@ def build():
     ])
 
     core = doc.core_properties
-    core.title = "Rapport PFE — DataWatch"
+    core.title = "Rapport PFE DataWatch"
     core.subject = "Conception et réalisation d’une plateforme SaaS de surveillance de la qualité des données"
     core.author = "Mounir Gaiby"
-    core.keywords = "DataWatch, qualité des données, SaaS, intelligence artificielle, ISGA"
-    core.comments = "Rapport de Projet de Fin d’Études — ISGA Casablanca"
+    core.keywords = "DataWatch, qualité des données, SaaS, intelligence artificielle, ISGA, Oyster"
+    core.comments = "Rapport de Projet de Fin d’Études, ISGA Casablanca"
+
+    visible_parts = [doc._element]
+    for section in doc.sections:
+        visible_parts.extend([section.header._element, section.footer._element])
+    visible_text = "".join("".join(part.itertext()) for part in visible_parts)
+    forbidden = {"tiret cadratin": "—", "tiret demi-cadratin": "–", "point-virgule": ";"}
+    present = [name for name, character in forbidden.items() if character in visible_text]
+    if present:
+        raise ValueError("Ponctuation interdite détectée dans le rapport : " + ", ".join(present))
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     doc.save(OUT)
