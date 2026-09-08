@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import hashlib
 import re
@@ -22,8 +23,13 @@ STRUCTURE_REFERENCE = ROOT / "docs/pfe/reference/Structure_Rapport_ISGA.pdf"
 ISGA_LOGO = ROOT / "docs/pfe/assets/isga-logo.png"
 OYSTER_LOGO = ROOT / "docs/pfe/assets/oyster-logo-black.png"
 STRUCTURE_REFERENCE_SHA256 = "7203827df3a626be6df3a2095af5e2abbd2133c93f8bc467bb909eb3e4bbae3c"
-OUT = ROOT / "output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx"
-PAGE_MAP_PATH = ROOT / "tmp/pfe/report-page-map.json"
+FULL_OUT = ROOT / "output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx"
+COMPACT_OUT = ROOT / "output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby_Compact.docx"
+FULL_PAGE_MAP_PATH = ROOT / "tmp/pfe/report-page-map.json"
+COMPACT_PAGE_MAP_PATH = ROOT / "tmp/pfe/report-page-map-compact.json"
+OUT = FULL_OUT
+PAGE_MAP_PATH = FULL_PAGE_MAP_PATH
+COMPACT = False
 
 FONT = "Times New Roman"
 INK = "202124"
@@ -385,12 +391,12 @@ def set_header(section, text=""):
 def section_geometry(section):
     section.page_width = Cm(21.0)
     section.page_height = Cm(29.7)
-    section.left_margin = Cm(3.0)
-    section.right_margin = Cm(2.2)
-    section.top_margin = Cm(2.2)
-    section.bottom_margin = Cm(2.2)
-    section.header_distance = Cm(0.9)
-    section.footer_distance = Cm(1.0)
+    section.left_margin = Cm(2.3 if COMPACT else 3.0)
+    section.right_margin = Cm(2.0 if COMPACT else 2.2)
+    section.top_margin = Cm(1.8 if COMPACT else 2.2)
+    section.bottom_margin = Cm(1.8 if COMPACT else 2.2)
+    section.header_distance = Cm(0.7 if COMPACT else 0.9)
+    section.footer_distance = Cm(0.75 if COMPACT else 1.0)
 
 
 def update_fields_on_open(doc):
@@ -408,30 +414,30 @@ def configure_styles(doc):
     normal.font.name = FONT
     normal._element.rPr.rFonts.set(qn("w:ascii"), FONT)
     normal._element.rPr.rFonts.set(qn("w:hAnsi"), FONT)
-    normal.font.size = Pt(12)
+    normal.font.size = Pt(10.7 if COMPACT else 12)
     normal.font.color.rgb = RGBColor.from_string(INK)
     normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     normal.paragraph_format.space_before = Pt(0)
-    normal.paragraph_format.space_after = Pt(7)
-    normal.paragraph_format.line_spacing = 1.35
+    normal.paragraph_format.space_after = Pt(4 if COMPACT else 7)
+    normal.paragraph_format.line_spacing = 1.18 if COMPACT else 1.35
     normal.paragraph_format.widow_control = True
 
     h1 = styles["Heading 1"]
-    h1.font.name = FONT; h1.font.size = Pt(19); h1.font.bold = True; h1.font.color.rgb = RGBColor.from_string(INK)
+    h1.font.name = FONT; h1.font.size = Pt(17.5 if COMPACT else 19); h1.font.bold = True; h1.font.color.rgb = RGBColor.from_string(INK)
     h1._element.rPr.rFonts.set(qn("w:ascii"), FONT); h1._element.rPr.rFonts.set(qn("w:hAnsi"), FONT)
-    h1.paragraph_format.space_before = Pt(6); h1.paragraph_format.space_after = Pt(14)
+    h1.paragraph_format.space_before = Pt(4 if COMPACT else 6); h1.paragraph_format.space_after = Pt(10 if COMPACT else 14)
     h1.paragraph_format.keep_with_next = True; h1.paragraph_format.page_break_before = True
 
     h2 = styles["Heading 2"]
-    h2.font.name = FONT; h2.font.size = Pt(14.5); h2.font.bold = True; h2.font.color.rgb = RGBColor.from_string(INK)
+    h2.font.name = FONT; h2.font.size = Pt(13 if COMPACT else 14.5); h2.font.bold = True; h2.font.color.rgb = RGBColor.from_string(INK)
     h2._element.rPr.rFonts.set(qn("w:ascii"), FONT); h2._element.rPr.rFonts.set(qn("w:hAnsi"), FONT)
-    h2.paragraph_format.space_before = Pt(14); h2.paragraph_format.space_after = Pt(6)
+    h2.paragraph_format.space_before = Pt(9 if COMPACT else 14); h2.paragraph_format.space_after = Pt(4 if COMPACT else 6)
     h2.paragraph_format.keep_with_next = True
 
     h3 = styles["Heading 3"]
-    h3.font.name = FONT; h3.font.size = Pt(12.5); h3.font.bold = True; h3.font.color.rgb = RGBColor.from_string(INK)
+    h3.font.name = FONT; h3.font.size = Pt(11.5 if COMPACT else 12.5); h3.font.bold = True; h3.font.color.rgb = RGBColor.from_string(INK)
     h3._element.rPr.rFonts.set(qn("w:ascii"), FONT); h3._element.rPr.rFonts.set(qn("w:hAnsi"), FONT)
-    h3.paragraph_format.space_before = Pt(10); h3.paragraph_format.space_after = Pt(4)
+    h3.paragraph_format.space_before = Pt(7 if COMPACT else 10); h3.paragraph_format.space_after = Pt(3 if COMPACT else 4)
     h3.paragraph_format.keep_with_next = True
 
     cap = styles["Caption"]
@@ -480,9 +486,9 @@ def set_num(paragraph, num_id):
 def add_body(doc, text, *, align=WD_ALIGN_PARAGRAPH.JUSTIFY, italic=False, bold=False, after=7):
     p = doc.add_paragraph(style="Normal")
     p.alignment = align
-    p.paragraph_format.space_after = Pt(after)
+    p.paragraph_format.space_after = Pt(min(after, 4) if COMPACT else after)
     run = p.add_run(clean_report_text(text))
-    set_font(run, 12, bold=bold, italic=italic, color=INK)
+    set_font(run, 10.7 if COMPACT else 12, bold=bold, italic=italic, color=INK)
     return p
 
 
@@ -490,10 +496,10 @@ def add_list(doc, text, num_id):
     p = doc.add_paragraph(style="Normal")
     set_num(p, num_id)
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    p.paragraph_format.space_after = Pt(4)
-    p.paragraph_format.line_spacing = 1.2
+    p.paragraph_format.space_after = Pt(2 if COMPACT else 4)
+    p.paragraph_format.line_spacing = 1.12 if COMPACT else 1.2
     run = p.add_run(clean_report_text(text))
-    set_font(run, 11.5, color=INK)
+    set_font(run, 10.3 if COMPACT else 11.5, color=INK)
     return p
 
 
@@ -593,7 +599,8 @@ def add_heading(doc, text, level, front=False, anchor=None, bookmark_id=None):
         else:
             paragraph_border(p)
     run = p.add_run(clean_report_text(text))
-    set_font(run, 19 if level == 1 else (14.5 if level == 2 else 12.5), bold=True, color=INK)
+    size = (17.5 if level == 1 else (13 if level == 2 else 11.5)) if COMPACT else (19 if level == 1 else (14.5 if level == 2 else 12.5))
+    set_font(run, size, bold=True, color=INK)
     if anchor is not None:
         add_bookmark(p, anchor, bookmark_id)
     return p
@@ -655,8 +662,13 @@ def add_picture(doc, path, label, caption, anchor=None, bookmark_id=None):
         raise FileNotFoundError(path)
     with Image.open(path) as im:
         w, h = im.size
-    max_w = 15.8
-    max_h = 15.2
+    if COMPACT and "docs/screenshots/pfe" in str(path):
+        max_w, max_h = 13.8, 8.7
+    elif COMPACT and path == OYSTER_LOGO:
+        max_w, max_h = 10.5, 3.0
+    else:
+        max_w = 16.3 if COMPACT else 15.8
+        max_h = 13.2 if COMPACT else 15.2
     width = max_w
     height = width * h / w
     if height > max_h:
@@ -664,7 +676,7 @@ def add_picture(doc, path, label, caption, anchor=None, bookmark_id=None):
         width = height * w / h
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p.paragraph_format.space_before = Pt(8)
+    p.paragraph_format.space_before = Pt(4 if COMPACT else 8)
     p.paragraph_format.space_after = Pt(0)
     p.paragraph_format.keep_with_next = True
     run = p.add_run()
@@ -673,9 +685,9 @@ def add_picture(doc, path, label, caption, anchor=None, bookmark_id=None):
     doc_pr.set("descr", clean_report_text(caption))
     cap = doc.add_paragraph(style="Caption")
     r = cap.add_run(clean_report_text(label))
-    set_font(r, 9, bold=True, color=ACCENT)
+    set_font(r, 8.2 if COMPACT else 9, bold=True, color=ACCENT)
     r = cap.add_run(" : " + clean_report_text(caption))
-    set_font(r, 9, color=MUTED)
+    set_font(r, 8.2 if COMPACT else 9, color=MUTED)
     if anchor is not None:
         add_bookmark(cap, anchor, bookmark_id)
 
@@ -686,7 +698,7 @@ def add_contextual_picture(doc, path, label, caption, anchor=None, bookmark_id=N
     lead = add_body(doc, introduction, after=4)
     lead.paragraph_format.keep_with_next = True
     add_picture(doc, path, label, caption, anchor=anchor, bookmark_id=bookmark_id)
-    reading = add_body(doc, interpretation, align=WD_ALIGN_PARAGRAPH.JUSTIFY, after=9)
+    reading = add_body(doc, interpretation, align=WD_ALIGN_PARAGRAPH.JUSTIFY, after=5 if COMPACT else 9)
     reading.paragraph_format.keep_together = True
 
 
@@ -1105,7 +1117,11 @@ def add_enrichments(doc, heading, bookmark_id):
     return bookmark_id
 
 
-def build():
+def build(compact=False):
+    global COMPACT, OUT, PAGE_MAP_PATH
+    COMPACT = compact
+    OUT = COMPACT_OUT if compact else FULL_OUT
+    PAGE_MAP_PATH = COMPACT_PAGE_MAP_PATH if compact else FULL_PAGE_MAP_PATH
     for required in (SOURCE, DATABASE_EVIDENCE, STRUCTURE_REFERENCE, ISGA_LOGO, OYSTER_LOGO):
         if not required.exists():
             raise FileNotFoundError(f"Élément obligatoire du rapport absent : {required}")
@@ -1325,4 +1341,7 @@ def build():
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description="Construire le rapport PFE DataWatch")
+    parser.add_argument("--compact", action="store_true", help="Créer l’édition compacte sans retirer de contenu")
+    args = parser.parse_args()
+    build(compact=args.compact)

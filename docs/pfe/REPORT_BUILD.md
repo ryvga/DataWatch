@@ -2,6 +2,8 @@
 
 Le document maître est `output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx`. Le PDF exporté porte le même nom dans le même dossier.
 
+Une édition compacte est également livrée dans `output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby_Compact.docx` et `output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby_Compact.pdf`. Elle conserve le même contenu, les 44 figures et la structure ISGA. Sa mise en page plus dense réduit le document actuel de 74 à 57 pages sans supprimer les preuves utiles à la soutenance.
+
 Le guide remis par l’encadrant est conservé dans `docs/pfe/reference/Structure_Rapport_ISGA.pdf`. Le générateur vérifie sa présence et son empreinte SHA-256 avant chaque construction. Si le fichier change, il interrompt la génération. La nouvelle version doit alors être relue et le rapport revalidé avant toute mise à jour de l’empreinte.
 
 ## Sources institutionnelles et professionnelles
@@ -35,6 +37,12 @@ L’export décrit les 29 tables SQLAlchemy, leurs relations et des exemples see
 /Users/mounir/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 scripts/pfe/build_rapport_word.py
 ```
 
+Pour construire l’édition compacte sans écraser le document maître :
+
+```bash
+/Users/mounir/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3 scripts/pfe/build_rapport_word.py --compact
+```
+
 Sur une autre machine, utiliser Python avec `python-docx`, `Pillow` et `lxml`. LibreOffice et Poppler sont nécessaires au contrôle PDF et à la stabilisation des numéros de page.
 
 ## 3. Stabiliser les index
@@ -45,6 +53,8 @@ Le générateur insère un vrai champ Word pour la table des matières et des li
 2. Le rendre en PDF.
 3. Extraire la page de chaque titre, figure et tableau dans `tmp/pfe/report-page-map.json`.
 4. Reconstruire puis rendre une seconde fois.
+
+L’édition compacte utilise `tmp/pfe/report-page-map-compact.json` afin de conserver ses propres numéros de page.
 
 Commande d’extraction :
 
