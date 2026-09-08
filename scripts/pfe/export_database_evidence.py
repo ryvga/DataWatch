@@ -22,7 +22,7 @@ from app.database import Base  # noqa: E402
 RESPONSIBILITIES = {
     "organizations": "Espaces clients, offre et état d'abonnement",
     "users": "Comptes humains rattachés à une organisation",
-    "staff_users": "Comptes séparés du personnel DataWatch",
+    "staff_users": "Comptes séparés du personnel Panopta",
     "api_keys": "Empreintes des clés d'accès programmatiques",
     "invites": "Invitations temporaires des membres",
     "teams": "Équipes opérationnelles d'une organisation",

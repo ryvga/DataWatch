@@ -1,8 +1,8 @@
 # Rapport PFE, reconstruction et contrôle
 
-Le document maître est `output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx`. Le PDF exporté porte le même nom dans le même dossier.
+Le document maître est `output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby.docx`. Le PDF exporté porte le même nom dans le même dossier.
 
-Une édition compacte est également livrée dans `output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby_Compact.docx` et `output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby_Compact.pdf`. Elle conserve le même contenu, les 44 figures et la structure ISGA. Sa mise en page plus dense réduit le document actuel de 74 à 57 pages sans supprimer les preuves utiles à la soutenance.
+Une édition compacte est également livrée dans `output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby_Compact.docx` et `output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby_Compact.pdf`. Elle conserve le même contenu, les 44 figures et la structure ISGA. Sa mise en page plus dense réduit le document actuel de 74 à 57 pages sans supprimer les preuves utiles à la soutenance.
 
 Le guide remis par l’encadrant est conservé dans `docs/pfe/reference/Structure_Rapport_ISGA.pdf`. Le générateur vérifie sa présence et son empreinte SHA-256 avant chaque construction. Si le fichier change, il interrompt la génération. La nouvelle version doit alors être relue et le rapport revalidé avant toute mise à jour de l’empreinte.
 
@@ -15,7 +15,7 @@ Le guide remis par l’encadrant est conservé dans `docs/pfe/reference/Structur
 - `docs/diagrams/pfe/`, diagrammes et sources Mermaid.
 - `docs/screenshots/pfe/`, captures du produit seedé.
 
-Le rapport présente Oyster comme l’employeur de Mounir Gaiby. Son poste est Software Engineer dans l’équipe Payments. Le PFE n’est pas un stage. DataWatch reste un projet académique distinct et ne doit jamais être présenté comme un produit Oyster ou comme une reproduction de systèmes internes.
+Le rapport présente Oyster comme l’employeur de Mounir Gaiby. Son poste est Software Engineer dans l’équipe Payments. Le PFE n’est pas un stage. Panopta reste un projet académique distinct et ne doit jamais être présenté comme un produit Oyster ou comme une reproduction de systèmes internes.
 
 ## 1. Préparer les preuves
 
@@ -60,8 +60,8 @@ Commande d’extraction :
 
 ```bash
 python scripts/pfe/extract_report_page_map.py \
-  output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx \
-  tmp/pfe/rendered-report/Rapport_PFE_DataWatch_Mounir_Gaiby.pdf \
+  output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby.docx \
+  tmp/pfe/rendered-report/Rapport_PFE_Panopta_Mounir_Gaiby.pdf \
   tmp/pfe/report-page-map.json
 ```
 

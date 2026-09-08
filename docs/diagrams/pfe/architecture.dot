@@ -1,5 +1,5 @@
 digraph Architecture {
-  graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.45", ranksep="0.62", fontname="Arial", labelloc="t", label="Architecture en couches de DataWatch", fontsize=20, fontcolor="#172033"];
+  graph [rankdir=TB, bgcolor="white", pad="0.25", nodesep="0.45", ranksep="0.62", fontname="Arial", labelloc="t", label="Architecture en couches de Panopta", fontsize=20, fontcolor="#172033"];
   node [shape=box, style="rounded,filled", fontname="Arial", fontsize=11, color="#CBD5E1", penwidth=1.2, fillcolor="#F8FAFC", fontcolor="#172033", margin="0.18,0.11"];
   edge [color="#64748B", penwidth=1.25, arrowsize=0.7, fontname="Arial", fontsize=9, fontcolor="#475569"];
 
@@ -15,7 +15,7 @@ digraph Architecture {
     alerts [label="Service d'alertes\ne-mail · Slack · PagerDuty"];
   }
   subgraph cluster_data { label="Couche données et intégrations"; color="#D7EEF5"; style="rounded,filled"; fillcolor="#F8FAFC";
-    pg [label="PostgreSQL DataWatch\n29 tables · historique · incidents", fillcolor="#F1F5F9"];
+    pg [label="PostgreSQL Panopta\n29 tables · historique · incidents", fillcolor="#F1F5F9"];
     redis [label="Redis\ncache · file de tâches"];
     sources [label="Sources surveillées\nPostgreSQL stable · DuckDB/SQLite bêta"];
     mail [label="Canaux externes\nMailHog en démonstration"];

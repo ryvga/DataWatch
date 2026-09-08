@@ -4,8 +4,8 @@ digraph UseCases {
   edge [color="#64748B", penwidth=1.0, arrowsize=0.6];
   op [shape=plaintext, label="Responsable Data\n/ Opérateur"];
   admin [shape=plaintext, label="Administrateur\nd'organisation"];
-  staff [shape=plaintext, label="Personnel\nDataWatch"];
-  subgraph cluster_system { label="DataWatch"; color="#5BB8CE"; style="rounded,filled"; fillcolor="#F8FCFD";
+  staff [shape=plaintext, label="Personnel\nPanopta"];
+  subgraph cluster_system { label="Panopta"; color="#5BB8CE"; style="rounded,filled"; fillcolor="#F8FCFD";
     login [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="S'authentifier"];
     source [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Connecter une source"];
     monitor [shape=ellipse, style=filled, fillcolor="#FFFFFF", label="Configurer la surveillance"];

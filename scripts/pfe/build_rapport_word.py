@@ -23,8 +23,8 @@ STRUCTURE_REFERENCE = ROOT / "docs/pfe/reference/Structure_Rapport_ISGA.pdf"
 ISGA_LOGO = ROOT / "docs/pfe/assets/isga-logo.png"
 OYSTER_LOGO = ROOT / "docs/pfe/assets/oyster-logo-black.png"
 STRUCTURE_REFERENCE_SHA256 = "7203827df3a626be6df3a2095af5e2abbd2133c93f8bc467bb909eb3e4bbae3c"
-FULL_OUT = ROOT / "output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx"
-COMPACT_OUT = ROOT / "output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby_Compact.docx"
+FULL_OUT = ROOT / "output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby.docx"
+COMPACT_OUT = ROOT / "output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby_Compact.docx"
 FULL_PAGE_MAP_PATH = ROOT / "tmp/pfe/report-page-map.json"
 COMPACT_PAGE_MAP_PATH = ROOT / "tmp/pfe/report-page-map-compact.json"
 OUT = FULL_OUT
@@ -48,7 +48,7 @@ FIGURE_CATALOG = [
     ("Figure 3.5", "Séquence de profilage et de détection", "docs/diagrams/pfe/sequence_monitoring-doc.png"),
     ("Figure 3.6", "Séquence d’investigation d’un incident", "docs/diagrams/pfe/sequence_investigation-doc.png"),
     ("Figure 3.7", "Séquence d’évaluation de la gouvernance IA", "docs/diagrams/pfe/sequence_ai_governance-doc.png"),
-    ("Figure 3.8", "Cycle de vie d’un incident DataWatch", "docs/diagrams/pfe/activity_incident-doc.png"),
+    ("Figure 3.8", "Cycle de vie d’un incident Panopta", "docs/diagrams/pfe/activity_incident-doc.png"),
     ("Figure 3.9", "Classes du noyau de surveillance", "docs/diagrams/pfe/classes_monitoring-doc.png"),
     ("Figure 3.10", "Classes d’identité et de collaboration", "docs/diagrams/pfe/classes_collaboration-doc.png"),
     ("Figure 3.11", "Classes des moniteurs typés et révisions", "docs/diagrams/pfe/classes_monitors-doc.png"),
@@ -93,22 +93,22 @@ FIGURE_META = {label: (caption, ROOT / path) for label, caption, path in FIGURE_
 FIGURE_CONTEXT = {
     "Figure 1.1": (
         "La figure 1.1 présente l’identité visuelle officielle d’Oyster, l’entreprise dans laquelle j’exerce mon activité professionnelle.",
-        "Ce repère distingue clairement le contexte d’emploi du périmètre technique du PFE. DataWatch reste un projet académique personnel. Il ne constitue ni un produit Oyster, ni une reproduction de ses systèmes internes.",
+        "Ce repère distingue clairement le contexte d’emploi du périmètre technique du PFE. Panopta reste un projet académique personnel. Il ne constitue ni un produit Oyster, ni une reproduction de ses systèmes internes.",
     ),
     "Figure 1.2": (
         "La figure 1.2 replace les travaux dans les trois mois retenus pour le PFE, du 1er juin au 31 août, puis distingue la continuité du produit après cette échéance académique.",
-        "La lecture horizontale révèle des chevauchements assumés : le profilage commence avant la clôture de l’architecture, tandis que les tests accompagnent les derniers incréments. Le jalon du 31 août ferme l’évaluation du PFE, pas le développement de DataWatch.",
+        "La lecture horizontale révèle des chevauchements assumés : le profilage commence avant la clôture de l’architecture, tandis que les tests accompagnent les derniers incréments. Le jalon du 31 août ferme l’évaluation du PFE, pas le développement de Panopta.",
     ),
     "Figure 3.1": (
-        "La figure 3.1 condense le périmètre fonctionnel autour de trois acteurs : l’administrateur d’organisation, l’opérateur data et le personnel DataWatch.",
-        "Cette séparation évite de confondre exploitation d’un workspace et administration de la plateforme. Le personnel DataWatch administre le SaaS ; il ne traite pas les incidents à la place du client.",
+        "La figure 3.1 condense le périmètre fonctionnel autour de trois acteurs : l’administrateur d’organisation, l’opérateur data et le personnel Panopta.",
+        "Cette séparation évite de confondre exploitation d’un workspace et administration de la plateforme. Le personnel Panopta administre le SaaS ; il ne traite pas les incidents à la place du client.",
     ),
     "Figure 3.2": (
         "La figure 3.2 détaille les actions réalisées dans un workspace client, depuis la configuration initiale jusqu’à l’investigation d’un incident.",
         "Deux responsabilités ressortent. Le propriétaire configure sources, membres et notifications ; l’opérateur consulte les profils, crée des moniteurs et pilote le cycle de vie des incidents. Les cas communs restent soumis à l’isolation du tenant.",
     ),
     "Figure 3.3": (
-        "La figure 3.3 isole les cas d’utilisation réservés à l’administration interne de DataWatch.",
+        "La figure 3.3 isole les cas d’utilisation réservés à l’administration interne de Panopta.",
         "Le compte staff consulte les indicateurs globaux, ouvre une organisation, gère son offre et administre les comptes internes. Ce périmètre possède son propre mécanisme d’authentification et ne réutilise pas une session client.",
     ),
     "Figure 3.4": (
@@ -148,7 +148,7 @@ FIGURE_CONTEXT = {
         "AISystem sert de racine à des versions, usages déclarés, manifestes, déploiements, approbations et preuves. Les évaluations et incidents conservent leur provenance, mais ce modèle de traçabilité reste observe-only et ne représente pas une certification automatisée.",
     ),
     "Figure 3.13": (
-        "La figure 3.13 situe les composants de DataWatch entre interface, API, traitements différés, persistance et services externes.",
+        "La figure 3.13 situe les composants de Panopta entre interface, API, traitements différés, persistance et services externes.",
         "L’API FastAPI centralise contrats et autorisations ; Celery absorbe les opérations longues ; PostgreSQL conserve l’historique et Redis transporte ou met en cache les travaux temporaires. Les connecteurs demeurent derrière une couche d’adaptation commune.",
     ),
     "Figure 3.14": (
@@ -252,7 +252,7 @@ FIGURE_CONTEXT = {
         "Chaque entrée conserve type, provenance, validité et empreinte afin de rendre une évaluation rejouable. Le registre ne stocke ni prompts ni réponses métier : la chronologie porte uniquement sur des métadonnées techniques bornées.",
     ),
     "Figure 4.21": (
-        "La figure 4.21 montre la porte d’entrée distincte du portail réservé au personnel DataWatch.",
+        "La figure 4.21 montre la porte d’entrée distincte du portail réservé au personnel Panopta.",
         "L’absence de champ Workspace n’est pas un oubli : les comptes staff appartiennent à un domaine d’identité séparé. Une session client ne peut donc pas être recyclée pour ouvrir les fonctions d’administration globale.",
     ),
     "Figure 4.22": (
@@ -567,7 +567,7 @@ def add_academic_table(doc, label, caption, headers, rows, widths, anchor, bookm
                 node = OxmlElement("w:" + edge); node.set(qn("w:val"), "nil"); borders.append(node)
             tc_pr.append(borders)
     p = doc.add_paragraph(); p.paragraph_format.space_after = Pt(5)
-    r = p.add_run("Source : élaboration personnelle à partir de la conception et des validations de DataWatch.")
+    r = p.add_run("Source : élaboration personnelle à partir de la conception et des validations de Panopta.")
     set_font(r, 8.5, italic=True, color=MUTED)
     return bookmark_id + 1
 
@@ -841,7 +841,7 @@ def cover(doc):
     p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_after = Pt(12)
     r = p.add_run("Filière Big Data et Intelligence Artificielle"); set_font(r, 10.5, bold=True, color=INK)
     p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.space_before = Pt(6); p.paragraph_format.space_after = Pt(6)
-    r = p.add_run("Conception et réalisation de DataWatch"); set_font(r, 24, bold=True, color=INK)
+    r = p.add_run("Conception et réalisation de Panopta"); set_font(r, 24, bold=True, color=INK)
     p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.left_indent = Cm(1.0); p.paragraph_format.right_indent = Cm(1.0); p.paragraph_format.space_after = Pt(20)
     r = p.add_run("Plateforme SaaS multi-tenant de surveillance de la qualité des données, enrichie par l’IA pour l’explication des incidents"); set_font(r, 12.5, color=MUTED)
     entries = [("RÉALISÉ PAR", "Mounir Gaiby"), ("ENCADRÉ PAR", "Pr. HANINE MOHAMED"), ("ENTREPRISE", "Oyster HR")]
@@ -861,7 +861,7 @@ def is_bullet_index(index):
 ENRICHMENTS = {
     "1. Introduction générale": [
         ("h2", "1.1 Contexte et motivation"),
-        ("p", "La transformation numérique a placé la donnée au centre des processus de pilotage, de recommandation et d’automatisation. Le problème change d’échelle dès que quatre tensions se croisent : le volume des tables, la variété des moteurs, la vélocité des mises à jour et la véracité des valeurs. Une rupture de fraîcheur, une dérive de schéma ou une poussée silencieuse de valeurs manquantes peut alors contaminer plusieurs usages avant d’être visible. DataWatch attaque ces quatre dimensions sans aspirer les lignes métier dans sa propre base : calcul agrégé au plus près de la source, contrat commun pour les connecteurs, exécution périodique distribuée et conservation de profils horodatés."),
+        ("p", "La transformation numérique a placé la donnée au centre des processus de pilotage, de recommandation et d’automatisation. Le problème change d’échelle dès que quatre tensions se croisent : le volume des tables, la variété des moteurs, la vélocité des mises à jour et la véracité des valeurs. Une rupture de fraîcheur, une dérive de schéma ou une poussée silencieuse de valeurs manquantes peut alors contaminer plusieurs usages avant d’être visible. Panopta attaque ces quatre dimensions sans aspirer les lignes métier dans sa propre base : calcul agrégé au plus près de la source, contrat commun pour les connecteurs, exécution périodique distribuée et conservation de profils horodatés."),
         ("p", "La qualité des données ne se réduit pas à la validité syntaxique. Elle englobe notamment l’exactitude, la complétude, la cohérence, l’actualité et la traçabilité. Le modèle ISO/IEC 25012 fournit un vocabulaire utile pour exprimer ces dimensions [9]. Dans ce projet, elles sont traduites en signaux observables : volume, fraîcheur, empreinte de schéma, taux de valeurs nulles, cardinalité et distributions numériques."),
         ("h2", "1.2 Problématique et démarche"),
         ("p", "La problématique retenue est la suivante : comment concevoir une plateforme SaaS capable de détecter précocement des anomalies de qualité, de les transformer en incidents compréhensibles et de guider l’investigation, sans exposer les données entre organisations ni présenter les sorties d’un modèle génératif comme des vérités opérationnelles ? Cette question combine des enjeux de génie logiciel, d’ingénierie des données, de sécurité et d’intelligence artificielle."),
@@ -878,11 +878,11 @@ ENRICHMENTS = {
         ("p", "Oyster travaille à distance par conception. Les équipes produit, ingénierie, opérations et support collaborent à travers les fuseaux horaires. Cette organisation rend les interfaces écrites, les journaux techniques et les responsabilités explicites particulièrement utiles. Une anomalie doit pouvoir être comprise sans dépendre de la mémoire d’une seule personne ni d’une réunion immédiate."),
         ("h3", "1.2.4 Équipe Payments et fonction occupée"),
         ("p", "J’occupe chez Oyster le poste de Software Engineer au sein de l’équipe Payments. Mon travail concerne les fonctionnalités de paiement, leur fiabilité, leur intégration et leur maintenance. Je traite les tâches techniques liées aux flux de paiement, aux statuts, aux erreurs, aux contrôles et aux évolutions attendues par le produit. Il s’agit de mon emploi actuel. Ce PFE n’est pas un stage."),
-        ("p", "Cette expérience a orienté mon regard sur DataWatch. Dans un domaine sensible comme les paiements, un incident utile doit conserver les faits, expliquer son origine et montrer ce qui a changé. DataWatch transpose cette exigence vers la qualité des données. Le projet reste toutefois séparé d’Oyster. Il ne reprend aucun code interne, aucune donnée confidentielle et aucune architecture propriétaire de l’entreprise."),
+        ("p", "Cette expérience a orienté mon regard sur Panopta. Dans un domaine sensible comme les paiements, un incident utile doit conserver les faits, expliquer son origine et montrer ce qui a changé. Panopta transpose cette exigence vers la qualité des données. Le projet reste toutefois séparé d’Oyster. Il ne reprend aucun code interne, aucune donnée confidentielle et aucune architecture propriétaire de l’entreprise."),
     ],
     "2.3 Présentation du projet": [
         ("h3", "1.3.1 Contexte métier"),
-        ("p", "Les équipes data exploitent des tableaux de bord, des modèles analytiques et des services alimentés par des bases hétérogènes. Lorsqu’un jeu de données devient vide, obsolète ou incohérent, l’impact se propage aux décisions métiers. Les contrôles artisanaux détectent parfois l’écart, mais ils fournissent rarement une chronologie, un niveau de sévérité, un propriétaire et une procédure de résolution. DataWatch vise à réunir ces éléments dans un même parcours."),
+        ("p", "Les équipes data exploitent des tableaux de bord, des modèles analytiques et des services alimentés par des bases hétérogènes. Lorsqu’un jeu de données devient vide, obsolète ou incohérent, l’impact se propage aux décisions métiers. Les contrôles artisanaux détectent parfois l’écart, mais ils fournissent rarement une chronologie, un niveau de sévérité, un propriétaire et une procédure de résolution. Panopta vise à réunir ces éléments dans un même parcours. Son nom s’inspire d’Argos Panoptès, le gardien aux multiples yeux de la mythologie grecque. Cette image traduit la promesse du produit : maintenir une vigilance continue sur des sources nombreuses sans retirer la décision à l’opérateur."),
         ("h3", "1.3.2 Périmètre fonctionnel"),
         ("p", "Le périmètre couvre l’authentification par organisation, le registre de sources hétérogènes, la découverte des schémas, la sélection des tables, le profilage périodique et la gestion complète des incidents. Le cœur Big Data se trouve dans ce passage de sources variées à des profils compacts, calculés par agrégats et traités hors requête web par une file de tâches. Le cœur IA combine règles déterministes, z-score, Isolation Forest et décomposition STL ; la narration générative intervient ensuite, sur un contexte borné. Les moniteurs typés et le petit prototype de gouvernance IA en mode observation complètent cette chaîne. La facturation réelle, les garanties de disponibilité et l’exploitation à grande échelle restent hors du périmètre de preuve du PFE."),
         ("h3", "1.3.3 Utilisateurs cibles"),
@@ -915,7 +915,7 @@ ENRICHMENTS = {
         ("h3", "2.2.2 Détection statistique et apprentissage non supervisé"),
         ("p", "Les seuils statiques sont insuffisants lorsque le volume suit une tendance ou une saisonnalité. Le z-score compare une observation à une moyenne et un écart-type historiques ; Isolation Forest repère des observations rares dans un espace multivarié ; STL sépare tendance, saison et résidu. Ces méthodes réduisent l’effort de configuration, mais nécessitent un historique minimal et peuvent produire des faux positifs lorsque le contexte métier change."),
         ("h3", "2.2.3 Observabilité et gestion d’incidents"),
-        ("p", "Une plateforme d’observabilité complète ne se limite pas à exécuter des tests. Elle relie un signal à un actif, conserve l’historique, attribue une sévérité, notifie les responsables et facilite l’investigation. La valeur opérationnelle dépend donc autant de la déduplication, du routage et de la traçabilité que du détecteur lui-même. Cette observation justifie l’orientation de DataWatch vers une verticale allant de la mesure à l’action."),
+        ("p", "Une plateforme d’observabilité complète ne se limite pas à exécuter des tests. Elle relie un signal à un actif, conserve l’historique, attribue une sévérité, notifie les responsables et facilite l’investigation. La valeur opérationnelle dépend donc autant de la déduplication, du routage et de la traçabilité que du détecteur lui-même. Cette observation justifie l’orientation de Panopta vers une verticale allant de la mesure à l’action."),
         ("table", "Tableau 2.1", "Positionnement synthétique des approches", ["Approche", "Point fort", "Limite principale", "Apport retenu"], [
             ["Règles déclaratives", "Lisibles et auditables", "Configuration manuelle", "Moniteurs typés et versionnés"],
             ["Seuils statistiques", "Adaptation à l’historique", "Sensibles aux ruptures de régime", "Z-score et évolution temporelle"],
@@ -925,7 +925,7 @@ ENRICHMENTS = {
         ], [1800, 2250, 2450, 2450], "tab_2_1"),
     ],
     "3.3 Originalité de la solution": [
-        ("p", "Le positionnement n’est pas celui d’un remplacement complet des outils industriels. DataWatch assemble plutôt, dans un prototype SaaS cohérent, des briques rarement montrées ensemble dans un PFE : diversité des sources, profilage agrégé, exécution asynchrone, détection hybride et traitement opérationnel de l’incident. Le volume n’est pas déplacé inutilement ; il est condensé en métriques sur la source. La variété est rendue explicite par un registre de capacités. La vélocité est absorbée par la planification et les workers. La véracité, enfin, devient une suite de preuves datées au lieu d’un simple voyant rouge. La narration IA reste subordonnée à ces faits mesurés."),
+        ("p", "Le positionnement n’est pas celui d’un remplacement complet des outils industriels. Panopta assemble plutôt, dans un prototype SaaS cohérent, des briques rarement montrées ensemble dans un PFE : diversité des sources, profilage agrégé, exécution asynchrone, détection hybride et traitement opérationnel de l’incident. Le volume n’est pas déplacé inutilement ; il est condensé en métriques sur la source. La variété est rendue explicite par un registre de capacités. La vélocité est absorbée par la planification et les workers. La véracité, enfin, devient une suite de preuves datées au lieu d’un simple voyant rouge. La narration IA reste subordonnée à ces faits mesurés."),
         ("p", "La seconde originalité concerne la gouvernance. Les preuves, versions et évaluations sont séparées des états mutables de déploiement. Les contrôles peuvent conclure pass, fail, unknown, unsupported, not applicable ou error ; un manque d’information n’est donc pas transformé artificiellement en conformité. Le mode observe-only rend le risque visible sans bloquer une publication et sans revendiquer une certification juridique."),
     ],
     "4.2.1 Objectifs de la solution": [
@@ -1080,8 +1080,8 @@ ENRICHMENTS.setdefault("5.4.4 Alertes et gouvernance IA", []).extend([
     ("p", "Le catalogue distingue les capacités annoncées de chaque moteur. La source seedée sert de verticale vérifiée ; le routage et les préférences montrent ensuite comment la même alerte se distribue sans imposer un canal unique."),
     ("figure", "Figure 4.14"), ("figure", "Figure 4.15"), ("figure", "Figure 4.16"), ("figure", "Figure 4.17"),
     ("h3", "4.4.4.3 Registre de gouvernance IA"),
-    ("p", "La gouvernance IA désigne ici l’ensemble des responsabilités, versions, déclarations de données et preuves nécessaires pour répondre à cinq questions simples : quel système fonctionne, dans quel but déclaré, avec quelles données, sous la responsabilité de qui, et avec quels contrôles disponibles ? DataWatch matérialise ces réponses dans un registre isolé par organisation. Les versions, manifestes et évaluations terminales sont immuables ; les états inconnus ou périmés restent visibles au lieu d’être maquillés en succès."),
-    ("p", "Dans le scénario Acme, un assistant RAG de support est lié à une table surveillée et à une empreinte de schéma. À chaque profil réussi, DataWatch peut réévaluer l’âge des preuves, la fraîcheur du schéma, la présence de responsables, les rôles d’accès déclarés et quelques incohérences vectorielles. L’écran rassemble ensuite état global, confiance des preuves, risque résiduel, raisons de contrôle et chronologie. Il aide un opérateur à voir ce qui manque. Rien de plus."),
+    ("p", "La gouvernance IA désigne ici l’ensemble des responsabilités, versions, déclarations de données et preuves nécessaires pour répondre à cinq questions simples : quel système fonctionne, dans quel but déclaré, avec quelles données, sous la responsabilité de qui, et avec quels contrôles disponibles ? Panopta matérialise ces réponses dans un registre isolé par organisation. Les versions, manifestes et évaluations terminales sont immuables ; les états inconnus ou périmés restent visibles au lieu d’être maquillés en succès."),
+    ("p", "Dans le scénario Acme, un assistant RAG de support est lié à une table surveillée et à une empreinte de schéma. À chaque profil réussi, Panopta peut réévaluer l’âge des preuves, la fraîcheur du schéma, la présence de responsables, les rôles d’accès déclarés et quelques incohérences vectorielles. L’écran rassemble ensuite état global, confiance des preuves, risque résiduel, raisons de contrôle et chronologie. Il aide un opérateur à voir ce qui manque. Rien de plus."),
     ("figure", "Figure 4.18"), ("figure", "Figure 4.19"), ("figure", "Figure 4.20"),
     ("h3", "4.4.4.4 Limites du prototype de gouvernance IA"),
     ("p", "Cette brique est une preuve de concept, volontairement petite. La démonstration repose sur un seul système IA seedé, une verticale PostgreSQL/pgvector et des anomalies préparées pour être reproductibles. Plusieurs informations demeurent des déclarations client ; elles ne prouvent ni l’usage réel des données, ni la finalité juridique, ni le comportement effectif du modèle. Le prototype ne mesure pas la robustesse, les biais, l’équité, la sécurité adversariale ou la dérive des sorties. Il ne lit d’ailleurs ni prompts, ni réponses, ni lignes métier : le registre conserve uniquement des métadonnées bornées."),
@@ -1218,7 +1218,7 @@ def build(compact=False):
     add_heading(doc, "VIII. Liste des abréviations", 1, front=True, anchor="front_abbr", bookmark_id=bookmark_id); bookmark_id += 1
     add_abbreviations(doc)
 
-    body = doc.add_section(WD_SECTION_START.NEW_PAGE); section_geometry(body); set_page_numbering(body, "decimal", 1); set_header(body, "DataWatch : Rapport de Projet de Fin d’Études"); set_footer(body, numbered=True)
+    body = doc.add_section(WD_SECTION_START.NEW_PAGE); section_geometry(body); set_page_numbering(body, "decimal", 1); set_header(body, "Panopta : Rapport de Projet de Fin d’Études"); set_footer(body, numbered=True)
 
     extras = {
         "3.3 Originalité de la solution": [
@@ -1320,10 +1320,10 @@ def build(compact=False):
     ])
 
     core = doc.core_properties
-    core.title = "Rapport PFE DataWatch"
+    core.title = "Rapport PFE Panopta"
     core.subject = "Conception et réalisation d’une plateforme SaaS de surveillance de la qualité des données"
     core.author = "Mounir Gaiby"
-    core.keywords = "DataWatch, qualité des données, SaaS, intelligence artificielle, ISGA, Oyster"
+    core.keywords = "Panopta, qualité des données, SaaS, intelligence artificielle, ISGA, Oyster"
     core.comments = "Rapport de Projet de Fin d’Études, ISGA Casablanca"
 
     visible_parts = [doc._element]
@@ -1341,7 +1341,7 @@ def build(compact=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Construire le rapport PFE DataWatch")
+    parser = argparse.ArgumentParser(description="Construire le rapport PFE Panopta")
     parser.add_argument("--compact", action="store_true", help="Créer l’édition compacte sans retirer de contenu")
     args = parser.parse_args()
     build(compact=args.compact)

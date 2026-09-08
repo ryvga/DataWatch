@@ -1,4 +1,4 @@
-# DataWatch — Agent Context
+# Panopta — Agent Context
 
 > **PFE project** (Ingénieur d'État final-year thesis) by Mounir Gaiby.
 > Everything built feeds into a written rapport and jury oral defense.
@@ -8,7 +8,7 @@
 
 ## What This Project Is
 
-DataWatch is a **multi-tenant data quality monitoring SaaS**. Its registry covers PostgreSQL, MySQL/MariaDB, MongoDB, Cassandra, Redis, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Oracle Database, Databricks, Trino, DuckDB, and SQLite. Support is capability-based and generated from executable connector contracts: PostgreSQL is stable; DuckDB/SQLite are beta; the remaining implemented adapters are experimental. The app detects anomalies, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
+Panopta is a **multi-tenant data quality monitoring SaaS**. The repository retains the legacy DataWatch directory name and some internal protocol identifiers. Its registry covers PostgreSQL, MySQL/MariaDB, MongoDB, Cassandra, Redis, BigQuery, Snowflake, Redshift, ClickHouse, SQL Server, Oracle Database, Databricks, Trino, DuckDB, and SQLite. Support is capability-based and generated from executable connector contracts: PostgreSQL is stable; DuckDB/SQLite are beta; the remaining implemented adapters are experimental. The app detects anomalies, creates incidents, and delivers AI-generated root-cause reports via Slack/email/PagerDuty.
 
 The primary differentiator is the **LLM narration layer**: every P1/P2 incident gets an AI-written incident report explaining what happened, likely causes, and recommended actions.
 
@@ -130,7 +130,7 @@ POST /tables → scheduler.add_job()
 |---|---|
 | `organizations` | Tenant — id, name, slug, plan, llm_api_key_encrypted, stripe_customer_id, subscription_status |
 | `users` | Org members — email, password_hash, role (owner/admin/member), full_name |
-| `staff_users` | DataWatch team — separate from org users, access admin portal only |
+| `staff_users` | Panopta team — separate from org users, access admin portal only |
 | `api_keys` | Programmatic access — staff-managed, key_hash (bcrypt), never returned in API |
 | `invites` | Org member invitations — email, role, token, expires_at, accepted_at |
 | `teams` | Team groups within an org (future feature, structure defined) |

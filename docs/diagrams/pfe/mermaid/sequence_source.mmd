@@ -6,7 +6,7 @@ sequenceDiagram
     participant API as API FastAPI
     participant Crypto as Service de chiffrement
     participant Conn as Connecteur
-    participant DB as PostgreSQL DataWatch
+    participant DB as PostgreSQL Panopta
     Admin->>UI: Renseigne le type et les paramètres
     UI->>API: POST /sources
     API->>Crypto: Chiffrer par clé dérivée de org_id

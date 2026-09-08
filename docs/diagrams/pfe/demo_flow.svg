@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1900" height="520" viewBox="0 0 1900 520">
   <defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#697386"/></marker></defs>
   <rect width="1900" height="520" fill="#fff"/>
-  <text x="950" y="72" text-anchor="middle" font-family="Arial" font-size="42" font-weight="700" fill="#18212F">Parcours de démonstration DataWatch</text>
+  <text x="950" y="72" text-anchor="middle" font-family="Arial" font-size="42" font-weight="700" fill="#18212F">Parcours de démonstration Panopta</text>
   <g font-family="Arial" text-anchor="middle" fill="#18212F">
     <rect x="45" y="175" width="300" height="170" rx="20" fill="#F5F6F8" stroke="#B8C0CC" stroke-width="3"/><text x="195" y="228" font-size="24" font-weight="700">1 · Opérations</text><text x="195" y="284" font-size="21">Prioriser</text>
     <rect x="420" y="175" width="300" height="170" rx="20" fill="#FFF3F1" stroke="#C96A5B" stroke-width="3"/><text x="570" y="228" font-size="24" font-weight="700">2 · Incident P1</text><text x="570" y="284" font-size="21">Expliquer</text>

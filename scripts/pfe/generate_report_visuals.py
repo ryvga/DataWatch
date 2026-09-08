@@ -40,8 +40,8 @@ DIAGRAMS = {
     "use_cases": INIT + """flowchart LR
     op["Opérateur data"]
     admin["Administrateur d'organisation"]
-    staff["Personnel DataWatch"]
-    subgraph DW[DataWatch]
+    staff["Personnel Panopta"]
+    subgraph DW[Panopta]
       observe([Observer la qualité])
       configure([Configurer la surveillance])
       respond([Traiter un incident])
@@ -78,7 +78,7 @@ DIAGRAMS = {
     incident -. prolonge .-> action
 """,
     "use_cases_staff": INIT + """flowchart LR
-    staff["Administrateur DataWatch"]
+    staff["Administrateur Panopta"]
     subgraph PORTAL[Portail staff isolé]
       login([Se connecter avec un compte staff])
       stats([Consulter les statistiques globales])
@@ -100,7 +100,7 @@ DIAGRAMS = {
     participant API as API FastAPI
     participant Crypto as Service de chiffrement
     participant Conn as Connecteur
-    participant DB as PostgreSQL DataWatch
+    participant DB as PostgreSQL Panopta
     Admin->>UI: Renseigne le type et les paramètres
     UI->>API: POST /sources
     API->>Crypto: Chiffrer par clé dérivée de org_id

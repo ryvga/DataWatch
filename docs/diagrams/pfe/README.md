@@ -1,4 +1,4 @@
-# Diagrammes PFE DataWatch
+# Diagrammes PFE Panopta
 
 Ces sources produisent les figures du rapport PFE. Elles sont volontairement simplifiées pour rester lisibles sur une page A4 et correspondent aux modèles et flux actuellement présents dans le dépôt. Le diagramme de séquence final utilise `sequence-uml.svg`; les autres figures restent régénérables depuis Graphviz. `validation.dot` synthétise les preuves de test sans transformer les limites locales en garantie de production, et `demo_flow.dot` représente le parcours de soutenance.
 

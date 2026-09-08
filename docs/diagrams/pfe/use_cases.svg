@@ -13,7 +13,7 @@
 <g id="clust1" class="cluster">
 <title>cluster_system</title>
 <path fill="#f8fcfd" stroke="#5bb8ce" d="M134.28,-8C134.28,-8 284.56,-8 284.56,-8 290.56,-8 296.56,-14 296.56,-20 296.56,-20 296.56,-600 296.56,-600 296.56,-606 290.56,-612 284.56,-612 284.56,-612 134.28,-612 134.28,-612 128.28,-612 122.28,-606 122.28,-600 122.28,-600 122.28,-20 122.28,-20 122.28,-14 128.28,-8 134.28,-8"/>
-<text xml:space="preserve" text-anchor="middle" x="209.42" y="-590" font-family="Arial" font-size="20.00" fill="#172033">DataWatch</text>
+<text xml:space="preserve" text-anchor="middle" x="209.42" y="-590" font-family="Arial" font-size="20.00" fill="#172033">Panopta</text>
 </g>
 <!-- op -->
 <g id="node1" class="node">
@@ -139,7 +139,7 @@
 <g id="node3" class="node">
 <title>staff</title>
 <text xml:space="preserve" text-anchor="middle" x="49.14" y="-102" font-family="Arial" font-size="10.00" fill="#172033">Personnel</text>
-<text xml:space="preserve" text-anchor="middle" x="49.14" y="-90" font-family="Arial" font-size="10.00" fill="#172033">DataWatch</text>
+<text xml:space="preserve" text-anchor="middle" x="49.14" y="-90" font-family="Arial" font-size="10.00" fill="#172033">Panopta</text>
 </g>
 <!-- staff&#45;&gt;login -->
 <g id="edge11" class="edge">

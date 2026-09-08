@@ -1,14 +1,15 @@
-# DataWatch — Guide de continuité du projet
+# Panopta — Guide de continuité du projet
 
 > Dernière consolidation : 31 août 2026. Ce fichier est le point d'entrée pour
-> reprendre DataWatch sur un autre ordinateur ou après une pause.
+> reprendre Panopta sur un autre ordinateur ou après une pause.
 
 ## 1. Ce qu'est le projet
 
-DataWatch est le projet PFE de **Mounir Gaiby** : une plateforme SaaS
+Panopta est le projet PFE de **Mounir Gaiby** : une plateforme SaaS
 multi-tenant d'observabilité de la qualité des données. L'interface et le
-domaine de démonstration utilisent le nom **Panopta** ; le dépôt, le protocole
-et le rapport utilisent **DataWatch**. Il s'agit du même produit.
+domaine de démonstration utilisent le nom **Panopta**. Le dépôt Git, son
+répertoire local et certains identifiants techniques conservent **DataWatch**
+comme nom historique. Il s'agit du même code.
 
 Le flux démontré est : profilage d'une table → détection de signaux → incident
 → narration IA → alerte. La gouvernance IA est un registre de preuves
@@ -89,8 +90,9 @@ Si la narration n'est pas prête, refaire le reset plutôt que d'enregistrer un
 Les deux livrables produits à partir de l'état du projet sont conservés dans
 le dépôt :
 
-- `output/pfe/Rapport_PFE_DataWatch_Mounir_Gaiby.docx`
-- `output/pfe/Presentation_PFE_DataWatch_Mounir_Gaiby.pptx`
+- `output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby.docx`
+- `output/pfe/Rapport_PFE_Panopta_Mounir_Gaiby_Compact.docx`
+- `output/pfe/Presentation_PFE_Panopta_Mounir_Gaiby.pptx`
 
 Le rapport est en français, avec des chiffres romains pour les pages
 préliminaires seulement. La présentation contient le parcours de démonstration

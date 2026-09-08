@@ -9,7 +9,7 @@
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(18 695.2)">
 <title>Architecture</title>
 <polygon fill="white" stroke="none" points="-18,18 -18,-695.2 973,-695.2 973,18 -18,18"/>
-<text xml:space="preserve" text-anchor="middle" x="477.5" y="-655.2" font-family="Arial" font-size="20.00" fill="#172033">Architecture en couches de DataWatch</text>
+<text xml:space="preserve" text-anchor="middle" x="477.5" y="-655.2" font-family="Arial" font-size="20.00" fill="#172033">Architecture en couches de Panopta</text>
 <g id="clust1" class="cluster">
 <title>cluster_ui</title>
 <path fill="#f4fbfd" stroke="#d7eef5" d="M127,-454.16C127,-454.16 439,-454.16 439,-454.16 445,-454.16 451,-460.16 451,-466.16 451,-466.16 451,-625.2 451,-625.2 451,-631.2 445,-637.2 439,-637.2 439,-637.2 127,-637.2 127,-637.2 121,-637.2 115,-631.2 115,-625.2 115,-625.2 115,-466.16 115,-466.16 115,-460.16 121,-454.16 127,-454.16"/>
@@ -63,7 +63,7 @@
 <g id="node8" class="node">
 <title>pg</title>
 <path fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1.2" d="M499.06,-58.24C499.06,-58.24 336.94,-58.24 336.94,-58.24 330.94,-58.24 324.94,-52.24 324.94,-46.24 324.94,-46.24 324.94,-28 324.94,-28 324.94,-22 330.94,-16 336.94,-16 336.94,-16 499.06,-16 499.06,-16 505.06,-16 511.06,-22 511.06,-28 511.06,-28 511.06,-46.24 511.06,-46.24 511.06,-52.24 505.06,-58.24 499.06,-58.24"/>
-<text xml:space="preserve" text-anchor="middle" x="418" y="-40.42" font-family="Arial" font-size="11.00" fill="#172033">PostgreSQL DataWatch</text>
+<text xml:space="preserve" text-anchor="middle" x="418" y="-40.42" font-family="Arial" font-size="11.00" fill="#172033">PostgreSQL Panopta</text>
 <text xml:space="preserve" text-anchor="middle" x="418" y="-27.22" font-family="Arial" font-size="11.00" fill="#172033">29 tables · historique · incidents</text>
 </g>
 <!-- api&#45;&gt;pg -->

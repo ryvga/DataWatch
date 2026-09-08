@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-DataWatch Quickstart
+Panopta Quickstart
 ====================
 Creates two workspaces connected to live databases, seeds 30 days of healthy
 profile history (so statistical anomaly detection has baseline data), injects
-initial anomalies, then triggers real DataWatch profile runs so the full
+initial anomalies, then triggers real Panopta profile runs so the full
 pipeline fires: profiler → anomaly detection → LLM narration → incidents.
 
 Workspaces
@@ -24,8 +24,8 @@ Usage
 
 Environment overrides
 ---------------------
-  DB_URL          DataWatch PostgreSQL connection (default: localhost:5433)
-  API_URL         DataWatch API base URL (default: http://localhost:8000)
+  DB_URL          Panopta PostgreSQL connection (default: localhost:5433)
+  API_URL         Panopta API base URL (default: http://localhost:8000)
   ACME_DB_URL     acme-db write connection (for anomaly injection)
   ANALYTICS_DB_URL analytics-db write connection (for anomaly injection)
 """
@@ -151,7 +151,7 @@ def _headers(slug: str | None = None) -> dict:
 
 
 def api(method, path, slug=None, silent=False, **kwargs):
-    """Call the DataWatch API. path should include the full path e.g. /api/v1/tables."""
+    """Call the Panopta API. path should include the full path e.g. /api/v1/tables."""
     resp = requests.request(method, f"{API_URL}{path}", headers=_headers(slug), timeout=30, **kwargs)
     if not silent and resp.status_code >= 400:
         print(f"  WARNING {method} {path} -> {resp.status_code}: {resp.text[:200]}")
@@ -235,7 +235,7 @@ def seed_table(conn, source_id, schema, table, freshness_col="created_at", inter
 
 def compute_real_fingerprint(db_url: str, schema: str, table: str) -> str | None:
     """
-    Compute the schema fingerprint the DataWatch profiler will generate,
+    Compute the schema fingerprint the Panopta profiler will generate,
     by querying information_schema.columns from the actual database.
     Returns None if the DB is unreachable.
     """
@@ -838,7 +838,7 @@ def seed_staff(conn):
             return
         cur.execute("""
             INSERT INTO staff_users (id, email, password_hash, full_name, is_active, created_at)
-            VALUES (%s, %s, %s, 'DataWatch Admin', true, NOW())
+            VALUES (%s, %s, %s, 'Panopta Admin', true, NOW())
         """, (str(uuid.uuid4()), STAFF_EMAIL, hash_password(STAFF_PASSWORD)))
     conn.commit()
     print(f"  + Staff: {STAFF_EMAIL} / {STAFF_PASSWORD}")
@@ -982,7 +982,7 @@ def inject_anomalies(use_local: bool = False):
 
 def trigger_profiles():
     """Log into each workspace and trigger profile runs for all monitored tables."""
-    print("\n  Triggering profile runs via DataWatch API...")
+    print("\n  Triggering profile runs via Panopta API...")
     triggered = 0
     for ws in WORKSPACES:
         if not login(ws["slug"]):
@@ -1072,7 +1072,7 @@ def _bootstrap_env():
 # ── Entrypoints ───────────────────────────────────────────────────────────────────
 
 def run_full(use_local: bool = False):
-    print("\nDataWatch Quickstart — full setup")
+    print("\nPanopta Quickstart — full setup")
     print("=" * 60)
 
     print("\n1. Registering workspaces via API...")
@@ -1160,7 +1160,7 @@ def run_full(use_local: bool = False):
     print("\n12. Injecting initial anomalies into live databases...")
     inject_anomalies(use_local=use_local)
 
-    print("\n13. Triggering DataWatch profile runs...")
+    print("\n13. Triggering Panopta profile runs...")
     try:
         trigger_profiles()
     except Exception as e:
@@ -1186,7 +1186,7 @@ def run_full(use_local: bool = False):
 
 def run_inject(use_local: bool = False):
     """Inject anomalies and trigger profile runs without re-seeding."""
-    print("\nDataWatch — injecting anomalies + triggering profiles")
+    print("\nPanopta — injecting anomalies + triggering profiles")
     print("=" * 60)
     _bootstrap_env()
     inject_anomalies(use_local=use_local)
@@ -1313,7 +1313,7 @@ def _print_credentials():
 # ── Entry point ────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="DataWatch Quickstart")
+    parser = argparse.ArgumentParser(description="Panopta Quickstart")
     parser.add_argument("--reset",   action="store_true",
                         help="Drop all workspaces and re-run full setup")
     parser.add_argument("--inject",  action="store_true",

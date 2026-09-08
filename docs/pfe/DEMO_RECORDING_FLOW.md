@@ -1,4 +1,4 @@
-# Démonstration PFE DataWatch — conducteur d’enregistrement
+# Démonstration PFE Panopta — conducteur d’enregistrement
 
 Durée cible : 9 minutes. Résolution : 1920 × 1080. Zoom navigateur : 100 %. Fermer les outils de développement et les notifications système.
 
@@ -25,7 +25,7 @@ Attendre le message `Acme orders narration is ready for recording`. Garder MailH
 
 1. Afficher la page de connexion, puis ouvrir le workspace Acme Corp.
 2. Sur **Operations**, montrer le score de santé, les quatre tables suivies et la file d’incidents.
-3. Dire une seule idée : DataWatch transforme des mesures techniques en file d’investigation exploitable.
+3. Dire une seule idée : Panopta transforme des mesures techniques en file d’investigation exploitable.
 
 ### 00:45–02:45 — De l’alerte au diagnostic
 
@@ -54,7 +54,7 @@ Attendre le message `Acme orders narration is ready for recording`. Garder MailH
 
 1. Ouvrir **AI Governance** et sélectionner le système d’assistance enregistré.
 2. Montrer l’usage déclaré, les preuves, les évaluations et la chronologie.
-3. Terminer cette séquence sur **Observe only** : DataWatch rend les lacunes visibles ; il ne délivre ni certification juridique ni blocage automatique.
+3. Terminer cette séquence sur **Observe only** : Panopta rend les lacunes visibles ; il ne délivre ni certification juridique ni blocage automatique.
 
 ### 07:25–08:35 — Administration multi-tenant
 

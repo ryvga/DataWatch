@@ -2597,7 +2597,7 @@
     },
     {
       "name": "staff_users",
-      "responsibility": "Comptes séparés du personnel DataWatch",
+      "responsibility": "Comptes séparés du personnel Panopta",
       "columns": [
         {
           "name": "id",

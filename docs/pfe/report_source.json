@@ -1,5 +1,5 @@
 {
-  "title": "Rapport PFE — DataWatch — Mounir Gaiby",
+  "title": "Rapport PFE — Panopta — Mounir Gaiby",
   "revisionId": "ANLCKQlJDJX5sAE76wXRLSWa_yAipRpN4mzYuSoYpEbY914PtmLhrmyf3PH-uNPliW7_6nHPN6FDPFB3VeIQmLz8JlvdyQ1Zqc6FOpRkA6I",
   "paragraphs": [
     {
@@ -27,7 +27,7 @@
       "isListItem": false
     },
     {
-      "text": "Conception et réalisation de DataWatch",
+      "text": "Conception et réalisation de Panopta",
       "startIndex": 91,
       "endIndex": 129,
       "tabId": "t.0",
@@ -139,7 +139,7 @@
       "isListItem": false
     },
     {
-      "text": "Ce projet présente DataWatch, une plateforme SaaS multi-tenant de surveillance de la qualité des données. Son architecture répond aux quatre tensions du Big Data : le volume est condensé par des agrégats calculés sur la source, la variété passe par des contrats de connecteurs, la vélocité par une exécution Redis/Celery et la véracité par des profils horodatés. La détection associe règles métier, z-score, Isolation Forest et STL avant de créer des incidents priorisés. Une narration par grand modèle de langage propose ensuite un résumé, des hypothèses et des actions de diagnostic, sans retirer la décision à l’opérateur.",
+      "text": "Ce projet présente Panopta, une plateforme SaaS multi-tenant de surveillance de la qualité des données. Son architecture répond aux quatre tensions du Big Data : le volume est condensé par des agrégats calculés sur la source, la variété passe par des contrats de connecteurs, la vélocité par une exécution Redis/Celery et la véracité par des profils horodatés. La détection associe règles métier, z-score, Isolation Forest et STL avant de créer des incidents priorisés. Une narration par grand modèle de langage propose ensuite un résumé, des hypothèses et des actions de diagnostic, sans retirer la décision à l’opérateur.",
       "startIndex": 1397,
       "endIndex": 1836,
       "tabId": "t.0",
@@ -179,7 +179,7 @@
       "isListItem": false
     },
     {
-      "text": "This project presents DataWatch, a multi-tenant SaaS platform for data-quality monitoring. Its architecture addresses four recurring data-system pressures: volume through source-side aggregation, variety through connector contracts, velocity through Redis/Celery execution, and veracity through timestamped profiles. Detection combines business rules, z-scores, Isolation Forest and STL before prioritised incidents are created. A large-language-model layer then supplies a structured summary, plausible hypotheses and investigation actions while keeping the operator in control.",
+      "text": "This project presents Panopta, a multi-tenant SaaS platform for data-quality monitoring. Its architecture addresses four recurring data-system pressures: volume through source-side aggregation, variety through connector contracts, velocity through Redis/Celery execution, and veracity through timestamped profiles. Detection combines business rules, z-scores, Isolation Forest and STL before prioritised incidents are created. A large-language-model layer then supplies a structured summary, plausible hypotheses and investigation actions while keeping the operator in control.",
       "startIndex": 2630,
       "endIndex": 3025,
       "tabId": "t.0",
@@ -691,7 +691,7 @@
       "isListItem": false
     },
     {
-      "text": "Figure 3.1 - Cas d’utilisation de DataWatch",
+      "text": "Figure 3.1 - Cas d’utilisation de Panopta",
       "startIndex": 5360,
       "endIndex": 5403,
       "tabId": "t.0",
@@ -715,7 +715,7 @@
       "isListItem": false
     },
     {
-      "text": "Figure 3.4 - Architecture en couches de DataWatch",
+      "text": "Figure 3.4 - Architecture en couches de Panopta",
       "startIndex": 5521,
       "endIndex": 5570,
       "tabId": "t.0",
@@ -963,7 +963,7 @@
       "isListItem": false
     },
     {
-      "text": "L’objectif de ce projet est de concevoir et réaliser DataWatch, une plateforme de surveillance de la qualité des données adaptée à un contexte SaaS multi-tenant. La solution doit inventorier les sources, suivre les tables, produire des profils, détecter des anomalies, ouvrir des incidents et acheminer des alertes. Elle doit aussi exploiter l’IA générative pour transformer des signaux techniques en explications structurées, sans confondre une recommandation avec une décision automatique.",
+      "text": "L’objectif de ce projet est de concevoir et réaliser Panopta, une plateforme de surveillance de la qualité des données adaptée à un contexte SaaS multi-tenant. La solution doit inventorier les sources, suivre les tables, produire des profils, détecter des anomalies, ouvrir des incidents et acheminer des alertes. Elle doit aussi exploiter l’IA générative pour transformer des signaux techniques en explications structurées, sans confondre une recommandation avec une décision automatique.",
       "startIndex": 6942,
       "endIndex": 7433,
       "tabId": "t.0",
@@ -1051,7 +1051,7 @@
       "isListItem": false
     },
     {
-      "text": "Ce chapitre présente Oyster, mon environnement professionnel, puis la problématique et la méthode de conduite retenues pour DataWatch. Le projet répond aux exigences du PFE de la filière 3CI Big Data et Intelligence Artificielle à l’ISGA Casablanca. Il a été mené en parallèle de mon emploi de Software Engineer dans l’équipe Payments d’Oyster.",
+      "text": "Ce chapitre présente Oyster, mon environnement professionnel, puis la problématique et la méthode de conduite retenues pour Panopta. Le projet répond aux exigences du PFE de la filière 3CI Big Data et Intelligence Artificielle à l’ISGA Casablanca. Il a été mené en parallèle de mon emploi de Software Engineer dans l’équipe Payments d’Oyster.",
       "startIndex": 8422,
       "endIndex": 8644,
       "tabId": "t.0",
@@ -1067,7 +1067,7 @@
       "isListItem": false
     },
     {
-      "text": "Oyster constitue l’entreprise d’accueil au sens professionnel du rapport. DataWatch demeure un projet de fin d’études distinct de mon activité salariée. Cette séparation protège les informations internes de l’entreprise et permet d’évaluer le projet sur ses propres preuves, son code, ses tests et sa démonstration reproductible.",
+      "text": "Oyster constitue l’entreprise d’accueil au sens professionnel du rapport. Panopta demeure un projet de fin d’études distinct de mon activité salariée. Cette séparation protège les informations internes de l’entreprise et permet d’évaluer le projet sur ses propres preuves, son code, ses tests et sa démonstration reproductible.",
       "startIndex": 8687,
       "endIndex": 9067,
       "tabId": "t.0",
@@ -1107,7 +1107,7 @@
       "isListItem": false
     },
     {
-      "text": "DataWatch centralise les sources de données, les tables surveillées, les profils et les incidents. Le système exécute des vérifications périodiques, agrège les résultats et déduplique les incidents ouverts par table. Les alertes sont routées selon le canal et la sévérité. Une narration LLM, validée selon un schéma structuré, complète la fiche incident par des hypothèses et des recommandations de diagnostic.",
+      "text": "Panopta centralise les sources de données, les tables surveillées, les profils et les incidents. Le système exécute des vérifications périodiques, agrège les résultats et déduplique les incidents ouverts par table. Les alertes sont routées selon le canal et la sévérité. Une narration LLM, validée selon un schéma structuré, complète la fiche incident par des hypothèses et des recommandations de diagnostic.",
       "startIndex": 9586,
       "endIndex": 9996,
       "tabId": "t.0",
@@ -1299,7 +1299,7 @@
       "isListItem": false
     },
     {
-      "text": "DataWatch combine ces apports dans un prototype pédagogique : règles explicites, détection statistique, apprentissage non supervisé, gestion d’incidents et narration structurée. L’originalité ne réside pas dans un algorithme isolé, mais dans l’enchaînement vérifiable du signal jusqu’à l’action humaine, avec une séparation nette entre faits mesurés, hypothèses générées et décisions de l’opérateur.",
+      "text": "Panopta combine ces apports dans un prototype pédagogique : règles explicites, détection statistique, apprentissage non supervisé, gestion d’incidents et narration structurée. L’originalité ne réside pas dans un algorithme isolé, mais dans l’enchaînement vérifiable du signal jusqu’à l’action humaine, avec une séparation nette entre faits mesurés, hypothèses générées et décisions de l’opérateur.",
       "startIndex": 13103,
       "endIndex": 13502,
       "tabId": "t.0",
@@ -1315,7 +1315,7 @@
       "isListItem": false
     },
     {
-      "text": "La contribution de DataWatch réside dans la chaîne intégrée allant du profilage à l’incident, puis à une narration IA structurée et à l’alerte. Le système ne présente pas le LLM comme un détecteur autonome : les contrôles déterministes et les métriques calculées restent la source de l’incident. L’IA reformule le contexte disponible et propose des actions, ce qui conserve une frontière claire entre observation, recommandation et décision humaine.",
+      "text": "La contribution de Panopta réside dans la chaîne intégrée allant du profilage à l’incident, puis à une narration IA structurée et à l’alerte. Le système ne présente pas le LLM comme un détecteur autonome : les contrôles déterministes et les métriques calculées restent la source de l’incident. L’IA reformule le contexte disponible et propose des actions, ce qui conserve une frontière claire entre observation, recommandation et décision humaine.",
       "startIndex": 13536,
       "endIndex": 13985,
       "tabId": "t.0",
@@ -1355,7 +1355,7 @@
       "isListItem": false
     },
     {
-      "text": "La conception de DataWatch s’appuie sur la séparation des responsabilités : interface de pilotage, API métier, exécution asynchrone, persistance, cache et connecteurs. Les décisions de conception privilégient l’isolation tenant, la traçabilité et la possibilité de valider chaque étape.",
+      "text": "La conception de Panopta s’appuie sur la séparation des responsabilités : interface de pilotage, API métier, exécution asynchrone, persistance, cache et connecteurs. Les décisions de conception privilégient l’isolation tenant, la traçabilité et la possibilité de valider chaque étape.",
       "startIndex": 14277,
       "endIndex": 14563,
       "tabId": "t.0",
@@ -1523,7 +1523,7 @@
       "isListItem": false
     },
     {
-      "text": "Figure 3.1 - Cas d’utilisation de DataWatch.",
+      "text": "Figure 3.1 - Cas d’utilisation de Panopta.",
       "startIndex": 16943,
       "endIndex": 16987,
       "tabId": "t.0",
@@ -1635,7 +1635,7 @@
       "isListItem": false
     },
     {
-      "text": "Figure 3.4 - Architecture en couches de DataWatch.",
+      "text": "Figure 3.4 - Architecture en couches de Panopta.",
       "startIndex": 18427,
       "endIndex": 18477,
       "tabId": "t.0",
@@ -2083,7 +2083,7 @@
       "isListItem": false
     },
     {
-      "text": "Ce projet a permis de concevoir et réaliser DataWatch, une plateforme de surveillance de la qualité des données destinée à un contexte SaaS multi-tenant. Sa chaîne technique relie variété des sources, profilage agrégé, exécution asynchrone, détection hybride, incidents, alertes et narration IA. Elle traite ainsi les contraintes de volume, vélocité et véracité sans déplacer les données métier ligne par ligne. La conception privilégie le cloisonnement des organisations, la traçabilité, l’explicabilité et la validation reproductible.",
+      "text": "Ce projet a permis de concevoir et réaliser Panopta, une plateforme de surveillance de la qualité des données destinée à un contexte SaaS multi-tenant. Sa chaîne technique relie variété des sources, profilage agrégé, exécution asynchrone, détection hybride, incidents, alertes et narration IA. Elle traite ainsi les contraintes de volume, vélocité et véracité sans déplacer les données métier ligne par ligne. La conception privilégie le cloisonnement des organisations, la traçabilité, l’explicabilité et la validation reproductible.",
       "startIndex": 26485,
       "endIndex": 26936,
       "tabId": "t.0",
@@ -2163,7 +2163,7 @@
       "isListItem": false
     },
     {
-      "text": "[1] DataWatch, Documentation d’architecture du projet, dépôt source, consultée en août 2026.",
+      "text": "[1] Panopta, Documentation d’architecture du projet, dépôt source, consultée en août 2026.",
       "startIndex": 28386,
       "endIndex": 28478,
       "tabId": "t.0",
@@ -2171,7 +2171,7 @@
       "isListItem": false
     },
     {
-      "text": "[2] DataWatch, Release verification baseline — 2026-08-21, dossier docs/evidence du projet.",
+      "text": "[2] Panopta, Release verification baseline — 2026-08-21, dossier docs/evidence du projet.",
       "startIndex": 28479,
       "endIndex": 28570,
       "tabId": "t.0",
@@ -2179,7 +2179,7 @@
       "isListItem": false
     },
     {
-      "text": "[3] DataWatch, AI governance phase-two evidence — 2026-08-21, dossier docs/evidence du projet.",
+      "text": "[3] Panopta, AI governance phase-two evidence — 2026-08-21, dossier docs/evidence du projet.",
       "startIndex": 28571,
       "endIndex": 28665,
       "tabId": "t.0",
