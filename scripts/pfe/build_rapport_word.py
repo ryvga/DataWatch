@@ -844,7 +844,7 @@ def cover(doc):
     r = p.add_run("Conception et réalisation de DataWatch"); set_font(r, 24, bold=True, color=INK)
     p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.paragraph_format.left_indent = Cm(1.0); p.paragraph_format.right_indent = Cm(1.0); p.paragraph_format.space_after = Pt(20)
     r = p.add_run("Plateforme SaaS multi-tenant de surveillance de la qualité des données, enrichie par l’IA pour l’explication des incidents"); set_font(r, 12.5, color=MUTED)
-    entries = [("RÉALISÉ PAR", "Mounir Gaiby"), ("ENCADRÉ PAR", "Dr. HANINE MOHAMED"), ("ENTREPRISE", "Oyster HR")]
+    entries = [("RÉALISÉ PAR", "Mounir Gaiby"), ("ENCADRÉ PAR", "Pr. HANINE MOHAMED"), ("ENTREPRISE", "Oyster HR")]
     for label, value in entries:
         p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.LEFT; p.paragraph_format.left_indent = Cm(0.25); p.paragraph_format.space_after = Pt(8)
         p.paragraph_format.tab_stops.add_tab_stop(Cm(6.2), WD_TAB_ALIGNMENT.LEFT)
