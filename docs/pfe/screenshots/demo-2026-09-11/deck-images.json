@@ -1,0 +1,14 @@
+{
+  "operations": "docs/pfe/screenshots/demo-2026-09-11/02-operations.png",
+  "incident": "docs/pfe/screenshots/demo-2026-09-11/03-incident.png",
+  "table": "docs/pfe/screenshots/demo-2026-09-11/05-table-profile.png",
+  "narration": "docs/pfe/screenshots/demo-2026-09-11/04-ai-analysis.png",
+  "governance": "docs/pfe/screenshots/demo-2026-09-11/18-ai-system.png",
+  "sources": "docs/pfe/screenshots/demo-2026-09-11/13-sources.png",
+  "monitors": "docs/pfe/screenshots/demo-2026-09-11/09-monitor-builder.png",
+  "reports": "docs/pfe/screenshots/demo-2026-09-11/10-reports.png",
+  "teams": "docs/pfe/screenshots/demo-2026-09-11/11-teams.png",
+  "alerts": "docs/pfe/screenshots/demo-2026-09-11/15-alerts.png",
+  "mail": "docs/pfe/screenshots/demo-2026-09-11/16b-email-delivery.png",
+  "staff": "docs/pfe/screenshots/demo-2026-09-11/21-admin-dashboard.png"
+}
