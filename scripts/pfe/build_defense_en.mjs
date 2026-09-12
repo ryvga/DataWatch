@@ -161,11 +161,18 @@ for (let index = 0; index < slides.length; index += 1) {
     text(slide, 'FINAL-YEAR ENGINEERING PROJECT', 58, 185, 700, 28, 17, C.red, true)
     text(slide, 'Panopta', 52, 226, 1165, 113, 92, C.ink, true)
     text(slide, 'Data quality monitoring and\nAI-assisted incident investigation', 58, 358, 870, 104, 38, C.ink, false)
-    text(slide, 'State Engineering Degree in Big Data and Artificial Intelligence', 58, 500, 940, 34, 22, C.muted)
-    rule(slide, 58, 580, 1162, C.line, 1)
-    text(slide, 'Mounir Gaiby', 58, 611, 300, 28, 21, C.ink, true)
-    text(slide, 'Supervised by Pr. HANINE MOHAMED', 424, 611, 500, 28, 21, C.ink)
-    text(slide, 'ISGA Casablanca  2025-2026', 910, 611, 310, 28, 20, C.ink, false, 'right')
+    text(slide, 'State Engineering Degree in Big Data and Artificial Intelligence', 58, 490, 940, 34, 22, C.muted)
+    text(slide, 'ISGA Casablanca, Academic year 2025-2026', 58, 530, 940, 26, 17, C.muted)
+    rule(slide, 58, 572, 1162, C.line, 1)
+
+    text(slide, 'PRESENTED BY', 58, 594, 230, 22, 13, C.red, true)
+    text(slide, 'Mounir Gaiby', 58, 621, 240, 30, 22, C.ink, true)
+
+    text(slide, 'SUPERVISED BY', 342, 594, 270, 22, 13, C.red, true)
+    text(slide, 'Pr. Hanine Mohamed', 342, 621, 280, 30, 20, C.ink, true)
+
+    text(slide, 'JURY', 686, 594, 190, 22, 13, C.red, true)
+    text(slide, 'Pr. Hanine Mohamed\nPr. Samake Adama\nPr. Ben Darkawi Zakaria', 686, 621, 520, 78, 18, C.ink)
     continue
   }
 

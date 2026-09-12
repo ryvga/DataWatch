@@ -2,7 +2,7 @@
 
 ## Files to take to the presentation
 
-- `output/pfe/Presentation_Panopta_PFE_English_Improved.pptx`
+- `output/pfe/Presentation_Panopta_PFE_English_With_Jury.pptx`
 - `output/pfe/Demo_Panopta_PFE_Action.mp4`
 - `docs/pfe/PRESENTATION_SCRIPT_EN.md`
 - `docs/pfe/DEMO_SCRIPT_EN.md`
