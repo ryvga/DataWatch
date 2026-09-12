@@ -1,0 +1,9 @@
+{
+  "source_discovery": "docs/pfe/screenshots/action-2026-09-12/04-discovery.png",
+  "sql": "docs/pfe/screenshots/action-2026-09-12/09-sql-test.png",
+  "dsl": "docs/pfe/screenshots/action-2026-09-12/14-dsl-active.png",
+  "operations_action": "docs/pfe/screenshots/action-2026-09-12/01-operations.png",
+  "profile_action": "docs/pfe/screenshots/action-2026-09-12/05-profile.png",
+  "incident_action": "docs/pfe/screenshots/action-2026-09-12/17-incidents.png",
+  "governance_action": "docs/pfe/screenshots/action-2026-09-12/27-governance.png"
+}
