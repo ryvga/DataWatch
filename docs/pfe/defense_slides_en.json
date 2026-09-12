@@ -1,27 +1,234 @@
 [
-  {"type":"cover","title":"Panopta","section":"Final-year engineering project","seconds":35,"script":"Good morning. I am Mounir Gaiby, a Big Data and Artificial Intelligence student at ISGA Casablanca. I also work as a Software Engineer in Oyster’s Payments team. Today I will present Panopta, a data quality monitoring platform that combines configurable controls, anomaly detection and AI-assisted investigation. I thank Allah, my supervisor Professor HANINE MOHAMED, and everyone who supported this project.","cue":"Introduce yourself. Pause before naming the project.","know":"This is your final-year project, informed by your employment context. The demonstration uses synthetic data, not Oyster payment records.","question":"Is Panopta deployed at Oyster?","answer":"This defense demonstrates an academic prototype locally. I do not claim an Oyster production deployment.","sources":"Report introduction and professional context. Original ISGA and Oyster assets in docs/pfe/assets. Oyster media kit: https://www.oysterhr.com/media-kit"},
-  {"type":"rows","title":"Defense outline","section":"Overview","rows":[["The problem","Payment data can become unreliable while the database stays online."],["The engineering","Sources, profiles, SQL and typed DSL monitors, detection and AI."],["The demonstration","Configure a control, inspect its result and investigate an incident."]],"seconds":15,"script":"I will explain the problem and the main engineering choices, then show the application in action. The demonstration focuses on monitoring rather than a tour of menus. I will finish with the prototype’s limits and the next steps.","cue":"Keep the agenda brief. Detailed explanations come later.","know":"The order follows the report: context, analysis and design, implementation, validation and conclusion. Slides 21 to 25 are optional reserves.","question":"What is the main contribution?","answer":"A traceable monitoring workflow that links source measurements, configurable checks, incident handling and structured AI explanations.","sources":"docs/pfe/report_source.json and scripts/pfe/build_rapport_word.py"},
-  {"type":"company","title":"Oyster and my Payments role","section":"Professional context","seconds":25,"script":"At Oyster, I work as a Software Engineer in the Payments team, handling payment-related tasks. That context made data reliability a concrete engineering concern for me. A missing status can leave a payment difficult to interpret even when the system responds normally. Panopta explores how a monitoring tool can make those problems visible.","cue":"Say employment, not internship. Connect your work to the problem without sharing confidential systems.","know":"Oyster is the professional context. Acme is the synthetic demonstration workspace. They are not the same organization.","question":"Did you use company data?","answer":"The recorded scenario uses local synthetic data. It illustrates payment-quality issues without exposing company records.","sources":"User-provided professional role. Report section 1.1. Logo from https://www.oysterhr.com/media-kit"},
-  {"type":"problem","title":"Bad data can fail silently","section":"Problem statement","seconds":25,"script":"Consider the payment_status column. The table can remain available while an unusual number of values become null. Availability monitoring would miss that distinction. I need to observe the contents, compare them with explicit expectations or previous profiles, and preserve enough evidence for an engineer to investigate.","cue":"Point to the column name. Explain availability versus quality.","know":"A database health check answers whether the service responds. A quality monitor asks whether its data satisfies a rule or behaves as expected.","question":"Why not check the application logs?","answer":"Logs explain application events, but they do not necessarily detect missing or inconsistent data produced by another pipeline or source. These checks complement logs.","sources":"scripts/quickstart.py, backend/app/services/anomaly.py"},
-  {"type":"rows","title":"Requirements that shape the product","section":"Analysis","rows":[["Observe the data","Connect a source, select tables and configure the profiling cadence."],["Define expectations","Use statistical checks, targeted SQL or a typed monitor definition."],["Support investigation","Preserve results, explain incidents and assign operational ownership."]],"seconds":25,"script":"The main user is an engineer responsible for a dataset. They need a connection that works, controls they understand, and a useful incident when something fails. Around that workflow, I added organization isolation, team ownership, notifications and reports. Those requirements determine both the data model and the interface.","cue":"Describe a user’s job, not a list of technologies.","know":"Functional requirements describe actions. Nonfunctional requirements include isolation, bounded execution, traceability and responsiveness.","question":"What makes this a SaaS architecture?","answer":"Organizations share the platform while access and records remain scoped to a workspace. Roles, plans and staff administration support that shared-service model.","sources":"Report analysis and architecture chapters, backend/app/models, frontend/src/App.jsx"},
-  {"type":"gantt","title":"Three months of development, then continued work","section":"Project organization","seconds":20,"script":"The report covers June through the end of August. I organized the work in increments, starting with the SaaS foundation and moving into profiling, detection, monitors and validation. The overlapping bars reflect iterative work. Panopta continues beyond that three-month period, especially around measurement and production readiness.","cue":"Show June to August, then point to the continuation line.","know":"This is a work-package summary, not a daily time sheet or a claim that every milestone finished on an exact date.","question":"Why iterative development?","answer":"Each increment produced something testable, such as a migrated model or a browser flow. Feedback could influence the next implementation step.","sources":"Report project organization, Git history and docs/tracking.md"},
-  {"type":"screenshot","key":"source_discovery","title":"Source connection and discovery","section":"Implementation","label":"The monitoring boundary","body":"Test the connection.\n\nDiscover schemas and tables.\n\nChoose what to monitor.","seconds":25,"script":"Monitoring begins at the source. The connector tests access and discovers the available structure. I then choose the tables and configure their cadence and freshness column. Capabilities are explicit because different database engines support different operations. PostgreSQL is the reference source in this demonstration.","cue":"Point to the discovered tables. Do not claim every advertised connector was tested in the video.","know":"Connection testing, discovery, profiling and typed execution are separate connector capabilities. A catalogue entry is not proof of production readiness.","question":"How would you add another database?","answer":"Implement its connector contract, declare supported capabilities, test discovery and profiling, then validate execution and operational limits against a real instance.","sources":"backend/app/connectors, backend/app/routers/sources.py, report implementation chapter, local screenshot"},
-  {"type":"architecture","title":"Architecture and asynchronous execution","section":"Design","seconds":40,"script":"React calls the FastAPI application. PostgreSQL stores organizations, monitored assets and their history. Long-running profiling work goes to Celery through Redis, so the browser does not wait for a full source scan. The worker calls the connector, saves the profile and evaluates the checks. A language model contributes an explanation after detection. This separation keeps the user interface independent from background execution.","cue":"Trace browser, API, worker, source and persistence in that order.","know":"Redis is the broker and cache. PostgreSQL is the durable application database. Celery workers execute tasks. The scheduler determines when profiling work starts.","question":"Why Celery instead of Kafka?","answer":"The implemented workload is scheduled background work. Celery fits that requirement. Kafka would need a justified event-streaming use case and additional operational design.","sources":"docker-compose.yml, backend/app/tasks.py, backend/app/scheduler.py, backend/app/worker.py"},
-  {"type":"sql","title":"A SQL check for missing payment statuses","section":"Data engineering","seconds":35,"script":"Here is a concrete business rule. This SELECT counts rows with a missing payment status. The legacy SQL monitor expects one nonnegative integer, so zero means no violations. The application validates the SQL structure and restricts its scope before execution. The aggregate stays close to the source. I receive a measurement rather than copying the entire business table into Panopta.","cue":"Read the query in plain language. Explain zero versus a positive count.","know":"The legacy SQL path is distinct from the typed DSL. It does not have the same immutable revision and run-history architecture.","question":"Can users execute arbitrary SQL?","answer":"The supported rule is a restricted read-only SELECT with structural validation and source constraints. It is not a general SQL console.","sources":"backend/app/routers/custom_monitors.py, backend/tests/test_legacy_sql_monitor.py"},
-  {"type":"screenshot","key":"table","title":"Profiles preserve the table’s history","section":"Profiling","label":"Measured over time","body":"Volume and freshness.\n\nNull rates and cardinality.\n\nColumn distributions.","seconds":30,"script":"A profile is a snapshot of measured properties, including row count, freshness and column statistics. Keeping those snapshots gives the table a history that the detectors can compare. The source performs aggregate work where possible. Some distributions need additional queries, so I do not claim that every profile always uses exactly one query.","cue":"Point to a trend and a column metric. Explain what the metric measures.","know":"Null rate is missing values divided by rows. Cardinality describes distinct values. Freshness measures time since a configured timestamp, subject to the source and timestamp semantics.","question":"Does profiling copy all customer rows?","answer":"The main persisted evidence is aggregate profiles and metadata. Some profiling paths read bounded distributions. That differs from replicating the full source table.","sources":"backend/app/services/profiler.py, backend/app/models/table_profile.py, local screenshot"},
-  {"type":"screenshot","key":"dsl","title":"Typed monitors and traceable runs","section":"Configurable monitoring","label":"A controlled lifecycle","body":"Typed definition.\n\nSchema-bound plan.\n\nActive revision.\n\nPersisted run result.","seconds":40,"script":"The DSL expresses a monitor as structured data. It separates the measurement, the breach condition and the operational policy. Preview validates and compiles a plan linked to the observed schema. It does not execute the data query. Activation pins a revision. An actual run then evaluates that revision and preserves its measurements and outcome. This makes a rule change explainable after the fact.","cue":"Clearly distinguish Preview, Activate and Run.","know":"DSL means domain-specific language. Here it is an allow-listed typed document, not Python or JavaScript execution. Track mode records outcomes without producing alert incidents.","question":"What happens if I edit an active monitor?","answer":"A new draft revision does not silently replace the active revision. Activation is a separate action, so runs remain linked to the definition they used.","sources":"backend/app/routers/monitor_dsl.py, backend/app/services/monitor_dsl.py, backend/tests/test_monitor_dsl_persistence_api.py"},
-  {"type":"detectors","title":"Detection combines rules, statistics and ML","section":"Artificial intelligence","seconds":40,"script":"Different defects leave different signals. Rules catch explicit conditions such as an empty table or a freshness breach. Statistical checks compare measurements with history. Isolation Forest adds a multivariate view when enough profiles exist. STL separates trend and seasonal structure before examining residuals. These methods produce signals for the incident workflow. Their presence alone does not establish accuracy. Precision and false positives still need an annotated evaluation.","cue":"Explain one example per family. Keep the deeper maths for questions.","know":"Z-score is a standardized deviation. Isolation Forest is unsupervised anomaly detection. STL is time-series decomposition. Its configured period is seven observations, not automatically seven days.","question":"Is this supervised learning?","answer":"Isolation Forest does not require labeled anomaly examples for fitting. Labels would still be needed for an honest evaluation of detection quality.","sources":"backend/app/services/anomaly.py and backend/tests/test_anomaly.py"},
-  {"type":"screenshot","key":"narration","title":"The LLM supports investigation","section":"AI assistance","label":"Evidence before explanation","body":"Measured context.\n\nPossible causes.\n\nActions for an engineer to verify.","seconds":30,"script":"Once the checks identify an incident, the narration service constructs a context from the available evidence. The language model returns a structured explanation with possible causes and recommended actions. The application validates that response. I treat the proposed cause as a hypothesis. The engineer still needs to inspect the pipeline or source and confirm what happened.","cue":"Point to a concrete recommendation and describe it as a next investigative step.","know":"Detection and narration are different components. The LLM does not establish the original failure by guessing from a screenshot.","question":"What if the model hallucinates?","answer":"The prompt is grounded in measured context and the response has a validated structure, but that does not eliminate hallucinations. Human verification remains necessary.","sources":"backend/app/services/llm.py, backend/tests/test_llm.py, local screenshot"},
-  {"type":"screenshot","key":"incident","title":"An incident connects evidence to ownership","section":"Operations","label":"A complete investigation","body":"Observed signals.\n\nAI analysis and history.\n\nAssignment and acknowledgement.","seconds":25,"script":"The incident page brings the evidence and the operational response together. I can inspect the signals, return to the affected table, read the analysis and assign responsibility. Acknowledgement means someone has taken notice. It does not prove that the data has recovered. That distinction matters when interpreting the incident state.","cue":"Point to signals, then ownership. Avoid equating acknowledgement with resolution.","know":"Deduplication limits repeated incident noise. Source measurements, run outcomes and incident lifecycle state answer different questions.","question":"How do you avoid repeated alerts?","answer":"The incident and monitor policies use deduplication, consecutive-breach or recovery rules and cooldown behavior where supported. The exact policy belongs to the monitor path.","sources":"backend/app/services/incident.py, frontend/src/pages/IncidentDetail.jsx, local screenshot"},
-  {"type":"screenshot","key":"governance","title":"AI governance is an exploratory prototype","section":"Scope and accountability","label":"Observe-only","body":"System inventory.\n\nDeclared data uses.\n\nEvidence and control results.\n\nNo runtime blocking.","seconds":35,"script":"AI governance asks who owns an AI system, which version is in use, what data use is declared and what evidence supports the controls. In Panopta, this is a small observe-only prototype. It connects an inventory with versioned records, evidence and explainable control results. It does not certify compliance, measure fairness or block a model at runtime. Its purpose here is to test traceability and make missing evidence visible.","cue":"Lead with the purpose, then the prototype boundary. Do not apologize for a clearly scoped experiment.","know":"An evidence coverage score is not the probability that a model is safe. A declared data use is a customer assertion, not proof of actual runtime behavior.","question":"How is this different from your LLM feature?","answer":"Narration uses AI to explain data incidents. Governance stores and evaluates information about AI systems and their supporting evidence. One consumes a model, the other tracks accountability.","sources":"docs/ai-governance.md, backend/app/services/ai_governance.py, local screenshot"},
-  {"type":"tenancy","title":"Organization isolation and access control","section":"SaaS architecture","seconds":30,"script":"Each customer works within an organization context. The API uses authenticated identity and organization filtering to scope access. Roles control privileged operations, and the staff portal is separate from the customer workspace. Source credentials are encrypted with organization-derived keys. This is an application isolation design that must be tested with cross-organization requests, not assumed from the subdomain alone.","cue":"Separate routing, authentication, authorization and data scoping.","know":"A subdomain identifies the workspace but is not sufficient authorization. JWT claims need verification. A compromised master encryption key remains a serious compromise.","question":"Do tenants have separate physical databases?","answer":"The application uses shared tables with organization scoping. The demo does not claim one physical application database per tenant.","sources":"backend/app/auth.py, backend/app/routers/auth.py, backend/app/services/crypto.py"},
-  {"type":"rows","title":"Verification at several levels","section":"Validation","rows":[["Unit and contract tests","Check detector behavior, DSL validation and structured LLM output."],["A real local workflow","Connect, configure, execute and inspect persisted results."],["Explicit evidence limits","Local success does not establish production load or ML accuracy."]],"seconds":25,"script":"I use different checks for different questions. Unit tests exercise calculations and contracts. The browser demonstration verifies visible actions against the local stack. Integration tests are needed for persistence, authorization and background execution. I keep those forms of evidence separate. A successful local walkthrough does not establish a production service level or the accuracy of a detector.","cue":"Do not quote a historical count as a new full-suite result.","know":"Skipped tests are not passing feature evidence. Validation counts in the report have a date, environment and scope.","question":"How would you test the detectors properly?","answer":"Use labeled scenarios and time-ordered evaluation, then report precision, recall, false positives and detection delay. Test different data shapes and drift conditions.","sources":"backend/tests, frontend/playwright, docs/evidence and report validation chapter"},
-  {"type":"demo","title":"Panopta in action","section":"Live product workflow","seconds":10,"script":"I will now show the monitoring workflow in the application. The data is synthetic. Watch how a configured rule becomes an executed result, then how the incident supports investigation and ownership.","cue":"Start Demo_Panopta_PFE_Action.mp4. Use DEMO_SCRIPT_EN.md for the timed narration. Resume at slide 19.","know":"Keep the video beside the PPTX. The slide contains a relative link. Open the MP4 directly if PowerPoint blocks it.","question":"Is this a simulated interface?","answer":"The recording captures the local application and real actions on synthetic demo data. It is not a rendered product mockup.","sources":"scripts/pfe/record_demo.mjs and the recorded demo manifest"},
-  {"type":"limits","title":"What the prototype still needs","section":"Discussion","seconds":30,"script":"The next work is measurable. I need an annotated evaluation for the detectors, realistic concurrency tests for profiling, and more operational evidence for experimental connectors. The governance prototype needs broader controls and stronger evidence collection. Those tasks continue after the PFE period. They are also how I would judge whether Panopta is ready for a real customer workload.","cue":"Name the next evaluation, not just a feature wish list.","know":"Production readiness includes security, backups, monitoring of the monitoring service, failure recovery and operating costs.","question":"What would you prioritize first?","answer":"Validate one complete customer workflow under realistic load, with tenant-isolation tests, source budgets and clear recovery behavior. Then expand capabilities based on measured needs.","sources":"Report limitations and perspectives, README.md, docs/connector-catalogue.md"},
-  {"type":"conclusion","title":"A foundation for reliable data operations","section":"Conclusion","seconds":25,"script":"Panopta brings data engineering, anomaly detection and AI assistance into one investigation workflow. The contribution is the connection between measured data quality, configurable controls, traceable execution and an engineer’s response. The prototype gives me a working foundation and a clear set of measurements for the next stage. Thank you. I am ready for your questions.","cue":"Stop here. Open reserve slides only when they answer a question.","know":"Your central claim is a demonstrated prototype workflow, with explicit engineering choices and limitations.","question":"What did you learn?","answer":"How to connect source-level data checks with asynchronous execution, durable evidence and an interface that helps an engineer act on a failure.","sources":"Report conclusion and demonstrated application workflow"},
-  {"type":"data_model","title":"The core database relationships","section":"Reserve A","seconds":0,"script":"An organization owns sources. A source has monitored tables. Each table accumulates profiles, check results and incidents. Foreign keys connect those records, while organization scope constrains access. Additional families cover user access, alert routing, versioned monitors and AI governance. The study guide lists the complete application schema and its responsibilities.","cue":"Use this when asked about the database. Distinguish source data from Panopta metadata.","know":"PostgreSQL stores operational evidence and configuration. JSONB stores flexible structured metrics, while relational columns and constraints carry identities and relationships.","question":"Why JSONB and relational tables together?","answer":"Column metrics vary by data type, which suits JSONB. Ownership, identity and lifecycle relationships need relational constraints and joins.","sources":"backend/app/models, backend/alembic, docs/pfe/database_evidence.json"},
-  {"type":"sequence","title":"A monitor run keeps its execution context","section":"Reserve B","seconds":0,"script":"The user activates a validated revision, then requests a run. The API enqueues execution. The worker loads the pinned definition, uses the supported connector plan and persists measurements and evaluation state. Incident behavior then follows the policy. Keeping revision and plan identity lets me explain which rule produced a particular result.","cue":"Describe each stage without claiming exactly-once delivery.","know":"Queue delivery, idempotency and transactional persistence are related but different. A retry must not create contradictory duplicate state.","question":"Why keep definition and plan hashes?","answer":"They identify the exact content and compiled plan associated with a run. They support comparison and audit, but are not a substitute for access control.","sources":"backend/app/routers/monitor_dsl.py, backend/app/tasks.py, backend/app/models/monitor.py"},
-  {"type":"dsl_excerpt","title":"The rule, threshold and operational policy","section":"Reserve C","seconds":0,"script":"This example measures the null rate of payment_status. A rate above one percent is a breach. The policy independently determines severity, consecutive breaches, recovery passes and cooldown. That separation matters because a measurement is a fact, while alerting behavior is an operational decision. The schema and supported connector capabilities still constrain execution.","cue":"Explain that 0.01 means one percent. The excerpt is illustrative and omits the outer document.","know":"The full document also needs the API version, kind, metadata and actual table identity. The internal datawatch.io/v1alpha1 namespace remains a compatibility identifier.","question":"Why not let users write Python?","answer":"A typed, allow-listed document limits the executable surface and makes validation, compilation and audit more predictable. Arbitrary code would require a different isolation model.","sources":"backend/app/services/monitor_dsl.py and backend/tests/test_monitor_dsl_persistence_api.py"},
-  {"type":"screenshot","key":"reports","title":"Collaboration and operational follow-up","section":"Reserve D","label":"Beyond one incident","body":"Reliability reports.\n\nTeams and ownership.\n\nAlert routing and local email delivery.","seconds":0,"script":"The surrounding features support the operational workflow. Reports summarize reliability, teams make ownership explicit, and routing determines where an alert goes. MailHog provides local email-delivery evidence in the demonstration. That local receipt is useful verification, but it does not prove production email deliverability.","cue":"Use the video or app for detailed options rather than expanding the main presentation.","know":"Each integration needs its own delivery evidence. A visible channel option alone does not prove a live external integration.","question":"What happens when an alert destination fails?","answer":"Delivery failures should remain visible and isolated from the stored incident. The incident evidence should not disappear because an external service is unavailable.","sources":"backend/app/services/alert.py, frontend/src/pages/Reports.jsx, local screenshots"},
-  {"type":"rows","title":"The Big Data and AI contribution","section":"Reserve E","rows":[["Data engineering","Heterogeneous sources, source-side aggregates and asynchronous execution."],["Detection","Rules, statistical comparisons and unsupervised anomaly detection."],["AI assistance and accountability","Structured incident explanations and an observe-only governance prototype."]],"seconds":0,"script":"The project fits Big Data and AI through its processing choices and model use. Aggregation near the source reduces data movement. Asynchronous workers separate collection from the interface. Historical profiles support statistical and multivariate detection. The LLM helps interpret incidents, while governance explores traceability around AI systems. I have not yet demonstrated distributed big-data throughput at production scale.","cue":"Explain the mechanism before naming a technology.","know":"Kafka is not implemented in this version. Large-scale processing suitability and measured large-scale performance are different claims.","question":"Why call it Big Data if the demo is small?","answer":"The work applies relevant engineering patterns to heterogeneous data and monitoring workloads. The demo verifies behavior. A separate controlled benchmark is needed to establish scale.","sources":"Report architecture and conclusion, backend/app/connectors, backend/app/services/anomaly.py, docker-compose.yml"}
+  {
+    "type": "cover",
+    "title": "Panopta",
+    "section": "Opening",
+    "seconds": 25,
+    "script": "Good morning. My name is Mounir Gaiby. I am presenting Panopta, my final-year engineering project at ISGA Casablanca. Panopta is a multi-tenant SaaS for data quality monitoring and AI-assisted incident investigation. The project grew from a concrete concern in payment systems, where a database can remain available while the data inside it becomes unusable.",
+    "sources": "CLAUDE.md. Rapport PFE Panopta."
+  },
+  {
+    "type": "journey",
+    "title": "Presentation structure",
+    "section": "Opening",
+    "seconds": 20,
+    "script": "I will begin with the professional context and the problem. I will then explain the functional scope, the architecture, the asynchronous runtime, and the database model. After that, I will follow the product itself, from a connected source to a table profile, a monitor, an incident, and an operational response. I will finish with governance, validation, and the demonstration.",
+    "sources": "Presentation structure prepared from the final PFE report."
+  },
+  {
+    "type": "company",
+    "title": "Oyster and my role in Payments",
+    "section": "Context",
+    "seconds": 30,
+    "script": "I work at Oyster as a Software Engineer in the Payments team. This is a professional role, not an internship. Payment work depends on tables that describe amounts, currencies, statuses, references, and settlement dates. A service may answer normally while one of those fields becomes stale or empty. That gap between system availability and data reliability motivated Panopta.",
+    "sources": "User-provided employment context. Oyster logo asset stored in docs/pfe/assets."
+  },
+  {
+    "type": "problem",
+    "title": "The silent data failure",
+    "section": "Context",
+    "seconds": 30,
+    "script": "Consider an orders table with 8,500 rows. The database responds, the API remains online, and no infrastructure alarm fires. Yet payment_status is null for every order. Operational dashboards become misleading, reconciliation loses meaning, and engineers discover the damage late. Panopta focuses on this exact class of failure, where the system runs but its data no longer supports the business process.",
+    "sources": "Synthetic public.orders PFE fixture. docs/pfe/screenshots/action-2026-09-12."
+  },
+  {
+    "type": "scope",
+    "title": "Project objective and scope",
+    "section": "Context",
+    "seconds": 30,
+    "script": "The objective is to make a data problem visible, explainable, and assignable. Panopta connects to a source, discovers its schema, profiles selected tables, evaluates quality rules, and opens an incident when evidence crosses a defined threshold. The platform also routes alerts and stores the investigation history. It does not repair customer data automatically. The engineer remains responsible for diagnosis and remediation.",
+    "sources": "CLAUDE.md. docs/architecture.md."
+  },
+  {
+    "type": "gantt",
+    "title": "Three-month development plan",
+    "section": "Project",
+    "seconds": 25,
+    "script": "The PFE development period ran from June through the end of August. June established the SaaS foundation, authentication, source connections, and profiling. July concentrated on detectors, monitor execution, and incident handling. August added the typed DSL, stronger connector contracts, AI governance, validation, and report evidence. Panopta remains an ongoing product, so performance studies and production hardening continue after the academic period.",
+    "sources": "docs/tracking.md. Notion 7-Day Build Log."
+  },
+  {
+    "type": "workflow",
+    "title": "Panopta functional workflow",
+    "section": "Design",
+    "seconds": 35,
+    "script": "This workflow provides the structure for the rest of the presentation. First, an organization connects a source. Panopta discovers tables and stores the selected monitoring configuration. Profiling then produces compact measurements. Rules and detectors evaluate those measurements. A failure creates or updates an incident. Finally, the platform explains the evidence, assigns ownership, and sends the alert to the configured operational channel.",
+    "sources": "CLAUDE.md core data flow. docs/architecture.md."
+  },
+  {
+    "type": "architecture",
+    "title": "System architecture",
+    "section": "Design",
+    "seconds": 40,
+    "script": "The React interface communicates with an asynchronous FastAPI backend. PostgreSQL stores tenants, source metadata, profiles, monitor revisions, runs, incidents, and governance evidence. APScheduler decides when tables are due. Celery workers execute profiling, detection, narration, and alert tasks through Redis. Source connectors perform bounded read-only operations. The language model receives structured incident context only after Panopta has persisted the observed checks.",
+    "sources": "CLAUDE.md technology stack and core data flow. backend/app/main.py. backend/app/tasks.py."
+  },
+  {
+    "type": "sequence",
+    "title": "Asynchronous monitoring execution",
+    "section": "Design",
+    "seconds": 40,
+    "script": "A request does not hold the browser open while a large table is profiled. The API validates the request and queues a job. The worker loads the organization and source context, executes one aggregate profile query, persists the snapshot, and runs the configured checks. If those checks fail, Panopta updates the incident, generates the AI narration, and dispatches alerts. Every stage leaves a database record that can be inspected later.",
+    "sources": "backend/app/tasks.py. backend/app/scheduler.py. CLAUDE.md core data flow."
+  },
+  {
+    "type": "db_domains",
+    "title": "Database structure",
+    "section": "Design",
+    "seconds": 35,
+    "script": "The application database contains 29 ORM tables grouped into five domains. Identity and tenancy manage organizations, users, roles, keys, and invitations. Monitoring configuration covers sources, tables, and monitor definitions. Observation tables preserve profiles, check results, runs, and evaluation state. Operations store incidents, alert routes, notification preferences, and on-call ownership. The governance domain stores versioned AI systems, manifests, approvals, evidence, controls, and governance incidents.",
+    "sources": "backend/app/models. CLAUDE.md database schema."
+  },
+  {
+    "type": "data_model",
+    "title": "Core monitoring relationships",
+    "section": "Design",
+    "seconds": 35,
+    "script": "At the center of the model, an organization owns data sources. A source exposes monitored tables. Each profile belongs to one table and contains row count, freshness, schema fingerprint, and column metrics. Check results reference the observed profile. A typed monitor points to an immutable revision, while each run records the exact revision it executed. Failed evidence reaches an incident, which can accumulate repeated checks without creating duplicate open incidents.",
+    "sources": "backend/app/models. backend/app/services/incident.py."
+  },
+  {
+    "type": "tenancy",
+    "title": "Tenant isolation and credential security",
+    "section": "Design",
+    "seconds": 30,
+    "script": "Every protected request resolves an organization from the user session. Queries then scope customer records with org_id. Roles separate owners, administrators, and members, while staff authentication uses a different portal. Panopta encrypts each source configuration with a key derived from the master secret and the organization identifier. This prevents one tenant from decrypting another tenant's source credentials through an ordinary application path.",
+    "sources": "backend/app/auth.py. backend/app/services/crypto.py. CLAUDE.md auth pattern."
+  },
+  {
+    "type": "screenshot",
+    "title": "Sources and connector maturity",
+    "section": "Product flow 01",
+    "seconds": 30,
+    "key": "connectors_action",
+    "label": "SOURCE",
+    "body": "PostgreSQL is the stable demonstration path. Other connectors expose capability-based maturity rather than identical promises.",
+    "script": "The product journey begins with a source. Panopta has adapters for relational databases, warehouses, document stores, Cassandra, and Redis. The catalogue does not pretend that every connector has the same maturity. PostgreSQL is the stable path used in this defense. DuckDB and SQLite are beta. The remaining implemented adapters are marked experimental until their operational promotion gates are satisfied.",
+    "sources": "CLAUDE.md connector registry. frontend connector catalogue."
+  },
+  {
+    "type": "screenshot",
+    "title": "Connection and schema discovery",
+    "section": "Product flow 02",
+    "seconds": 30,
+    "key": "source_discovery",
+    "label": "DISCOVER",
+    "body": "The operator tests the connection, refreshes the schema, and selects the exact table to monitor.",
+    "script": "After storing the encrypted connection configuration, the operator tests the live connection. Panopta then discovers schemas and tables through the connector. The user selects public.orders, and the captured schema confirms that created_at is available for freshness monitoring. The table configuration stores the cadence, sensitivity, and freshness field. Discovery is the first product action built on top of the connector and tenant model.",
+    "sources": "docs/pfe/screenshots/action-2026-09-12/04-discovery.png. backend/app/routers/sources.py."
+  },
+  {
+    "type": "screenshot",
+    "title": "Table profiling",
+    "section": "Product flow 03",
+    "seconds": 35,
+    "key": "profile_action",
+    "label": "PROFILE",
+    "body": "One source-side aggregate query becomes a compact historical snapshot. Raw table rows stay in the source.",
+    "script": "Once the table is registered, Panopta profiles it. The profiler builds a single aggregate query rather than loading rows into the application. It collects row count, freshness, null rates, distinct counts, numeric summaries, timestamp ranges, and text-length metrics. The application stores a compact snapshot for historical comparison. In this scenario, public.orders contains 8,500 rows and payment_status has reached a 100 percent null rate.",
+    "sources": "backend/app/services/profiler.py. docs/pfe/screenshots/action-2026-09-12/05-profile.png."
+  },
+  {
+    "type": "detectors",
+    "title": "Data quality detection",
+    "section": "Product flow 04",
+    "seconds": 40,
+    "script": "Panopta combines explicit expectations with historical detection. Rule checks catch empty tables, freshness breaches, schema drift, and large null-rate changes immediately. Z-scores compare current metrics with recent profiles. Isolation Forest looks for multivariate outliers after enough history exists. STL separates seasonal structure from unexpected residuals on daily series. The engine records the observed value, expected range, status, and deviation score for every check.",
+    "sources": "backend/app/services/anomaly.py. CLAUDE.md detection methods."
+  },
+  {
+    "type": "screenshot",
+    "title": "Read-only SQL monitors",
+    "section": "Product flow 05",
+    "seconds": 35,
+    "key": "sql",
+    "label": "SQL",
+    "body": "A restricted scalar query expresses a business rule. Testing returned 8,500 real violations before the rule could be saved.",
+    "script": "Some quality expectations are easiest to express with SQL. This monitor counts orders where payment_status is null. Panopta accepts a restricted, read-only scalar query and requires the current SQL to pass a test before saving. During the recorded run, PostgreSQL returned 8,500 violations. The rule can execute on demand and after each scheduled profile, but it cannot modify the source database.",
+    "sources": "backend/app/services/legacy_sql_monitor.py. docs/pfe/screenshots/action-2026-09-12/09-sql-test.png."
+  },
+  {
+    "type": "dsl_excerpt",
+    "title": "Typed monitor definition",
+    "section": "Product flow 06",
+    "seconds": 35,
+    "script": "The typed DSL provides a safer alternative to free-form SQL. This definition binds the null_rate metric to payment_status and marks a breach above 0.01, which means one percent. The policy sets P2 severity, requires one failing run, requires two passing runs for recovery, and applies a 60-minute cooldown. The compiler validates the field against the captured schema before activation.",
+    "sources": "backend/app/services/monitor_dsl.py. docs/pfe/screenshots/action-2026-09-12/13-dsl-preview.png."
+  },
+  {
+    "type": "screenshot",
+    "title": "Monitor revisions and traceable runs",
+    "section": "Product flow 07",
+    "seconds": 35,
+    "key": "dsl",
+    "label": "EXECUTE",
+    "body": "Activation freezes revision 1. Each run keeps the revision identity, compiled plan, status, and measured result.",
+    "script": "Validation produces a canonical definition and a stable hash. Activation freezes that document as revision 1 and points the monitor to it. A run records the revision, connector plan, idempotency key, timing, status, and measurements. This design lets an engineer answer two precise questions later. Which rule ran, and what evidence did that exact rule produce?",
+    "sources": "backend/app/models/monitor.py. backend/app/services/monitor_runtime.py."
+  },
+  {
+    "type": "screenshot",
+    "title": "Incident evidence and lifecycle",
+    "section": "Product flow 08",
+    "seconds": 35,
+    "key": "incident_action",
+    "label": "INCIDENT",
+    "body": "Detected, acknowledged, investigating, resolved. The timeline records responsibility without claiming that acknowledgement repaired the data.",
+    "script": "A failed check becomes operational through the incident lifecycle. Panopta opens one active incident per table, then appends repeated evidence instead of flooding the team with duplicates. Severity depends on the failed checks. The detail view shows the affected table, observed signals, status history, and ownership. Acknowledgement means that someone has taken responsibility. Resolution requires later recovery evidence or an explicit operational decision.",
+    "sources": "backend/app/services/incident.py. docs/pfe/screenshots/action-2026-09-12/17-incidents.png."
+  },
+  {
+    "type": "screenshot",
+    "title": "AI-assisted incident analysis",
+    "section": "Product flow 09",
+    "seconds": 40,
+    "key": "ai_analysis_action",
+    "label": "EXPLAIN",
+    "body": "The model receives structured evidence and returns a validated explanation, likely causes, impact, and diagnostic actions.",
+    "script": "For P1 and P2 incidents, Panopta builds a compact context from the table profile and fired checks. The language model returns structured JSON containing a summary, probable causes, impact, and recommended diagnostic actions. The backend validates that structure before storing it. These causes remain hypotheses. The model helps the engineer read the evidence faster, but it does not claim that a suggested cause has been proven.",
+    "sources": "backend/app/services/llm.py. docs/pfe/screenshots/action-2026-09-12/19-ai-analysis.png."
+  },
+  {
+    "type": "response",
+    "title": "Operational response",
+    "section": "Product flow 10",
+    "seconds": 35,
+    "script": "The incident must reach a person who can act. Alert routes support email, Slack, PagerDuty, and signed webhooks with severity thresholds. Teams and on-call schedules define responsibility. Notification preferences control delivery without changing the detector itself. Reports then summarize health and incident history across the workspace. In the local demonstration, Panopta delivers a real alert to MailHog without contacting an external customer.",
+    "sources": "backend/app/services/alert.py. docs/pfe/screenshots/action-2026-09-12/22-alerts.png. docs/pfe/screenshots/action-2026-09-12/24-reports.png."
+  },
+  {
+    "type": "screenshot",
+    "title": "AI governance prototype",
+    "section": "Product flow 11",
+    "seconds": 40,
+    "key": "governance_action",
+    "label": "GOVERN",
+    "body": "The prototype inventories AI systems, versions, declared data uses, evidence, controls, approvals, and deployments in observe-only mode.",
+    "script": "Panopta also contains a small AI governance prototype. It records an AI system, its version, declared data uses, release manifests, deployments, approvals, evidence, and control evaluations. The interface calculates evidence confidence and residual risk from the available records. This module operates in observe-only mode. It surfaces missing or failed evidence and can create an incident, but it does not certify legal compliance and it does not block a deployment.",
+    "sources": "docs/ai-governance.md. backend/app/models/ai_governance.py. docs/pfe/screenshots/action-2026-09-12/27-governance.png."
+  },
+  {
+    "type": "evidence",
+    "title": "Big Data, AI, and validation evidence",
+    "section": "Evidence",
+    "seconds": 40,
+    "script": "The Big Data contribution lies in connector-aware, source-side aggregation and asynchronous execution. Panopta stores measurements rather than copying full customer tables. The AI contribution combines anomaly detection with a structured LLM explanation layer and an evidence-oriented governance prototype. For this delivery, 67 targeted backend tests passed. The 26-slide package passed integrity and geometry checks. The recorded browser journey produced zero page errors and zero failed Panopta API responses.",
+    "sources": "Local validation on 2026-09-12. Commit 1060b1d. docs/pfe/DEFENSE_STUDY_GUIDE_EN.md."
+  },
+  {
+    "type": "demo",
+    "title": "Product demonstration",
+    "section": "Demonstration",
+    "seconds": 10,
+    "script": "I will now show the complete path in the running application. The demonstration uses a synthetic e-commerce workspace. It starts with the source and table, creates SQL and typed monitors, executes them, opens the incident, reviews the AI analysis, and finishes with alerting and governance.",
+    "sources": "output/pfe/Demo_Panopta_PFE_Action.mp4."
+  },
+  {
+    "type": "conclusion",
+    "title": "Conclusion and next work",
+    "section": "Conclusion",
+    "seconds": 35,
+    "script": "Panopta proves the complete chain from a source measurement to an owned investigation. The current prototype connects real databases, profiles tables, evaluates explicit and statistical controls, preserves monitor revisions, opens incidents, and produces AI-assisted explanations. The next work is measurable. I need controlled scale tests, detector precision and recall studies, production recovery exercises, and broader governance evidence coverage. Thank you for your attention.",
+    "sources": "docs/pfe/DEFENSE_STUDY_GUIDE_EN.md."
+  }
 ]

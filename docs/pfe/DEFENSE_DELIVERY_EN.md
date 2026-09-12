@@ -2,7 +2,7 @@
 
 ## Files to take to the presentation
 
-- `output/pfe/Presentation_Panopta_PFE_English.pptx`
+- `output/pfe/Presentation_Panopta_PFE_English_Improved.pptx`
 - `output/pfe/Demo_Panopta_PFE_Action.mp4`
 - `docs/pfe/PRESENTATION_SCRIPT_EN.md`
 - `docs/pfe/DEMO_SCRIPT_EN.md`
@@ -12,12 +12,13 @@ Keep the PowerPoint and MP4 in the same folder. Slide 18 links to the video by f
 
 ## Recommended flow
 
-1. Present slides 1 to 17.
-2. Start the silent video from slide 18 and speak from `DEMO_SCRIPT_EN.md`.
-3. Finish with slides 19 and 20.
-4. Use slides 21 to 25 only when the jury asks about the database, worker sequence, DSL, collaboration features, or the Big Data and AI contribution.
+1. Present slides 1 to 12 to establish the problem, architecture, execution model, database, and tenant isolation.
+2. Follow slides 13 to 23 in order. The sequence matches the product flow from sources to governance.
+3. Present the validation evidence on slide 24.
+4. Start the silent video from slide 25 and speak from `DEMO_SCRIPT_EN.md`.
+5. Finish with slide 26.
 
-The spoken slide content is about 9 minutes. The video is 3 minutes and 34 seconds. The complete flow is about 13 minutes before questions.
+The full slide script contains approximately 1,600 words and takes about 11 minutes at a clear defense pace. The video is 3 minutes and 34 seconds. The complete flow is about 15 minutes before questions.
 
 ## Demonstration facts
 

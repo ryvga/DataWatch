@@ -5,5 +5,9 @@
   "operations_action": "docs/pfe/screenshots/action-2026-09-12/01-operations.png",
   "profile_action": "docs/pfe/screenshots/action-2026-09-12/05-profile.png",
   "incident_action": "docs/pfe/screenshots/action-2026-09-12/17-incidents.png",
-  "governance_action": "docs/pfe/screenshots/action-2026-09-12/27-governance.png"
+  "governance_action": "docs/pfe/screenshots/action-2026-09-12/27-governance.png",
+  "connectors_action": "docs/pfe/screenshots/action-2026-09-12/03-connectors.png",
+  "ai_analysis_action": "docs/pfe/screenshots/action-2026-09-12/19-ai-analysis.png",
+  "alerts_action": "docs/pfe/screenshots/action-2026-09-12/22-alerts.png",
+  "reports_action": "docs/pfe/screenshots/action-2026-09-12/24-reports.png"
 }
